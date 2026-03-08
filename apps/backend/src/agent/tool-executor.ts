@@ -32,16 +32,35 @@ export async function executeTool(
 
       case 'webhook': {
         const url = toolInput.url as string;
-        validateWebhookUrl(url);
-        const payload = toolInput.payload || toolInput;
+        await validateWebhookUrl(url);
+
+        // Sanitize payload: strip conversation/prompt data to prevent exfiltration
+        const rawPayload = (toolInput.payload || toolInput) as Record<string, unknown>;
+        const SENSITIVE_KEYS = new Set(['messages', 'conversation', 'history', 'system_prompt', 'prompt']);
+        const sanitizedPayload: Record<string, unknown> = {};
+        for (const [key, value] of Object.entries(rawPayload)) {
+          if (!SENSITIVE_KEYS.has(key)) {
+            sanitizedPayload[key] = value;
+          }
+        }
+
         const response = await fetch(url, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(payload),
+          body: JSON.stringify(sanitizedPayload),
           signal: AbortSignal.timeout(10_000),
         });
+
+        const contentType = response.headers.get('content-type') || '';
+
+        // Don't return HTML bodies (likely error pages or non-API responses)
+        if (contentType.includes('text/html')) {
+          return JSON.stringify({ status: response.status, message: 'HTML response' });
+        }
+
+        // Truncate response to prevent excessive token usage
         const text = await response.text();
-        return text;
+        return text.length > 4096 ? text.slice(0, 4096) : text;
       }
 
       default:

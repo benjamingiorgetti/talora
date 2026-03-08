@@ -13,7 +13,8 @@ conversationsRouter.get('/', async (req, res) => {
   const offset = (pageNum - 1) * limitNum;
 
   try {
-    let query = 'SELECT * FROM conversations';
+    // Single query with COUNT(*) OVER() window function to get data + total in one round-trip
+    let query = 'SELECT *, COUNT(*) OVER() AS _total FROM conversations';
     const values: unknown[] = [];
 
     if (instance_id) {
@@ -25,22 +26,14 @@ conversationsRouter.get('/', async (req, res) => {
     query += ` LIMIT $${values.length + 1} OFFSET $${values.length + 2}`;
     values.push(limitNum, offset);
 
-    // Run data + count queries in parallel
-    let countQuery = 'SELECT COUNT(*) as total FROM conversations';
-    const countValues: unknown[] = [];
-    if (instance_id) {
-      countQuery += ' WHERE instance_id = $1';
-      countValues.push(instance_id);
-    }
+    const result = await pool.query<Conversation & { _total: string }>(query, values);
+    const total = result.rows.length > 0 ? parseInt(result.rows[0]._total, 10) : 0;
 
-    const [result, countResult] = await Promise.all([
-      pool.query<Conversation>(query, values),
-      pool.query<{ total: string }>(countQuery, countValues),
-    ]);
-    const total = parseInt(countResult.rows[0].total, 10);
+    // Strip the _total column from response rows
+    const data = result.rows.map(({ _total, ...row }) => row);
 
     res.json({
-      data: result.rows,
+      data,
       pagination: { page: pageNum, limit: limitNum, total },
     });
   } catch (err) {

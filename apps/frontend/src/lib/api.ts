@@ -1,6 +1,8 @@
 const BASE_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:3001";
 
-let isRedirecting = false;
+// Promise-based coordination: the first 401 creates the redirect promise,
+// subsequent concurrent 401s await the same promise instead of competing.
+let logoutPromise: Promise<void> | null = null;
 
 function getToken(): string | null {
   if (typeof window === "undefined") return null;
@@ -28,22 +30,33 @@ async function request<T>(
   const method = (options.method ?? "GET").toUpperCase();
   const timeoutMs = MUTATION_METHODS.has(method) ? MUTATION_TIMEOUT_MS : GET_TIMEOUT_MS;
 
-  const res = await fetch(`${BASE_URL}${path}`, {
-    ...options,
-    headers,
-    signal: AbortSignal.timeout(timeoutMs),
-  });
+  let res: Response;
+  try {
+    res = await fetch(`${BASE_URL}${path}`, {
+      ...options,
+      headers,
+      signal: AbortSignal.timeout(timeoutMs),
+    });
+  } catch (err) {
+    // AbortError is thrown by AbortSignal.timeout() when the request times out.
+    if (err instanceof Error && err.name === "AbortError") {
+      throw new Error(
+        `La solicitud tardo demasiado (${timeoutMs / 1000}s). Verifica tu conexion e intenta de nuevo.`
+      );
+    }
+    throw err;
+  }
 
   if (res.status === 401) {
-    // Don't redirect if this IS the login request — 401 means bad credentials
-    if (path !== "/auth/login") {
-      if (typeof window !== "undefined" && !isRedirecting) {
-        isRedirecting = true;
-        localStorage.removeItem("token");
-        window.location.href = "/login";
-        // Reset flag after short delay in case redirect is blocked
-        setTimeout(() => { isRedirecting = false; }, 2000);
+    // Don't redirect if this IS the login request — 401 means bad credentials.
+    if (path !== "/auth/login" && typeof window !== "undefined") {
+      if (!logoutPromise) {
+        logoutPromise = (async () => {
+          localStorage.removeItem("token");
+          window.location.href = "/login";
+        })();
       }
+      await logoutPromise;
     }
     const body = await res.json().catch(() => ({}));
     throw new Error(body.error || "Unauthorized");

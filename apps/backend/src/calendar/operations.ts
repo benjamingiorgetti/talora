@@ -1,7 +1,7 @@
 import { getCalendarClient } from './client';
 import { config } from '../config';
+import { logger } from '../utils/logger';
 
-const TIMEZONE = 'America/Argentina/Buenos_Aires';
 const CALENDAR_ID = config.googleCalendarId;
 
 // In-memory lock for booking slots to prevent double-booking (single-instance only)
@@ -19,13 +19,20 @@ export async function bookSlot(
   date: string,
   durationMinutes: number,
   description: string
-): Promise<{ success: boolean; eventId?: string; error?: string }> {
+): Promise<{ success: boolean; eventId?: string; error?: string; suggestions?: string[] }> {
   const slotKey = getSlotKey(date, durationMinutes);
 
   // Wait for any pending booking on the same slot
   const pending = bookingLocks.get(slotKey) ?? Promise.resolve();
 
-  const booking = pending.then(async () => {
+  let resolve!: () => void;
+  const lockPromise = new Promise<void>((r) => { resolve = r; });
+  bookingLocks.set(slotKey, lockPromise);
+
+  try {
+    // Wait for any pending booking on the same slot to complete
+    await pending;
+
     // Check availability first
     const availability = await checkSlot(date, durationMinutes);
     if (!availability.available) {
@@ -36,15 +43,11 @@ export async function bookSlot(
       };
     }
     // Create the event
-    return createEvent(name, date, durationMinutes, description);
-  });
-
-  const swallowed = booking.catch(() => {});
-  bookingLocks.set(slotKey, swallowed);
-  try {
-    return await booking;
+    return await createEvent(name, date, durationMinutes, description);
   } finally {
-    if (bookingLocks.get(slotKey) === swallowed) {
+    // Release the lock so the next queued booking can proceed
+    resolve();
+    if (bookingLocks.get(slotKey) === lockPromise) {
       bookingLocks.delete(slotKey);
     }
   }
@@ -59,11 +62,11 @@ export async function checkSlot(
   const start = new Date(date);
   const end = new Date(start.getTime() + durationMinutes * 60 * 1000);
 
+  // toISOString() already produces UTC strings, so no timeZone hint needed
   const freeBusyResponse = await calendar.freebusy.query({
     requestBody: {
       timeMin: start.toISOString(),
       timeMax: end.toISOString(),
-      timeZone: TIMEZONE,
       items: [{ id: CALENDAR_ID }],
     },
   });
@@ -84,7 +87,6 @@ export async function checkSlot(
     requestBody: {
       timeMin: searchStart.toISOString(),
       timeMax: searchEnd.toISOString(),
-      timeZone: TIMEZONE,
       items: [{ id: CALENDAR_ID }],
     },
   });
@@ -128,13 +130,12 @@ export async function createEvent(
     requestBody: {
       summary: name,
       description,
+      // UTC ISO strings — no timeZone hint needed
       start: {
         dateTime: start.toISOString(),
-        timeZone: TIMEZONE,
       },
       end: {
         dateTime: end.toISOString(),
-        timeZone: TIMEZONE,
       },
     },
   });
@@ -144,13 +145,26 @@ export async function createEvent(
 
 export async function deleteEvent(
   eventId: string
-): Promise<{ success: boolean }> {
+): Promise<{ success: boolean; error?: string }> {
   const calendar = await getCalendarClient();
 
-  await calendar.events.delete({
-    calendarId: CALENDAR_ID,
-    eventId,
-  });
-
-  return { success: true };
+  try {
+    await calendar.events.delete({
+      calendarId: CALENDAR_ID,
+      eventId,
+    });
+    return { success: true };
+  } catch (err: unknown) {
+    const status = (err as { code?: number }).code;
+    if (status === 404) {
+      logger.warn(`deleteEvent: event ${eventId} already deleted (404)`);
+      return { success: true }; // Idempotent — already gone
+    }
+    if (status === 403) {
+      logger.error(`deleteEvent: no permission to delete event ${eventId} (403)`);
+      return { success: false, error: 'No permission to delete this event' };
+    }
+    logger.error(`deleteEvent: unexpected error for event ${eventId}:`, err);
+    return { success: false, error: 'Failed to delete event' };
+  }
 }

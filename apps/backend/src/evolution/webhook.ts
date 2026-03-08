@@ -6,6 +6,7 @@ import { broadcast } from '../ws/server';
 import { handleIncomingMessage } from '../agent/index';
 import { EvolutionClient } from './client';
 import { logger } from '../utils/logger';
+import { withTimeout } from '../utils/timeout';
 import type { WhatsAppInstance } from '@bottoo/shared';
 
 const evolution = new EvolutionClient();
@@ -35,17 +36,28 @@ setInterval(() => {
 
 /**
  * Enforce max size on the idempotency map.
- * When exceeding MAX_PROCESSED_ENTRIES, remove the oldest 20% of entries.
+ * When exceeding MAX_PROCESSED_ENTRIES, evict entries older than TTL first,
+ * then remove the oldest entries by timestamp if still over limit.
  */
 function enforceIdempotencyMapSize() {
   if (processedMessages.size <= MAX_PROCESSED_ENTRIES) return;
 
-  const entriesToDelete = Math.floor(MAX_PROCESSED_ENTRIES * 0.2);
-  const iterator = processedMessages.keys();
-  for (let i = 0; i < entriesToDelete; i++) {
-    const next = iterator.next();
-    if (next.done) break;
-    processedMessages.delete(next.value);
+  const now = Date.now();
+
+  // First pass: evict expired entries by timestamp
+  for (const [id, ts] of processedMessages) {
+    if (now - ts > IDEMPOTENCY_TTL_MS) {
+      processedMessages.delete(id);
+    }
+  }
+
+  // If still over limit, evict the oldest entries by timestamp
+  if (processedMessages.size > MAX_PROCESSED_ENTRIES) {
+    const sorted = [...processedMessages.entries()].sort((a, b) => a[1] - b[1]);
+    const entriesToDelete = processedMessages.size - MAX_PROCESSED_ENTRIES;
+    for (let i = 0; i < entriesToDelete; i++) {
+      processedMessages.delete(sorted[i][0]);
+    }
   }
 }
 
@@ -61,18 +73,6 @@ function normalizePhone(raw: string): string {
 // --- Processing timeout ---
 const PROCESSING_TIMEOUT_MS = 120_000; // 120 seconds
 
-function withTimeout<T>(promise: Promise<T>, timeoutMs: number, label: string): Promise<T> {
-  return Promise.race([
-    promise,
-    new Promise<never>((_, reject) =>
-      setTimeout(() => {
-        logger.error(`Processing timeout (${timeoutMs}ms) for: ${label}`);
-        reject(new Error(`Processing timeout for: ${label}`));
-      }, timeoutMs)
-    ),
-  ]);
-}
-
 // --- Webhook origin validation ---
 function getClientIp(req: Request): string {
   // Support proxied requests (X-Forwarded-For) and fall back to direct IP
@@ -83,17 +83,41 @@ function getClientIp(req: Request): string {
   return req.ip || req.socket.remoteAddress || '';
 }
 
-function isOriginAllowed(req: Request): boolean {
+function isWebhookAuthorized(req: Request): boolean {
+  const secret = config.webhookSecret;
+
+  // If a webhook secret is configured, check it first (takes priority)
+  if (secret) {
+    const headerSecret = req.headers['x-webhook-secret'] as string | undefined;
+    const querySecret = req.query.secret as string | undefined;
+    if (headerSecret === secret || querySecret === secret) {
+      return true;
+    }
+    // Secret configured but not matched — reject
+    return false;
+  }
+
+  // Fall back to IP/hostname allowlist
   const allowedHosts = config.webhookAllowedHosts;
-  if (!allowedHosts) return true; // No restriction in dev
+  const allowedList = allowedHosts
+    ? allowedHosts.split(',').map((h) => h.trim()).filter(Boolean)
+    : [];
 
-  const allowedList = allowedHosts.split(',').map((h) => h.trim()).filter(Boolean);
-  if (allowedList.length === 0) return true;
+  if (allowedList.length > 0) {
+    const clientIp = getClientIp(req);
+    const hostname = req.hostname || '';
+    return allowedList.some((allowed) => clientIp === allowed || hostname === allowed);
+  }
 
-  const clientIp = getClientIp(req);
-  const hostname = req.hostname || '';
+  // No secret and no allowlist configured
+  // Only accept in development mode — reject in production
+  if (config.nodeEnv === 'development') {
+    logger.warn('Webhook received with no secret or allowlist configured — accepting in development mode');
+    return true;
+  }
 
-  return allowedList.some((allowed) => clientIp === allowed || hostname === allowed);
+  logger.error('Webhook rejected: no WEBHOOK_SECRET or WEBHOOK_ALLOWED_HOSTS configured in production');
+  return false;
 }
 
 // --- Instance existence cache (short-lived) ---
@@ -123,7 +147,7 @@ setInterval(refreshKnownInstances, INSTANCE_CACHE_TTL_MS);
 
 webhookRouter.post('/evolution', (req, res) => {
   // Origin validation
-  if (!isOriginAllowed(req)) {
+  if (!isWebhookAuthorized(req)) {
     logger.warn(`Webhook rejected: unauthorized origin ${getClientIp(req)}`);
     res.status(403).json({ error: 'Forbidden' });
     return;

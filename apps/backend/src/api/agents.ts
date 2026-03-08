@@ -1,6 +1,6 @@
 import { Router } from 'express';
 import { pool } from '../db/pool';
-import { buildUpdateSet } from '../db/query-helpers';
+import { buildUpdateSet, getNextSectionOrder } from '../db/query-helpers';
 import { invalidateAgentCache } from '../cache/agent-cache';
 import { logger } from '../utils/logger';
 import type { Agent, PromptSection, AgentTool } from '@bottoo/shared';
@@ -90,14 +90,7 @@ agentsRouter.post('/:id/prompt-sections', async (req, res) => {
   }
 
   try {
-    let sectionOrder = order;
-    if (sectionOrder === undefined) {
-      const maxResult = await pool.query<{ max: number }>(
-        'SELECT COALESCE(MAX("order"), -1) as max FROM prompt_sections WHERE agent_id = $1',
-        [id]
-      );
-      sectionOrder = maxResult.rows[0].max + 1;
-    }
+    const sectionOrder = await getNextSectionOrder(id, order);
 
     const result = await pool.query<PromptSection>(
       `INSERT INTO prompt_sections (agent_id, title, content, "order")

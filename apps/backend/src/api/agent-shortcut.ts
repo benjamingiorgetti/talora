@@ -1,16 +1,16 @@
 import { Router } from 'express';
 import { pool } from '../db/pool';
-import { buildUpdateSet } from '../db/query-helpers';
-import { invalidateAgentCache } from '../cache/agent-cache';
+import { buildUpdateSet, getNextSectionOrder } from '../db/query-helpers';
+import { getAgentConfig, invalidateAgentCache } from '../cache/agent-cache';
 import { logger } from '../utils/logger';
-import type { Agent, PromptSection, AgentTool } from '@bottoo/shared';
+import type { PromptSection, AgentTool } from '@bottoo/shared';
 
 export const agentShortcutRouter = Router();
 
-// Resolve the single agent for all routes
+// Reuse the existing agent config cache (60s TTL) instead of a separate cache
 async function getAgentId(): Promise<string | null> {
-  const result = await pool.query<Agent>('SELECT id FROM agents LIMIT 1');
-  return result.rows.length > 0 ? result.rows[0].id : null;
+  const config = await getAgentConfig();
+  return config?.agent.id ?? null;
 }
 
 // --- Sections ---
@@ -39,14 +39,7 @@ agentShortcutRouter.post('/sections', async (req, res) => {
     const { title, content, order } = req.body;
     if (!title) { res.status(400).json({ error: 'Title is required' }); return; }
 
-    let sectionOrder = order;
-    if (sectionOrder === undefined) {
-      const maxResult = await pool.query<{ max: number }>(
-        'SELECT COALESCE(MAX("order"), -1) as max FROM prompt_sections WHERE agent_id = $1',
-        [agentId]
-      );
-      sectionOrder = maxResult.rows[0].max + 1;
-    }
+    const sectionOrder = await getNextSectionOrder(agentId, order);
 
     const result = await pool.query<PromptSection>(
       `INSERT INTO prompt_sections (agent_id, title, content, "order")

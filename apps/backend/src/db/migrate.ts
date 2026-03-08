@@ -121,6 +121,26 @@ CREATE UNIQUE INDEX IF NOT EXISTS tools_agent_name_idx ON tools(agent_id, name);
 ALTER TABLE agents ADD COLUMN IF NOT EXISTS updated_at TIMESTAMPTZ DEFAULT NOW();
 ALTER TABLE tools ADD COLUMN IF NOT EXISTS updated_at TIMESTAMPTZ DEFAULT NOW();
 ALTER TABLE prompt_sections ADD COLUMN IF NOT EXISTS updated_at TIMESTAMPTZ DEFAULT NOW();
+ALTER TABLE conversations ADD COLUMN IF NOT EXISTS updated_at TIMESTAMPTZ DEFAULT NOW();
+
+-- Additional indexes (Issue #17)
+CREATE INDEX IF NOT EXISTS idx_prompt_sections_agent_id ON prompt_sections(agent_id);
+CREATE INDEX IF NOT EXISTS idx_alerts_instance_id ON alerts(instance_id);
+CREATE INDEX IF NOT EXISTS idx_conversations_instance_id ON conversations(instance_id);
+CREATE INDEX IF NOT EXISTS idx_messages_conversation_id ON messages(conversation_id);
+
+-- CHECK constraints for status/role columns (Issue #18)
+DO $$ BEGIN
+  ALTER TABLE whatsapp_instances ADD CONSTRAINT chk_instance_status
+    CHECK (status IN ('connected', 'disconnected', 'connecting', 'error'));
+EXCEPTION WHEN duplicate_object THEN NULL;
+END $$;
+
+DO $$ BEGIN
+  ALTER TABLE messages ADD CONSTRAINT chk_message_role
+    CHECK (role IN ('user', 'assistant', 'system', 'tool'));
+EXCEPTION WHEN duplicate_object THEN NULL;
+END $$;
 `;
 
 async function run() {

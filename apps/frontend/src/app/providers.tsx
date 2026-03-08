@@ -11,6 +11,13 @@ export function Providers({ children }: { children: React.ReactNode }) {
         dedupingInterval: 5000,
         revalidateOnFocus: true,
         revalidateOnReconnect: true,
+        onErrorRetry: (error, _key, _config, revalidate, { retryCount }) => {
+          // Never retry on 401 — the api.ts interceptor already handles redirect.
+          if (error?.status === 401) return;
+          // Stop retrying after 3 attempts for all other errors.
+          if (retryCount >= 3) return;
+          setTimeout(() => revalidate({ retryCount }), 5000);
+        },
       }}
     >
     <AuthProvider>

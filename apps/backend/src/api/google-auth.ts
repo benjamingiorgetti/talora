@@ -2,6 +2,7 @@ import crypto from 'crypto';
 import { Router } from 'express';
 import { oauth2Client, saveRefreshToken } from '../calendar/client';
 import { logger } from '../utils/logger';
+import { authMiddleware } from './middleware';
 
 export const googleAuthRouter = Router();
 
@@ -19,8 +20,8 @@ setInterval(() => {
   }
 }, 5 * 60 * 1000);
 
-// GET /auth/google — redirect to Google OAuth consent screen
-googleAuthRouter.get('/google', (_req, res) => {
+// GET /auth/google — redirect to Google OAuth consent screen (requires auth)
+googleAuthRouter.get('/google', authMiddleware, (_req, res) => {
   const state = crypto.randomUUID();
   pendingStates.set(state, Date.now());
 

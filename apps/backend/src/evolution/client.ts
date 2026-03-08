@@ -1,7 +1,8 @@
 import { config } from '../config';
 import { logger } from '../utils/logger';
 
-const MAX_RETRIES = 3;
+/** Total number of attempts (1 initial + retries). RETRY_DELAYS length must be >= MAX_ATTEMPTS - 1. */
+const MAX_ATTEMPTS = 4;
 const RETRY_DELAYS = [1000, 2000, 4000];
 const REQUEST_TIMEOUT = 15_000;
 
@@ -23,7 +24,7 @@ export class EvolutionClient {
 
     let lastError: Error | null = null;
 
-    for (let attempt = 0; attempt <= MAX_RETRIES; attempt++) {
+    for (let attempt = 0; attempt < MAX_ATTEMPTS; attempt++) {
       try {
         const response = await fetch(url, {
           method,
@@ -42,7 +43,7 @@ export class EvolutionClient {
           }
 
           lastError = err;
-          if (attempt < MAX_RETRIES) {
+          if (attempt < MAX_ATTEMPTS - 1) {
             await new Promise((r) => setTimeout(r, RETRY_DELAYS[attempt]));
             continue;
           }
@@ -64,8 +65,8 @@ export class EvolutionClient {
           throw lastError;
         }
 
-        if (attempt < MAX_RETRIES) {
-          logger.warn(`EvolutionAPI retry ${attempt + 1}/${MAX_RETRIES} for ${method} ${path}`);
+        if (attempt < MAX_ATTEMPTS - 1) {
+          logger.warn(`EvolutionAPI attempt ${attempt + 2}/${MAX_ATTEMPTS} for ${method} ${path}`);
           await new Promise((r) => setTimeout(r, RETRY_DELAYS[attempt]));
         }
       }
@@ -86,7 +87,7 @@ export class EvolutionClient {
     return this.request('POST', '/instance/create', {
       instanceName,
       integration: 'WHATSAPP-BAILEYS',
-      qrcode: false,
+      qrcode: true,
       rejectCall: false,
       groupsIgnore: true,
       alwaysOnline: true,
@@ -104,8 +105,8 @@ export class EvolutionClient {
     });
   }
 
-  async connectInstance(instanceName: string): Promise<{ base64: string }> {
-    return this.request<{ base64: string }>('GET', `/instance/connect/${instanceName}`);
+  async connectInstance(instanceName: string): Promise<{ base64?: string }> {
+    return this.request<{ base64?: string }>('GET', `/instance/connect/${instanceName}`);
   }
 
   async getInstanceStatus(instanceName: string): Promise<{ state: string }> {

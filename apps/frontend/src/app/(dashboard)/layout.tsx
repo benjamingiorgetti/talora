@@ -15,11 +15,13 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
   if (!token) return null;
 
   return (
-    <div className="min-h-screen bg-background">
-      <Navbar />
-      <main className="container py-6">
-        <ErrorBoundary>{children}</ErrorBoundary>
-      </main>
-    </div>
+    <ErrorBoundary>
+      <div className="min-h-screen bg-background">
+        <Navbar />
+        <main className="container py-6">
+          {children}
+        </main>
+      </div>
+    </ErrorBoundary>
   );
 }

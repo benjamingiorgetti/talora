@@ -1,6 +1,6 @@
 "use client";
 
-import React, { createContext, useContext, useEffect, useState, useCallback } from "react";
+import React, { createContext, useContext, useEffect, useRef, useState, useCallback } from "react";
 import { useRouter, usePathname } from "next/navigation";
 import { api } from "./api";
 
@@ -18,6 +18,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [isLoading, setIsLoading] = useState(true);
   const router = useRouter();
   const pathname = usePathname();
+  // Keep a stable ref so event handlers can read current token without stale closure.
+  const tokenRef = useRef<string | null>(null);
+  tokenRef.current = token;
 
   useEffect(() => {
     const stored = localStorage.getItem("token");
@@ -28,6 +31,31 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     }
     setIsLoading(false);
   }, [pathname, router]);
+
+  // Sync auth state when api.ts removes the token from localStorage (e.g. on 401).
+  // storage events only fire in OTHER tabs; focus events catch the same-tab case.
+  useEffect(() => {
+    const handleStorage = (e: StorageEvent) => {
+      if (e.key === "token" && !e.newValue) {
+        setToken(null);
+      }
+    };
+
+    const handleFocus = () => {
+      const current = localStorage.getItem("token");
+      if (!current && tokenRef.current) {
+        setToken(null);
+      }
+    };
+
+    window.addEventListener("storage", handleStorage);
+    window.addEventListener("focus", handleFocus);
+
+    return () => {
+      window.removeEventListener("storage", handleStorage);
+      window.removeEventListener("focus", handleFocus);
+    };
+  }, []);
 
   const login = useCallback(
     async (email: string, password: string) => {

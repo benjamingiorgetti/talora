@@ -75,14 +75,27 @@ instancesRouter.post('/:id/connect', async (req, res) => {
     const instanceName = instance.rows[0].evolution_instance_name;
     const qrResponse = await evolution.connectInstance(instanceName);
 
-    await pool.query(
-      `UPDATE whatsapp_instances
-       SET qr_code = $1, status = 'qr_pending', updated_at = NOW()
-       WHERE id = $2`,
-      [qrResponse.base64, id]
-    );
+    if (qrResponse.base64) {
+      await pool.query(
+        `UPDATE whatsapp_instances
+         SET qr_code = $1, status = 'qr_pending', updated_at = NOW()
+         WHERE id = $2`,
+        [qrResponse.base64, id]
+      );
 
-    res.json({ data: { qr_code: qrResponse.base64, status: 'qr_pending' } });
+      res.json({ data: { qr_code: qrResponse.base64, status: 'qr_pending' } });
+    } else {
+      logger.warn(`connectInstance for "${instanceName}" returned no base64 QR — waiting for webhook`);
+
+      await pool.query(
+        `UPDATE whatsapp_instances
+         SET status = 'qr_pending', updated_at = NOW()
+         WHERE id = $1`,
+        [id]
+      );
+
+      res.json({ data: { qr_code: null, status: 'qr_pending' } });
+    }
   } catch (err) {
     logger.error('Error connecting instance:', err);
     res.status(500).json({ error: 'Failed to connect instance' });

@@ -10,12 +10,21 @@ import type { WsEvent, WhatsAppInstance } from '@bottoo/shared';
 let wss: WebSocketServer;
 
 const HEARTBEAT_INTERVAL = 30_000;
+const MAX_WS_CONNECTIONS = 100;
 
 export function setupWebSocket(server: Server) {
   wss = new WebSocketServer({ noServer: true });
 
   // Handle upgrade manually to validate JWT before accepting connection
   server.on('upgrade', (request: IncomingMessage, socket, head) => {
+    // Enforce max concurrent connections
+    if (wss.clients.size >= MAX_WS_CONNECTIONS) {
+      logger.warn(`WebSocket connection rejected: max connections reached (${MAX_WS_CONNECTIONS})`);
+      socket.write('HTTP/1.1 503 Service Unavailable\r\n\r\n');
+      socket.destroy();
+      return;
+    }
+
     const url = new URL(request.url || '', `http://${request.headers.host}`);
     const token = url.searchParams.get('token');
 

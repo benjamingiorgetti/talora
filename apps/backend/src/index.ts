@@ -13,6 +13,7 @@ import { webhookRouter } from './evolution/webhook';
 import { authMiddleware } from './api/middleware';
 import { agentShortcutRouter } from './api/agent-shortcut';
 import { requestIdMiddleware } from './api/request-id';
+import { createRateLimiter } from './api/rate-limit';
 import { pool } from './db/pool';
 import { EvolutionClient } from './evolution/client';
 import { logger } from './utils/logger';
@@ -59,18 +60,21 @@ app.use('/auth', authRouter);
 app.use('/auth', googleAuthRouter);
 app.use('/webhook', webhookRouter);
 
+// Rate limiter for protected routes: 100 requests per minute per IP
+const apiRateLimiter = createRateLimiter(100, 60_000);
+
 // Protected routes (frontend uses paths without /api prefix)
-app.use('/instances', authMiddleware, instancesRouter);
-app.use('/conversations', authMiddleware, conversationsRouter);
-app.use('/alerts', authMiddleware, alertsRouter);
+app.use('/instances', authMiddleware, apiRateLimiter, instancesRouter);
+app.use('/conversations', authMiddleware, apiRateLimiter, conversationsRouter);
+app.use('/alerts', authMiddleware, apiRateLimiter, alertsRouter);
 
 // Agent routes: frontend uses /agent/sections and /agent/tools (single-tenant)
 // Backend agents router expects /:id/prompt-sections and /:id/tools
 // Bridge: resolve the single agent and rewrite the path
-app.use('/agent', authMiddleware, agentShortcutRouter);
+app.use('/agent', authMiddleware, apiRateLimiter, agentShortcutRouter);
 
 // Full agents CRUD (kept for direct API access)
-app.use('/api/agents', authMiddleware, agentsRouter);
+app.use('/api/agents', authMiddleware, apiRateLimiter, agentsRouter);
 
 // WebSocket
 setupWebSocket(server);

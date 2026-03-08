@@ -1,3 +1,18 @@
+import { pool } from './pool';
+
+/**
+ * Returns the next available order value for prompt_sections of a given agent.
+ * If an explicit order is provided, returns that instead.
+ */
+export async function getNextSectionOrder(agentId: string, explicitOrder?: number): Promise<number> {
+  if (explicitOrder !== undefined) return explicitOrder;
+  const result = await pool.query<{ max: number }>(
+    'SELECT COALESCE(MAX("order"), -1) as max FROM prompt_sections WHERE agent_id = $1',
+    [agentId]
+  );
+  return result.rows[0].max + 1;
+}
+
 /**
  * Builds a dynamic SET clause for UPDATE queries from a partial object.
  * Returns null if no fields to update.

@@ -1,19 +1,59 @@
+import { lookup } from 'node:dns/promises';
+import { isIP } from 'node:net';
 import { config } from '../config';
 
 const BLOCKED_HOSTNAMES = new Set([
   'localhost',
-  '127.0.0.1',
-  '0.0.0.0',
-  '[::1]',
   'metadata.google.internal',
-  '169.254.169.254',
+  'metadata.google',
+  'instance-data',
 ]);
 
-const PRIVATE_IP_PREFIXES = ['10.', '172.16.', '172.17.', '172.18.', '172.19.', '172.20.',
-  '172.21.', '172.22.', '172.23.', '172.24.', '172.25.', '172.26.', '172.27.', '172.28.',
-  '172.29.', '172.30.', '172.31.', '192.168.'];
+/**
+ * Check if an IPv4 address falls in a private or reserved range.
+ */
+function isPrivateOrReservedIp(ip: string): boolean {
+  // Handle IPv6-mapped IPv4 (::ffff:x.x.x.x)
+  if (ip.startsWith('::ffff:')) {
+    const mapped = ip.slice(7);
+    if (isIP(mapped) === 4) {
+      return isPrivateOrReservedIp(mapped);
+    }
+  }
 
-export function validateWebhookUrl(url: string): void {
+  // IPv6 loopback and link-local
+  if (ip === '::1') return true;
+  const lowerIp = ip.toLowerCase();
+  if (lowerIp.startsWith('fe80:')) return true; // fe80::/10 link-local
+  if (lowerIp.startsWith('fc') || lowerIp.startsWith('fd')) return true; // fc00::/7 ULA
+
+  // IPv4 checks
+  const parts = ip.split('.').map(Number);
+  if (parts.length !== 4 || parts.some((p) => isNaN(p))) return false;
+
+  const [a, b] = parts;
+
+  // 0.0.0.0/8
+  if (a === 0) return true;
+  // 127.0.0.0/8 (full loopback range)
+  if (a === 127) return true;
+  // 10.0.0.0/8
+  if (a === 10) return true;
+  // 172.16.0.0/12
+  if (a === 172 && b >= 16 && b <= 31) return true;
+  // 192.168.0.0/16
+  if (a === 192 && b === 168) return true;
+  // 169.254.0.0/16 (link-local)
+  if (a === 169 && b === 254) return true;
+
+  return false;
+}
+
+/**
+ * Validate a webhook URL is safe to call (no SSRF).
+ * Resolves DNS to check the actual IP address.
+ */
+export async function validateWebhookUrl(url: string): Promise<void> {
   let parsed: URL;
   try {
     parsed = new URL(url);
@@ -27,12 +67,9 @@ export function validateWebhookUrl(url: string): void {
 
   const hostname = parsed.hostname.toLowerCase();
 
+  // Fast-path: block well-known internal hostnames
   if (BLOCKED_HOSTNAMES.has(hostname)) {
     throw new Error(`Blocked hostname: ${hostname}`);
-  }
-
-  if (PRIVATE_IP_PREFIXES.some((prefix) => hostname.startsWith(prefix))) {
-    throw new Error(`Private IP addresses are not allowed: ${hostname}`);
   }
 
   // Check allowlist if configured
@@ -42,5 +79,22 @@ export function validateWebhookUrl(url: string): void {
     if (!allowed.has(hostname)) {
       throw new Error(`Hostname not in allowlist: ${hostname}`);
     }
+  }
+
+  // Resolve hostname to IP and validate
+  let resolvedIp: string;
+  if (isIP(hostname)) {
+    resolvedIp = hostname;
+  } else {
+    try {
+      const result = await lookup(hostname);
+      resolvedIp = result.address;
+    } catch {
+      throw new Error(`Could not resolve hostname: ${hostname}`);
+    }
+  }
+
+  if (isPrivateOrReservedIp(resolvedIp)) {
+    throw new Error(`URL resolves to private/reserved IP (${resolvedIp}): ${hostname}`);
   }
 }

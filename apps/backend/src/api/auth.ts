@@ -80,11 +80,11 @@ function cleanupStaleEntries(): void {
   }
 }
 
+// Run cleanup on a fixed interval instead of on every login request
+setInterval(cleanupStaleEntries, 60_000);
+
 authRouter.post('/login', async (req, res) => {
   const ip = req.ip || req.socket.remoteAddress || 'unknown';
-
-  // Clean up stale entries on each request
-  cleanupStaleEntries();
 
   // Rate limit check
   if (isRateLimited(ip)) {

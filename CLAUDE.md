@@ -132,3 +132,8 @@ Run migrations: `cd apps/backend && bun run migrate`
 
 - **evolution-api-backend-dev** (Opus): Backend tasks, Evolution API integration, webhook logic
 - **frontend-ui-craftsman** (Sonnet): Frontend UI components, animations, dashboard design
+- **prompt-engineer** (Opus): System prompt design, tool definitions, Anthropic SDK patterns, bot response quality
+- **infra-devops** (Sonnet): Docker, CI/CD, deployment, monitoring, security
+- **db-migrations** (Sonnet): Schema design, migrations, query optimization, PostgreSQL
+- **calendar-integrations** (Opus): Google Calendar, OAuth2, scheduling logic, external integrations
+- **testing** (Sonnet): Test infrastructure, unit/integration tests, mocks, coverage
