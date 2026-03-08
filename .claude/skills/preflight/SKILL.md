@@ -1,6 +1,6 @@
 ---
 name: preflight
-description: "Run pre-implementation diagnostics for bottoo. Checks env vars, dependencies, Docker, ports, type-checking, and URL alignment between frontend and backend."
+description: "Run pre-implementation diagnostics for Talora. Checks env vars, dependencies, Docker, ports, type-checking, and URL alignment between frontend and backend."
 user_invocable: true
 ---
 

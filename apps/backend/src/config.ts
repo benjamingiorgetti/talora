@@ -43,6 +43,7 @@ export const config = {
   googleCalendarId: optionalEnv('GOOGLE_CALENDAR_ID', 'primary'),
   webhookAllowedHosts: optionalEnv('WEBHOOK_ALLOWED_HOSTS', ''),
   webhookSecret: optionalEnv('WEBHOOK_SECRET', ''),
+  openaiApiKey: requireEnv('OPENAI_API_KEY'),
 
   // Operational limits
   maxToolIterations: parseInt(optionalEnv('MAX_TOOL_ITERATIONS', '10')),

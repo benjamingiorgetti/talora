@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useRef, useCallback, useMemo } from "react";
 import useSWR from "swr";
-import type { Conversation, Message } from "@bottoo/shared";
+import type { Conversation, Message } from "@talora/shared";
 import { fetcher } from "@/lib/api";
 
 import { Input } from "@/components/ui/input";
@@ -31,14 +31,15 @@ function getInitial(name: string | null | undefined, phone: string) {
   return phone.slice(-2);
 }
 
+// Dark-mode safe avatar palette
 const avatarColors = [
-  "bg-orange-200 text-orange-700",
-  "bg-blue-200 text-blue-700",
-  "bg-green-200 text-green-700",
-  "bg-purple-200 text-purple-700",
-  "bg-pink-200 text-pink-700",
-  "bg-cyan-200 text-cyan-700",
-  "bg-amber-200 text-amber-700",
+  "bg-blue-500/15 text-blue-400",
+  "bg-indigo-500/15 text-indigo-400",
+  "bg-sky-500/15 text-sky-400",
+  "bg-violet-500/15 text-violet-400",
+  "bg-teal-500/15 text-teal-400",
+  "bg-cyan-500/15 text-cyan-400",
+  "bg-slate-500/15 text-slate-400",
 ];
 
 function getAvatarColor(id: string) {
@@ -58,18 +59,18 @@ function ToolCallCard({ message }: { message: Message }) {
 
   return (
     <div className="mx-auto my-3 max-w-md">
-      <Card className="rounded-xl border-2 border-dashed border-primary/20 bg-primary/5">
-        <CardContent className="p-4">
-          <div className="flex items-center gap-2 mb-2">
-            <div className="h-7 w-7 rounded-lg bg-primary/10 flex items-center justify-center">
-              <Wrench className="h-4 w-4 text-primary" />
+      <Card className="rounded-xl border border-dashed border-primary/20 bg-primary/5">
+        <CardContent className="p-3">
+          <div className="flex items-center gap-2 mb-1.5">
+            <div className="h-6 w-6 rounded-md bg-primary/10 flex items-center justify-center">
+              <Wrench className="h-3.5 w-3.5 text-primary" />
             </div>
-            <span className="text-sm font-bold text-primary">
+            <span className="text-xs font-semibold text-primary">
               {toolInfo.name}
             </span>
           </div>
           {toolInfo.result && (
-            <pre className="text-sm text-muted-foreground whitespace-pre-wrap break-words">
+            <pre className="text-xs text-muted-foreground whitespace-pre-wrap break-words">
               {toolInfo.result}
             </pre>
           )}
@@ -89,17 +90,17 @@ function MessageBubble({ message }: { message: Message }) {
   if (message.role === "assistant" && message.tool_calls && message.tool_calls.length > 0 && !message.content) {
     return (
       <div className="mx-auto my-3 max-w-md">
-        <Card className="rounded-xl border-2 border-dashed border-primary/30 bg-primary/5">
-          <CardContent className="p-4">
-            <div className="flex items-center gap-2 mb-2">
-              <div className="h-7 w-7 rounded-lg bg-primary/10 flex items-center justify-center">
-                <Wrench className="h-4 w-4 text-primary" />
+        <Card className="rounded-xl border border-dashed border-primary/30 bg-primary/5">
+          <CardContent className="p-3">
+            <div className="flex items-center gap-2 mb-1.5">
+              <div className="h-6 w-6 rounded-md bg-primary/10 flex items-center justify-center">
+                <Wrench className="h-3.5 w-3.5 text-primary" />
               </div>
-              <span className="text-sm font-bold text-primary">
+              <span className="text-xs font-semibold text-primary">
                 Llamada a herramienta
               </span>
             </div>
-            <pre className="text-sm text-muted-foreground whitespace-pre-wrap break-words">
+            <pre className="text-xs text-muted-foreground whitespace-pre-wrap break-words">
               {JSON.stringify(message.tool_calls, null, 2)}
             </pre>
           </CardContent>
@@ -109,33 +110,28 @@ function MessageBubble({ message }: { message: Message }) {
   }
 
   return (
-    <div className={cn("flex gap-3 my-3", isUser ? "justify-start" : "justify-end")}>
+    <div className={cn("flex gap-2.5 my-2.5", isUser ? "justify-start" : "justify-end")}>
       {isUser && (
-        <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-muted">
-          <User className="h-5 w-5 text-muted-foreground" />
+        <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-muted">
+          <User className="h-4 w-4 text-muted-foreground" />
         </div>
       )}
       <div
         className={cn(
-          "max-w-[75%] rounded-2xl px-4 py-3 text-base",
+          "max-w-[75%] rounded-xl px-4 py-2.5 text-sm",
           isUser
-            ? "bg-white shadow-sm border border-border/50 text-foreground"
-            : "bg-primary text-white shadow-md shadow-primary/15"
+            ? "bg-accent border border-border text-foreground"
+            : "bg-primary/15 text-foreground border border-primary/20"
         )}
       >
         <p className="whitespace-pre-wrap break-words">{message.content}</p>
-        <p
-          className={cn(
-            "mt-1.5 text-xs font-semibold",
-            isUser ? "text-muted-foreground" : "text-white/70"
-          )}
-        >
+        <p className="mt-1 text-xs text-muted-foreground">
           {formatTime(message.created_at)}
         </p>
       </div>
       {!isUser && (
-        <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-primary">
-          <Bot className="h-5 w-5 text-white" />
+        <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-primary/20">
+          <Bot className="h-4 w-4 text-primary" />
         </div>
       )}
     </div>
@@ -204,10 +200,10 @@ export function ConversationsTab() {
 
   if (error) {
     return (
-      <div className="space-y-5">
+      <div className="space-y-4">
         <div>
-          <h2 className="text-3xl font-extrabold tracking-tight">Conversaciones</h2>
-          <p className="mt-1 text-lg text-muted-foreground font-semibold">
+          <h2 className="text-xl font-semibold tracking-tight">Conversaciones</h2>
+          <p className="mt-0.5 text-sm font-medium text-muted-foreground">
             Revisa las conversaciones del bot con los clientes
           </p>
         </div>
@@ -218,10 +214,10 @@ export function ConversationsTab() {
 
   if (isLoading && allConversations.length === 0) {
     return (
-      <div className="space-y-5">
+      <div className="space-y-4">
         <div>
-          <h2 className="text-3xl font-extrabold tracking-tight">Conversaciones</h2>
-          <p className="mt-1 text-lg text-muted-foreground font-semibold">
+          <h2 className="text-xl font-semibold tracking-tight">Conversaciones</h2>
+          <p className="mt-0.5 text-sm font-medium text-muted-foreground">
             Revisa las conversaciones del bot con los clientes
           </p>
         </div>
@@ -231,44 +227,44 @@ export function ConversationsTab() {
   }
 
   return (
-    <div className="space-y-5">
+    <div className="space-y-4">
       <div>
-        <h2 className="text-3xl font-extrabold tracking-tight">Conversaciones</h2>
-        <p className="mt-1 text-lg text-muted-foreground font-semibold">
+        <h2 className="text-xl font-semibold tracking-tight">Conversaciones</h2>
+        <p className="mt-0.5 text-sm font-medium text-muted-foreground">
           Revisa las conversaciones del bot con los clientes
         </p>
       </div>
 
-      <div className="flex h-[600px] rounded-2xl border-0 shadow-md overflow-hidden">
+      <div className="flex h-[600px] rounded-lg border border-border overflow-hidden">
         {/* Left panel */}
-        <div className="w-80 shrink-0 border-r bg-white flex flex-col">
-          <div className="p-4 border-b">
+        <div className="w-72 shrink-0 border-r border-border bg-card flex flex-col">
+          <div className="p-3 border-b border-border">
             <div className="relative">
-              <Search className="absolute left-4 top-1/2 h-5 w-5 -translate-y-1/2 text-muted-foreground" />
+              <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
               <Input
                 placeholder="Buscar por nombre o telefono..."
                 value={search}
                 onChange={(e) => setSearch(e.target.value)}
-                className="h-12 rounded-full border-2 bg-muted/50 pl-12 text-base"
+                className="h-9 rounded-md border border-border bg-background pl-9 text-sm"
               />
             </div>
           </div>
           <ScrollArea className="flex-1">
-            <div className="p-2 space-y-1">
+            <div className="p-2 space-y-0.5">
               {filtered.map((conv) => (
                 <button
                   key={conv.id}
                   onClick={() => setSelectedId(conv.id)}
                   className={cn(
-                    "w-full text-left rounded-xl px-4 py-4 transition-all duration-200 flex items-center gap-3",
+                    "w-full text-left rounded-md px-3 py-3 transition-colors duration-150 flex items-center gap-2.5",
                     selectedId === conv.id
-                      ? "bg-primary/10"
-                      : "hover:bg-muted/50"
+                      ? "bg-accent border-l-2 border-l-primary"
+                      : "hover:bg-accent/50"
                   )}
                 >
                   <div
                     className={cn(
-                      "h-11 w-11 rounded-full flex items-center justify-center shrink-0 font-extrabold text-sm",
+                      "h-9 w-9 rounded-full flex items-center justify-center shrink-0 font-semibold text-xs",
                       getAvatarColor(conv.id)
                     )}
                   >
@@ -276,16 +272,16 @@ export function ConversationsTab() {
                   </div>
                   <div className="flex-1 min-w-0">
                     <div className="flex items-center justify-between">
-                      <span className="text-base font-bold truncate">
+                      <span className="text-sm font-semibold truncate">
                         {conv.contact_name ?? conv.phone_number}
                       </span>
                     </div>
                     <div className="flex items-center justify-between mt-0.5">
-                      <span className="text-sm text-muted-foreground truncate">
+                      <span className="text-xs text-muted-foreground truncate">
                         {conv.phone_number}
                       </span>
                       {conv.last_message_at && (
-                        <span className="text-xs text-muted-foreground shrink-0 ml-2 font-semibold">
+                        <span className="text-xs text-muted-foreground shrink-0 ml-2">
                           {formatTime(conv.last_message_at)}
                         </span>
                       )}
@@ -294,16 +290,16 @@ export function ConversationsTab() {
                 </button>
               ))}
               {filtered.length === 0 && (
-                <p className="py-12 text-center text-base font-bold text-muted-foreground">
+                <p className="py-10 text-center text-sm font-medium text-muted-foreground">
                   No hay conversaciones
                 </p>
               )}
               {conversations && conversations.length === PAGE_LIMIT && !debouncedSearch && (
-                <div className="py-4 flex justify-center">
+                <div className="py-3 flex justify-center">
                   <Button
                     variant="outline"
                     onClick={handleLoadMore}
-                    className="h-12 rounded-xl border-2 text-base font-bold"
+                    className="h-9 rounded-lg text-sm font-medium"
                   >
                     Cargar mas
                   </Button>
@@ -314,11 +310,11 @@ export function ConversationsTab() {
         </div>
 
         {/* Right panel */}
-        <div className="flex-1 flex flex-col bg-amber-50/20">
+        <div className="flex-1 flex flex-col bg-background">
           {selectedId ? (
             <>
-              <div className="p-4 border-b bg-white">
-                <span className="text-lg font-bold">
+              <div className="p-4 border-b border-border">
+                <span className="text-sm font-semibold">
                   {(() => {
                     const conv = allConversations.find((c) => c.id === selectedId);
                     return conv?.contact_name ?? conv?.phone_number ?? "";
@@ -326,7 +322,7 @@ export function ConversationsTab() {
                 </span>
               </div>
               <ScrollArea className="flex-1">
-                <div className="p-6">
+                <div className="p-5">
                   {messages?.map((msg) => (
                     <MessageBubble key={msg.id} message={msg} />
                   ))}
@@ -335,11 +331,11 @@ export function ConversationsTab() {
               </ScrollArea>
             </>
           ) : (
-            <div className="flex flex-1 flex-col items-center justify-center gap-4">
-              <div className="h-16 w-16 rounded-full bg-muted flex items-center justify-center">
-                <MessageSquare className="h-8 w-8 text-muted-foreground" />
+            <div className="flex flex-1 flex-col items-center justify-center gap-3">
+              <div className="h-14 w-14 rounded-xl bg-muted flex items-center justify-center">
+                <MessageSquare className="h-7 w-7 text-muted-foreground" />
               </div>
-              <p className="text-lg font-bold text-muted-foreground">
+              <p className="text-sm font-medium text-muted-foreground">
                 Selecciona una conversacion para ver los mensajes
               </p>
             </div>

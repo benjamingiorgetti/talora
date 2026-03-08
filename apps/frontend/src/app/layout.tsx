@@ -1,22 +1,22 @@
 import type { Metadata } from "next";
-import { Nunito } from "next/font/google";
+import { Plus_Jakarta_Sans } from "next/font/google";
 import "./globals.css";
 import { Providers } from "./providers";
 
-const nunito = Nunito({
+const plusJakarta = Plus_Jakarta_Sans({
   subsets: ["latin"],
-  weight: ["400", "600", "700", "800"],
+  weight: ["400", "500", "600"],
 });
 
 export const metadata: Metadata = {
-  title: "Illuminato Estudio - Admin",
+  title: "Talora - Admin",
   description: "Panel de administracion del bot de WhatsApp",
 };
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
-    <html lang="es" suppressHydrationWarning>
-      <body className={`${nunito.className} antialiased`}>
+    <html lang="es" className="dark" suppressHydrationWarning>
+      <body className={`${plusJakarta.className} antialiased`}>
         <Providers>{children}</Providers>
       </body>
     </html>

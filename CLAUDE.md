@@ -1,4 +1,4 @@
-# bottoo
+# Talora
 
 WhatsApp conversational agent for tattoo studios. Admin panel to configure agents, monitor conversations, and manage WhatsApp instances via Evolution API.
 
@@ -7,7 +7,7 @@ WhatsApp conversational agent for tattoo studios. Admin panel to configure agent
 - **Monorepo**: Bun workspaces (`apps/*`, `packages/*`)
 - **Backend**: Express + TypeScript on Bun (`apps/backend/`, port 3001)
 - **Frontend**: Next.js 14 + Tailwind + shadcn/ui (`apps/frontend/`, port 3000)
-- **Shared types**: `packages/shared/src/index.ts` (imported as `@bottoo/shared`)
+- **Shared types**: `packages/shared/src/index.ts` (imported as `@talora/shared`)
 - **Infrastructure**: Docker Compose (PostgreSQL 16 + Evolution API v2.2.3)
 - **AI**: Anthropic SDK (`@anthropic-ai/sdk`)
 - **DB**: PostgreSQL, migrations in `apps/backend/src/db/migrate.ts`
@@ -66,11 +66,54 @@ Optional (infrastructure):
 - **ALWAYS launch multiple agents in parallel** for any task. NEVER use a single agent alone. Decompose every task into at least 2 independent sub-tasks and launch them concurrently (e.g., one agent for backend research/changes and another for frontend, or one for exploration and another for implementation planning). This is a hard requirement — no exceptions.
 - **Before implementing a new feature**, ask if the user wants a plan first
 - **Before running the app**, verify `.env` exists and has all required keys populated
-- **Shared types** go in `packages/shared/src/index.ts` - import as `@bottoo/shared`
+- **Shared types** go in `packages/shared/src/index.ts` - import as `@talora/shared`
 - **Frontend API URL** must point to `http://localhost:3001` (NOT 4000 or other ports). The fallback in `apps/frontend/src/lib/api.ts` is `localhost:4000` which is WRONG - always set `NEXT_PUBLIC_API_URL=http://localhost:3001` in `.env`
 - **Backend config** is centralized in `apps/backend/src/config.ts` - use `requireEnv()` / `optionalEnv()` helpers
 - **CORS origin** defaults to `http://localhost:5173` in config.ts - **set `CORS_ORIGIN=http://localhost:3000` in `.env`**
 - After editing TypeScript files, validate types compile: `cd apps/backend && bunx tsc --noEmit`
+
+## Workflow Preferences
+
+- Before implementing any non-trivial feature, ask 10+ clarification questions to understand scope, edge cases, and priorities
+- Always explore existing code before writing new code — read relevant files first
+- After implementation, run a verification checklist: type-check (`tsc --noEmit`), lint, and manual test
+- When debugging, check in this order: env vars → service health (`docker ps`, ports) → logs → code
+- Default to planning mode for features that touch 3+ files
+
+## Brand Guidelines
+
+- **Brand name**: Talora
+- **Primary font**: Plus Jakarta Sans (Google Font, loaded in `layout.tsx`)
+- **Secondary font**: Sohne (self-hosted or fallback to system sans-serif)
+- **Theme**: Dark mode
+- **Primary color**: HSL `142 60% 55%` — green
+- **Background**: HSL `222 47% 6%` — dark navy
+- **Card/Surface**: HSL `222 40% 8%` — slightly lighter navy
+- **Border**: HSL `222 20% 16%`
+- **Logo**: `public/talora-logo.png`, `public/talora-logo-transparent.png`
+- **Color tokens** defined in `apps/frontend/src/app/globals.css`
+
+## Design Standards
+
+- UI aesthetic: Dark, minimal, clean
+- Animation library: Framer Motion (motion variants in `apps/frontend/src/lib/motion.ts`)
+- Component library: shadcn/ui + Radix UI primitives
+- Design principle: Maximum clarity, minimal cognitive load — interfaces should be intuitive at first glance
+
+## Integration Patterns
+
+- All external API clients go in `apps/backend/src/<service>/client.ts`
+- Wrap all external calls with timeout + retry + error normalization
+- Types for external APIs go in `packages/shared/src/index.ts`
+
+## Debugging Checklist
+
+When something doesn't work:
+1. Check `.env` has all required vars (compare with `.env.example`)
+2. Verify Docker containers are running: `docker ps`
+3. Check port availability: 3000 (frontend), 3001 (backend), 5432 (postgres), 8080 (evolution)
+4. Check backend logs for errors
+5. Verify `CORS_ORIGIN` matches frontend URL (`http://localhost:3000`)
 
 ## Quick Commands
 
@@ -132,8 +175,19 @@ Run migrations: `cd apps/backend && bun run migrate`
 
 - **evolution-api-backend-dev** (Opus): Backend tasks, Evolution API integration, webhook logic
 - **frontend-ui-craftsman** (Sonnet): Frontend UI components, animations, dashboard design
+- **code-auditor** (Sonnet): Code quality audits, security reviews, dead code detection, performance bottlenecks
+- **integrations** (Opus): Third-party API integrations, OAuth2 flows, Google Calendar, scheduling, external services (replaces calendar-integrations)
 - **prompt-engineer** (Opus): System prompt design, tool definitions, Anthropic SDK patterns, bot response quality
 - **infra-devops** (Sonnet): Docker, CI/CD, deployment, monitoring, security
 - **db-migrations** (Sonnet): Schema design, migrations, query optimization, PostgreSQL
-- **calendar-integrations** (Opus): Google Calendar, OAuth2, scheduling logic, external integrations
 - **testing** (Sonnet): Test infrastructure, unit/integration tests, mocks, coverage
+
+## Skills (Slash Commands)
+
+- `/launch` — Start full dev environment (Docker, migrations, backend, frontend)
+- `/preflight` — Read-only diagnostics (env vars, ports, types, URL alignment)
+- `/audit` — Full codebase quality audit with parallel agents
+- `/debug` — Systematic debugging (env → services → logs → code)
+- `/plan-deep` — Deep planning with 10-15 clarification questions before implementation
+- `/integrate <api>` — Scaffold a new API/library integration
+- `/rename <old> <new>` — Rename a brand/identifier across the entire codebase

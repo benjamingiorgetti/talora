@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import useSWR from "swr";
-import type { AgentTool } from "@bottoo/shared";
+import type { AgentTool } from "@talora/shared";
 import { fetcher, api } from "@/lib/api";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -33,12 +33,11 @@ import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 import { ErrorCard } from "@/components/ui/error-card";
 import { LoadingSpinner } from "@/components/ui/loading-spinner";
-
 const IMPL_TYPES = [
-  { value: "google_calendar_check", label: "Google Calendar - Consultar", icon: Calendar, color: "bg-blue-100 text-blue-700 border-blue-200" },
-  { value: "google_calendar_book", label: "Google Calendar - Reservar", icon: CalendarPlus, color: "bg-green-100 text-green-700 border-green-200" },
-  { value: "google_calendar_cancel", label: "Google Calendar - Cancelar", icon: CalendarX, color: "bg-red-100 text-red-700 border-red-200" },
-  { value: "webhook", label: "Webhook", icon: Webhook, color: "bg-purple-100 text-purple-700 border-purple-200" },
+  { value: "google_calendar_check", label: "Google Calendar - Consultar", icon: Calendar, color: "bg-blue-500/10 text-blue-400 border-blue-500/20" },
+  { value: "google_calendar_book", label: "Google Calendar - Reservar", icon: CalendarPlus, color: "bg-green-500/10 text-green-400 border-green-500/20" },
+  { value: "google_calendar_cancel", label: "Google Calendar - Cancelar", icon: CalendarX, color: "bg-red-500/10 text-red-400 border-red-500/20" },
+  { value: "webhook", label: "Webhook", icon: Webhook, color: "bg-purple-500/10 text-purple-400 border-purple-500/20" },
 ];
 
 function getImplConfig(impl: string) {
@@ -170,106 +169,107 @@ export function ToolsTab() {
   if (isLoading && !tools) return <LoadingSpinner />;
 
   return (
-    <div className="space-y-5">
+    <div className="space-y-4">
       <div className="flex items-center justify-between">
         <div>
-          <h2 className="text-3xl font-extrabold tracking-tight">Herramientas</h2>
-          <p className="mt-1 text-lg text-muted-foreground font-semibold">
+          <h2 className="text-xl font-semibold tracking-tight">Herramientas</h2>
+          <p className="mt-0.5 text-sm font-medium text-muted-foreground">
             Configura las herramientas disponibles para el agente
           </p>
         </div>
         <Button
           onClick={openCreate}
-          className="h-12 rounded-xl px-6 text-base font-bold"
+          className="h-9 rounded-lg px-4 text-sm font-medium"
         >
-          <Plus className="mr-2 h-5 w-5" />
+          <Plus className="mr-2 h-4 w-4" />
           Nueva Herramienta
         </Button>
       </div>
 
-      <div className="space-y-4">
+      <div className="space-y-3">
         {tools?.map((tool) => {
           const implConfig = getImplConfig(tool.implementation);
           const Icon = implConfig.icon;
 
           return (
-            <Card
-              key={tool.id}
-              className={cn(
-                "rounded-2xl border-0 shadow-sm hover-lift transition-all duration-200",
-                !tool.is_active && "opacity-60"
-              )}
-            >
-              <CardContent className="p-6">
-                <div className="flex items-center gap-5">
-                  <div className={cn("h-14 w-14 rounded-2xl flex items-center justify-center shrink-0", implConfig.color)}>
-                    <Icon className="h-7 w-7" />
-                  </div>
-                  <div className="flex-1 min-w-0">
-                    <div className="flex items-center gap-3 mb-1">
-                      <span className="text-lg font-bold">{tool.name}</span>
-                      <Badge
+            <div key={tool.id}>
+              <Card
+                className={cn(
+                  "rounded-lg border border-border",
+                  !tool.is_active && "opacity-60"
+                )}
+              >
+                <CardContent className="p-5">
+                  <div className="flex items-center gap-4">
+                    <div className={cn("h-9 w-9 rounded-md flex items-center justify-center shrink-0 border", implConfig.color)}>
+                      <Icon className="h-4 w-4" />
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center gap-2 mb-0.5">
+                        <span className="text-sm font-semibold">{tool.name}</span>
+                        <Badge
+                          variant="outline"
+                          className={cn("rounded text-xs font-medium px-2 border", implConfig.color)}
+                        >
+                          {implConfig.label}
+                        </Badge>
+                      </div>
+                      <p className="text-sm text-muted-foreground">
+                        {tool.description}
+                      </p>
+                    </div>
+                    <div className="flex items-center gap-3 shrink-0">
+                      <div className="flex items-center gap-2">
+                        <Switch
+                          checked={tool.is_active}
+                          onCheckedChange={() => handleToggle(tool)}
+                          disabled={togglingId === tool.id}
+                          aria-label={tool.is_active ? "Desactivar herramienta" : "Activar herramienta"}
+                        />
+                        <Label className="text-xs font-medium text-muted-foreground">
+                          {togglingId === tool.id ? "Cambiando..." : tool.is_active ? "Activa" : "Inactiva"}
+                        </Label>
+                      </div>
+                      <Button
                         variant="outline"
-                        className={cn("rounded-full font-bold px-3", implConfig.color)}
+                        size="icon"
+                        className="h-8 w-8 rounded-lg"
+                        onClick={() => openEdit(tool)}
+                        aria-label="Editar herramienta"
                       >
-                        {implConfig.label}
-                      </Badge>
+                        <Pencil className="h-4 w-4" />
+                      </Button>
+                      <Button
+                        variant="outline"
+                        size="icon"
+                        className="h-8 w-8 rounded-lg border-red-200 text-red-500 hover:bg-red-50 hover:text-red-600"
+                        onClick={() => confirmDelete(tool.id)}
+                        aria-label="Eliminar herramienta"
+                      >
+                        <Trash2 className="h-4 w-4" />
+                      </Button>
                     </div>
-                    <p className="text-base text-muted-foreground">
-                      {tool.description}
-                    </p>
                   </div>
-                  <div className="flex items-center gap-4 shrink-0">
-                    <div className="flex items-center gap-2">
-                      <Switch
-                        checked={tool.is_active}
-                        onCheckedChange={() => handleToggle(tool)}
-                        disabled={togglingId === tool.id}
-                        aria-label={tool.is_active ? "Desactivar herramienta" : "Activar herramienta"}
-                      />
-                      <Label className="text-sm font-bold">
-                        {togglingId === tool.id ? "Cambiando..." : tool.is_active ? "Activa" : "Inactiva"}
-                      </Label>
-                    </div>
-                    <Button
-                      variant="outline"
-                      size="icon"
-                      className="h-10 w-10 rounded-xl border-2"
-                      onClick={() => openEdit(tool)}
-                      aria-label="Editar herramienta"
-                    >
-                      <Pencil className="h-5 w-5" />
-                    </Button>
-                    <Button
-                      variant="outline"
-                      size="icon"
-                      className="h-10 w-10 rounded-xl border-2 border-red-200 text-red-500 hover:bg-red-50 hover:text-red-600"
-                      onClick={() => confirmDelete(tool.id)}
-                      aria-label="Eliminar herramienta"
-                    >
-                      <Trash2 className="h-5 w-5" />
-                    </Button>
-                  </div>
-                </div>
-              </CardContent>
-            </Card>
+                </CardContent>
+              </Card>
+            </div>
           );
         })}
 
         {(!tools || tools.length === 0) && (
           <div className="flex flex-col items-center justify-center py-20">
-            <Wrench className="h-12 w-12 text-muted-foreground mb-3" />
-            <p className="text-lg font-bold text-muted-foreground">
+            <Wrench className="h-10 w-10 text-muted-foreground mb-3" />
+            <p className="text-base font-semibold text-muted-foreground">
               No hay herramientas configuradas
             </p>
-            <p className="text-muted-foreground">
+            <p className="text-sm text-muted-foreground">
               Crea una nueva herramienta para empezar
             </p>
             <Button
               onClick={openCreate}
-              className="mt-6 h-12 rounded-xl px-6 text-base font-bold"
+              className="mt-5 h-9 rounded-lg px-4 text-sm font-medium"
             >
-              <Plus className="mr-2 h-5 w-5" />
+              <Plus className="mr-2 h-4 w-4" />
               Crear Herramienta
             </Button>
           </div>
@@ -278,39 +278,39 @@ export function ToolsTab() {
 
       {/* Tool Dialog */}
       <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
-        <DialogContent className="rounded-2xl sm:max-w-lg">
+        <DialogContent className="rounded-xl sm:max-w-lg">
           <DialogHeader>
-            <DialogTitle className="text-2xl font-extrabold">
+            <DialogTitle className="text-lg font-semibold">
               {editingId ? "Editar Herramienta" : "Nueva Herramienta"}
             </DialogTitle>
-            <DialogDescription className="text-base">
+            <DialogDescription>
               {editingId
                 ? "Modifica la configuracion de esta herramienta"
                 : "Configura una nueva herramienta para el agente"}
             </DialogDescription>
           </DialogHeader>
-          <div className="space-y-5 py-2">
-            <div className="space-y-2">
-              <Label className="text-base font-bold">Nombre</Label>
+          <div className="space-y-4 py-2">
+            <div className="space-y-1.5">
+              <Label className="text-sm font-medium">Nombre</Label>
               <Input
                 value={form.name}
                 onChange={(e) => setForm({ ...form, name: e.target.value })}
                 placeholder="check_availability"
-                className="h-12 rounded-xl border-2 text-base"
+                className="h-10 rounded-lg text-sm"
               />
             </div>
-            <div className="space-y-2">
-              <Label className="text-base font-bold">Descripcion</Label>
+            <div className="space-y-1.5">
+              <Label className="text-sm font-medium">Descripcion</Label>
               <Textarea
                 value={form.description}
                 onChange={(e) => setForm({ ...form, description: e.target.value })}
                 placeholder="Verifica la disponibilidad de turnos..."
                 rows={3}
-                className="rounded-xl border-2 text-base p-4"
+                className="rounded-lg text-sm p-3"
               />
             </div>
-            <div className="space-y-2">
-              <Label className="text-base font-bold">Parametros (JSON Schema)</Label>
+            <div className="space-y-1.5">
+              <Label className="text-sm font-medium">Parametros (JSON Schema)</Label>
               <Textarea
                 value={form.parameters}
                 onChange={(e) => {
@@ -318,18 +318,18 @@ export function ToolsTab() {
                   setFormError("");
                 }}
                 className={cn(
-                  "rounded-xl border-2 font-mono text-sm p-4",
+                  "rounded-lg font-mono text-sm p-3",
                   formError && "border-red-400 bg-red-50"
                 )}
                 rows={6}
               />
               {formError && (
-                <p className="text-sm font-bold text-red-500">{formError}</p>
+                <p className="text-xs font-medium text-red-500">{formError}</p>
               )}
             </div>
-            <div className="space-y-3">
-              <Label className="text-base font-bold">Tipo de implementacion</Label>
-              <div className="grid grid-cols-2 gap-3">
+            <div className="space-y-2">
+              <Label className="text-sm font-medium">Tipo de implementacion</Label>
+              <div className="grid grid-cols-2 gap-2">
                 {IMPL_TYPES.map((t) => {
                   const ImplIcon = t.icon;
                   const isSelected = form.implementation === t.value;
@@ -339,14 +339,14 @@ export function ToolsTab() {
                       type="button"
                       onClick={() => setForm({ ...form, implementation: t.value })}
                       className={cn(
-                        "flex items-center gap-3 rounded-xl border-2 p-4 text-left transition-all duration-200",
+                        "flex items-center gap-2.5 rounded-lg border p-3 text-left transition-all duration-200",
                         isSelected
-                          ? "border-primary bg-primary/5 ring-2 ring-primary/20"
+                          ? "border-primary bg-primary/5 ring-1 ring-primary/20"
                           : "border-border hover:border-primary/30 hover:bg-muted/50"
                       )}
                     >
-                      <ImplIcon className={cn("h-6 w-6", isSelected ? "text-primary" : "text-muted-foreground")} />
-                      <span className={cn("text-sm font-bold", isSelected ? "text-primary" : "text-foreground")}>
+                      <ImplIcon className={cn("h-4 w-4", isSelected ? "text-primary" : "text-muted-foreground")} />
+                      <span className={cn("text-xs font-medium", isSelected ? "text-primary" : "text-foreground")}>
                         {t.label}
                       </span>
                     </button>
@@ -354,28 +354,28 @@ export function ToolsTab() {
                 })}
               </div>
             </div>
-            <div className="flex items-center gap-3">
+            <div className="flex items-center gap-2.5">
               <Switch
                 checked={form.is_active}
                 onCheckedChange={(checked) => setForm({ ...form, is_active: checked })}
               />
-              <Label className="text-base font-bold">
+              <Label className="text-sm font-medium">
                 {form.is_active ? "Activa" : "Inactiva"}
               </Label>
             </div>
           </div>
-          <DialogFooter className="gap-3">
+          <DialogFooter className="gap-2">
             <Button
               variant="outline"
               onClick={() => setDialogOpen(false)}
-              className="h-12 rounded-xl border-2 text-base font-bold"
+              className="h-10 rounded-lg text-sm font-medium"
             >
               Cancelar
             </Button>
             <Button
               onClick={handleSave}
               disabled={saving || !form.name.trim()}
-              className="h-12 rounded-xl text-base font-bold"
+              className="h-10 rounded-lg text-sm font-medium"
             >
               {saving ? "Guardando..." : "Guardar"}
             </Button>
@@ -385,30 +385,30 @@ export function ToolsTab() {
 
       {/* Delete Confirmation Dialog */}
       <Dialog open={deleteOpen} onOpenChange={setDeleteOpen}>
-        <DialogContent className="rounded-2xl sm:max-w-sm">
+        <DialogContent className="rounded-xl sm:max-w-sm">
           <DialogHeader>
-            <DialogTitle className="text-xl font-extrabold text-red-600">
+            <DialogTitle className="text-lg font-semibold text-red-600">
               Eliminar Herramienta
             </DialogTitle>
-            <DialogDescription className="text-base">
+            <DialogDescription>
               Esta accion no se puede deshacer.
             </DialogDescription>
           </DialogHeader>
-          <DialogFooter className="gap-3 mt-4">
+          <DialogFooter className="gap-2 mt-3">
             <Button
               variant="outline"
               onClick={() => setDeleteOpen(false)}
-              className="h-12 rounded-xl border-2 text-base font-bold flex-1"
+              className="h-10 rounded-lg text-sm font-medium flex-1"
             >
               Cancelar
             </Button>
             <Button
               onClick={handleDelete}
               disabled={!!deletingId}
-              className="h-12 rounded-xl bg-red-500 text-base font-bold text-white hover:bg-red-600 flex-1"
+              className="h-10 rounded-lg bg-red-500 text-sm font-medium text-white hover:bg-red-600 flex-1"
               aria-label="Confirmar eliminacion de herramienta"
             >
-              <Trash2 className="mr-2 h-5 w-5" />
+              <Trash2 className="mr-2 h-4 w-4" />
               {deletingId ? "Eliminando..." : "Eliminar"}
             </Button>
           </DialogFooter>

@@ -1,10 +1,10 @@
 ---
 name: launch
-description: "Start the full bottoo development environment. Checks .env, installs dependencies, starts Docker containers, runs migrations, and launches backend + frontend servers."
+description: "Start the full Talora development environment. Checks .env, installs dependencies, starts Docker containers, runs migrations, and launches backend + frontend servers."
 user_invocable: true
 ---
 
-Run the following checklist to launch the bottoo development environment. Stop and report if any step fails.
+Run the following checklist to launch the Talora development environment. Stop and report if any step fails.
 
 ## Step 1: Verify .env
 Read `.env` in the project root. Compare against `.env.example` and verify ALL required keys have non-empty values:

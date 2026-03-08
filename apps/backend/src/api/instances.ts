@@ -3,7 +3,7 @@ import { pool } from '../db/pool';
 import { EvolutionClient } from '../evolution/client';
 import { config } from '../config';
 import { logger } from '../utils/logger';
-import type { WhatsAppInstance } from '@bottoo/shared';
+import type { WhatsAppInstance } from '@talora/shared';
 
 export const instancesRouter = Router();
 const evolution = new EvolutionClient();
@@ -73,7 +73,47 @@ instancesRouter.post('/:id/connect', async (req, res) => {
     }
 
     const instanceName = instance.rows[0].evolution_instance_name;
-    const qrResponse = await evolution.connectInstance(instanceName);
+
+    // Auto-fix webhook URL if it points to localhost (unreachable from Docker)
+    const expectedWebhookUrl = `${config.webhookBaseUrl}/webhook/evolution`;
+    try {
+      const webhook = await evolution.getWebhook(instanceName);
+      if (webhook.url && webhook.url !== expectedWebhookUrl) {
+        logger.info(`Updating stale webhook for "${instanceName}": ${webhook.url} → ${expectedWebhookUrl}`);
+        await evolution.updateWebhook(instanceName, expectedWebhookUrl);
+      }
+    } catch (webhookErr) {
+      logger.warn(`Could not check/update webhook for "${instanceName}":`, webhookErr);
+    }
+
+    let qrResponse: { base64?: string } = {};
+
+    try {
+      qrResponse = await evolution.connectInstance(instanceName);
+    } catch (connectErr) {
+      const is404 = connectErr instanceof Error && connectErr.message.includes('(404)');
+      if (!is404) throw connectErr;
+
+      // Instance exists in DB but not in Evolution API — create it (QR comes in create response)
+      logger.info(`Instance "${instanceName}" not found in Evolution API — creating`);
+      const webhookUrl = `${config.webhookBaseUrl}/webhook/evolution`;
+      const createResult = await evolution.createInstance(instanceName, webhookUrl);
+      if (createResult.qrcode?.base64) {
+        qrResponse = { base64: createResult.qrcode.base64 };
+      } else {
+        // Fallback: try connectInstance after create
+        try {
+          qrResponse = await evolution.connectInstance(instanceName);
+        } catch {
+          logger.warn(`connectInstance after create failed for "${instanceName}" — will wait for webhook`);
+        }
+      }
+    }
+
+    // If no QR yet, wait for webhook — do NOT delete/recreate (that destroys the instance before Baileys generates QR)
+    if (!qrResponse.base64) {
+      logger.info(`No immediate QR for "${instanceName}" — waiting for webhook`);
+    }
 
     if (qrResponse.base64) {
       await pool.query(
@@ -85,7 +125,7 @@ instancesRouter.post('/:id/connect', async (req, res) => {
 
       res.json({ data: { qr_code: qrResponse.base64, status: 'qr_pending' } });
     } else {
-      logger.warn(`connectInstance for "${instanceName}" returned no base64 QR — waiting for webhook`);
+      logger.info(`No QR available for "${instanceName}" — will arrive via webhook`);
 
       await pool.query(
         `UPDATE whatsapp_instances
@@ -98,7 +138,13 @@ instancesRouter.post('/:id/connect', async (req, res) => {
     }
   } catch (err) {
     logger.error('Error connecting instance:', err);
-    res.status(500).json({ error: 'Failed to connect instance' });
+    const message = err instanceof Error ? err.message : 'Failed to connect instance';
+    const isEvolutionDown = message.includes('ECONNREFUSED') || message.includes('fetch failed');
+    res.status(isEvolutionDown ? 502 : 500).json({
+      error: isEvolutionDown
+        ? 'Evolution API no disponible. Verifica que el container este corriendo.'
+        : `Error al conectar: ${message}`,
+    });
   }
 });
 

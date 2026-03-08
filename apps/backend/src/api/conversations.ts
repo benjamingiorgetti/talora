@@ -1,7 +1,7 @@
 import { Router } from 'express';
 import { pool } from '../db/pool';
 import { logger } from '../utils/logger';
-import type { Conversation, Message } from '@bottoo/shared';
+import type { Conversation, Message } from '@talora/shared';
 
 export const conversationsRouter = Router();
 

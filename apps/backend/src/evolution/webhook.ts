@@ -7,7 +7,7 @@ import { handleIncomingMessage } from '../agent/index';
 import { EvolutionClient } from './client';
 import { logger } from '../utils/logger';
 import { withTimeout } from '../utils/timeout';
-import type { WhatsAppInstance } from '@bottoo/shared';
+import type { WhatsAppInstance } from '@talora/shared';
 
 const evolution = new EvolutionClient();
 
@@ -145,7 +145,7 @@ async function refreshKnownInstances() {
 refreshKnownInstances();
 setInterval(refreshKnownInstances, INSTANCE_CACHE_TTL_MS);
 
-webhookRouter.post('/evolution', (req, res) => {
+webhookRouter.post('/evolution/:event?', (req, res) => {
   // Origin validation
   if (!isWebhookAuthorized(req)) {
     logger.warn(`Webhook rejected: unauthorized origin ${getClientIp(req)}`);
@@ -223,7 +223,7 @@ async function handleMessagesUpsert(body: EvolutionWebhookBody) {
         await evolution.sendText(
           instanceName,
           phone,
-          'Por ahora solo puedo leer mensajes de texto. Por favor, escribí tu consulta.',
+          '¡Gracias por tu mensaje! Por ahora solo puedo leer texto. Si querés mostrarme una referencia de tatuaje, describímelo con palabras y te ayudo a encontrar lo que buscás. 🎨',
         );
       } catch (err) {
         logger.error(`Failed to send unsupported media reply to ${phone}:`, err);

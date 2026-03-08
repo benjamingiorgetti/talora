@@ -47,7 +47,19 @@ app.get('/api/health', async (_req, res) => {
     checks.evolution = 'error';
   }
 
-  const allOk = Object.values(checks).every((v) => v === 'ok');
+  // Google Calendar check
+  try {
+    const result = await pool.query("SELECT value FROM bot_config WHERE key = 'google_refresh_token'");
+    if (result.rows.length > 0 && result.rows[0].value) {
+      checks.google_calendar = 'ok';
+    } else {
+      checks.google_calendar = 'not_connected';
+    }
+  } catch {
+    checks.google_calendar = 'error';
+  }
+
+  const allOk = Object.values(checks).every((v) => v === 'ok' || v === 'not_connected');
   const status = allOk ? 'ok' : 'degraded';
 
   res.status(allOk ? 200 : 503).json({

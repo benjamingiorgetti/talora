@@ -1,0 +1,30 @@
+{$DOMAIN:localhost} {
+    handle /api/* {
+        reverse_proxy backend:3001
+    }
+    handle /auth/* {
+        reverse_proxy backend:3001
+    }
+    handle /webhook/* {
+        reverse_proxy backend:3001
+    }
+    handle /instances* {
+        reverse_proxy backend:3001
+    }
+    handle /conversations* {
+        reverse_proxy backend:3001
+    }
+    handle /alerts* {
+        reverse_proxy backend:3001
+    }
+    handle /agent* {
+        reverse_proxy backend:3001
+    }
+    handle {
+        reverse_proxy frontend:3000
+    }
+}
+
+{$EVO_DOMAIN:evo.localhost} {
+    reverse_proxy evolution-api:8080
+}

@@ -24,15 +24,17 @@ export function Providers({ children }: { children: React.ReactNode }) {
       {children}
       <Toaster
         position="bottom-right"
+        offset={24}
         toastOptions={{
           style: {
-            fontFamily: "'Nunito', sans-serif",
-            borderRadius: "16px",
+            background: "hsl(222 40% 8%)",
+            border: "1px solid hsl(222 20% 16%)",
+            borderRadius: "8px",
             padding: "16px",
-            fontSize: "15px",
+            fontSize: "13px",
+            color: "hsl(210 20% 93%)",
           },
         }}
-        richColors
       />
     </AuthProvider>
     </SWRConfig>

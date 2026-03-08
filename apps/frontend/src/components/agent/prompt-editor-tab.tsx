@@ -1,98 +1,244 @@
 "use client";
 
-import { useMemo } from "react";
-import useSWR from "swr";
-import type { PromptSection } from "@bottoo/shared";
-import { fetcher } from "@/lib/api";
-import { Card, CardContent } from "@/components/ui/card";
-import { Badge } from "@/components/ui/badge";
-import { ScrollArea } from "@/components/ui/scroll-area";
-import { FileText } from "lucide-react";
+import { useRef, useCallback, useState } from "react";
+import { usePromptEditor } from "@/hooks/use-prompt-editor";
+import { SaveDiscardBar } from "./save-discard-bar";
+import { VariablesPanel } from "./variables-panel";
+import { TestChatPanel } from "./test-chat-panel";
+import { EnvironmentToggle } from "./environment-toggle";
+import { ResolvedView } from "./resolved-view";
 import { ErrorCard } from "@/components/ui/error-card";
 import { LoadingSpinner } from "@/components/ui/loading-spinner";
+import { Button } from "@/components/ui/button";
+import { FileText, Eye, EyeOff } from "lucide-react";
+import { cn } from "@/lib/utils";
+import { AnimatePresence, motion } from "framer-motion";
 
 function highlightVariables(text: string) {
-  const parts = text.split(/({{[^}]+}})/g);
+  // Split text around {{variable}} patterns
+  const parts = text.split(/({{[^}]*}})/g);
   return parts.map((part, i) => {
     if (part.startsWith("{{") && part.endsWith("}}")) {
       return (
-        <span
+        <mark
           key={i}
-          className="inline-block rounded-full bg-orange-100 border border-orange-300 px-3 py-0.5 font-mono text-sm font-bold text-orange-600"
+          style={{
+            all: "unset",
+            backgroundColor: "hsl(var(--primary) / 0.15)",
+            color: "hsl(var(--primary))",
+            borderRadius: "2px",
+            padding: "0 2px",
+          }}
         >
           {part}
-        </span>
+        </mark>
       );
     }
-    return <span key={i}>{part}</span>;
+    return part;
   });
 }
 
-function HighlightedContent({ content }: { content: string }) {
-  const highlighted = useMemo(() => highlightVariables(content), [content]);
-  return <>{highlighted}</>;
-}
-
 export function PromptEditorTab() {
-  const { data: sections, error, isLoading, mutate } = useSWR<PromptSection[]>("/agent/sections", fetcher);
+  const {
+    localPrompt,
+    setLocalPrompt,
+    error,
+    isLoading,
+    isSaving,
+    isDirty,
+    save,
+    discard,
+    mutate,
+  } = usePromptEditor();
 
-  const activeSections = useMemo(
-    () => sections?.filter((s) => s.is_active).sort((a, b) => a.order - b.order),
-    [sections]
+  const [mode, setMode] = useState<"production" | "test">("production");
+  const [showResolved, setShowResolved] = useState(false);
+  const textareaRef = useRef<HTMLTextAreaElement>(null);
+  const backdropRef = useRef<HTMLDivElement>(null);
+
+  const handleInsertVariable = useCallback(
+    (key: string) => {
+      const varText = `{{${key}}}`;
+      const textarea = textareaRef.current;
+      if (!textarea) {
+        setLocalPrompt((prev) => prev + varText);
+        return;
+      }
+
+      const start = textarea.selectionStart;
+      const end = textarea.selectionEnd;
+      const before = localPrompt.slice(0, start);
+      const after = localPrompt.slice(end);
+      const newPrompt = before + varText + after;
+      setLocalPrompt(newPrompt);
+
+      // Restore cursor position after the inserted variable
+      requestAnimationFrame(() => {
+        textarea.focus();
+        const newPos = start + varText.length;
+        textarea.setSelectionRange(newPos, newPos);
+      });
+    },
+    [localPrompt, setLocalPrompt]
   );
+
+  const handleScroll = useCallback(() => {
+    if (textareaRef.current && backdropRef.current) {
+      backdropRef.current.scrollTop = textareaRef.current.scrollTop;
+      backdropRef.current.scrollLeft = textareaRef.current.scrollLeft;
+    }
+  }, []);
 
   if (error) return <ErrorCard onRetry={() => mutate()} />;
   if (isLoading) return <LoadingSpinner />;
 
   return (
-    <div className="space-y-5">
-      <div>
-        <h2 className="text-3xl font-extrabold tracking-tight">Prompt Completo</h2>
-        <p className="mt-1 text-lg text-muted-foreground font-semibold">
-          Vista previa del prompt final con todas las secciones activas
-        </p>
+    <div className="flex flex-col gap-0" style={{ minHeight: "calc(100vh - 200px)" }}>
+      {/* Top toolbar */}
+      <div className="flex items-center justify-between mb-4">
+        <div className="flex items-center gap-3">
+          <EnvironmentToggle mode={mode} onChange={setMode} />
+          <h2 className="text-xl font-semibold tracking-tight">
+            Prompt Editor
+          </h2>
+        </div>
+        <Button
+          variant="outline"
+          size="sm"
+          onClick={() => setShowResolved((v) => !v)}
+          className={cn(
+            "h-8 text-xs gap-1.5 transition-colors",
+            showResolved && "bg-accent text-foreground border-border"
+          )}
+          aria-pressed={showResolved}
+        >
+          {showResolved ? (
+            <EyeOff className="h-3.5 w-3.5" aria-hidden="true" />
+          ) : (
+            <Eye className="h-3.5 w-3.5" aria-hidden="true" />
+          )}
+          {showResolved ? "Ocultar vista resuelta" : "Vista Resuelta"}
+        </Button>
       </div>
 
-      <Card className="rounded-2xl border-0 shadow-md">
-        <CardContent className="p-0">
-          <ScrollArea className="h-[600px]">
-            <div className="p-8 space-y-8 bg-amber-50/30 rounded-2xl border-2 border-dashed border-amber-200/50">
-              {!activeSections || activeSections.length === 0 ? (
-                <div className="flex flex-col items-center justify-center py-20">
-                  <FileText className="h-12 w-12 text-muted-foreground mb-3" />
-                  <p className="text-lg font-bold text-muted-foreground">
-                    No hay secciones activas
-                  </p>
-                </div>
-              ) : (
-                activeSections.map((section, idx) => (
-                  <div key={section.id}>
-                    {idx > 0 && (
-                      <div className="border-t border-amber-200/50 mb-8" />
-                    )}
-                    <div className="space-y-3">
-                      <div className="flex items-center gap-3">
-                        <Badge className="rounded-full bg-primary/10 text-primary font-bold px-4 py-1 text-sm border-0">
-                          {section.title}
-                        </Badge>
-                        <Badge
-                          variant="outline"
-                          className="rounded-full text-xs font-bold"
-                        >
-                          #{section.order}
-                        </Badge>
-                      </div>
-                      <div className="whitespace-pre-wrap text-base leading-relaxed">
-                        <HighlightedContent content={section.content} />
-                      </div>
-                    </div>
+      {/* Main layout */}
+      <div className="flex gap-4 flex-1">
+        {/* Left: Editor area */}
+        <div className="flex-1 min-w-0">
+          <AnimatePresence mode="wait">
+            {showResolved ? (
+              <motion.div
+                key="resolved"
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                exit={{ opacity: 0 }}
+                transition={{ duration: 0.15, ease: "easeOut" }}
+                style={{ minHeight: "500px" }}
+              >
+                <ResolvedView isOpen={showResolved} />
+              </motion.div>
+            ) : (
+              <motion.div
+                key="editor"
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                exit={{ opacity: 0 }}
+                transition={{ duration: 0.15, ease: "easeOut" }}
+              >
+                {/* Highlighted editor: backdrop div + transparent textarea overlay */}
+                <div
+                  className="relative rounded-lg border border-border bg-card overflow-hidden"
+                  style={{ minHeight: "500px", height: "calc(100vh - 280px)" }}
+                >
+                  {/* Backdrop: renders highlighted text */}
+                  <div
+                    ref={backdropRef}
+                    className="absolute inset-0 p-4 overflow-auto pointer-events-none font-mono text-sm leading-relaxed whitespace-pre-wrap break-words text-foreground/90"
+                    aria-hidden="true"
+                  >
+                    {highlightVariables(localPrompt)}
+                    {/* Extra space so backdrop always has room for trailing newline */}
+                    {"\n"}
                   </div>
-                ))
+
+                  {/* Textarea: transparent text, visible caret */}
+                  <textarea
+                    ref={textareaRef}
+                    value={localPrompt}
+                    onChange={(e) => setLocalPrompt(e.target.value)}
+                    onScroll={handleScroll}
+                    className="relative w-full h-full p-4 font-mono text-sm leading-relaxed resize-none bg-transparent outline-none whitespace-pre-wrap break-words"
+                    style={{
+                      color: "transparent",
+                      caretColor: "hsl(var(--foreground))",
+                      minHeight: "500px",
+                      height: "calc(100vh - 280px)",
+                    }}
+                    spellCheck={false}
+                    placeholder="Escribi tu prompt aca... Usa {{variables}} para insertar valores dinamicos."
+                  />
+                </div>
+
+                {/* Empty state hint */}
+                {!localPrompt && (
+                  <div className="flex items-center gap-2 mt-3 px-1">
+                    <FileText className="h-4 w-4 text-muted-foreground/40" aria-hidden="true" />
+                    <p className="text-xs text-muted-foreground">
+                      Escribi el prompt del agente. Podes usar variables como{" "}
+                      <code className="font-mono text-primary bg-primary/10 px-1 rounded">
+                        {"{{nombreCliente}}"}
+                      </code>{" "}
+                      que se reemplazan automaticamente.
+                    </p>
+                  </div>
+                )}
+              </motion.div>
+            )}
+          </AnimatePresence>
+        </div>
+
+        {/* Right panel */}
+        <div className="w-72 shrink-0 sticky top-24 self-start">
+          <div
+            className="rounded-lg border border-border bg-card overflow-hidden flex flex-col"
+            style={{ height: "calc(100vh - 220px)", minHeight: "400px" }}
+          >
+            <AnimatePresence mode="wait">
+              {mode === "production" ? (
+                <motion.div
+                  key="variables"
+                  initial={{ opacity: 0 }}
+                  animate={{ opacity: 1 }}
+                  exit={{ opacity: 0 }}
+                  transition={{ duration: 0.12, ease: "easeOut" }}
+                  className="flex flex-col h-full"
+                >
+                  <VariablesPanel onInsertVariable={handleInsertVariable} />
+                </motion.div>
+              ) : (
+                <motion.div
+                  key="test-chat"
+                  initial={{ opacity: 0 }}
+                  animate={{ opacity: 1 }}
+                  exit={{ opacity: 0 }}
+                  transition={{ duration: 0.12, ease: "easeOut" }}
+                  className="flex flex-col h-full"
+                >
+                  <TestChatPanel />
+                </motion.div>
               )}
-            </div>
-          </ScrollArea>
-        </CardContent>
-      </Card>
+            </AnimatePresence>
+          </div>
+        </div>
+      </div>
+
+      {/* Save/discard bar */}
+      <SaveDiscardBar
+        isDirty={isDirty}
+        isSaving={isSaving}
+        onSave={save}
+        onDiscard={discard}
+      />
     </div>
   );
 }

@@ -3,7 +3,7 @@ import { pool } from '../db/pool';
 import { buildUpdateSet, getNextSectionOrder } from '../db/query-helpers';
 import { invalidateAgentCache } from '../cache/agent-cache';
 import { logger } from '../utils/logger';
-import type { Agent, PromptSection, AgentTool } from '@bottoo/shared';
+import type { Agent, PromptSection, AgentTool } from '@talora/shared';
 
 export const agentsRouter = Router();
 

@@ -9,12 +9,13 @@
  * shared cache (e.g., Redis) or use a pub/sub invalidation mechanism.
  */
 import { pool } from '../db/pool';
-import type { Agent, PromptSection, AgentTool } from '@bottoo/shared';
+import type { Agent, PromptSection, AgentTool, Variable } from '@talora/shared';
 
-interface AgentConfig {
+export interface AgentConfig {
   agent: Agent;
   sections: PromptSection[];
   tools: AgentTool[];
+  variables: Variable[];
 }
 
 let cachedConfig: AgentConfig | null = null;
@@ -52,7 +53,7 @@ async function fetchAgentConfig(): Promise<AgentConfig | null> {
 
   const agent = agentResult.rows[0];
 
-  const [sectionsResult, toolsResult] = await Promise.all([
+  const [sectionsResult, toolsResult, variablesResult] = await Promise.all([
     pool.query<PromptSection>(
       `SELECT * FROM prompt_sections
        WHERE agent_id = $1 AND is_active = true
@@ -63,12 +64,17 @@ async function fetchAgentConfig(): Promise<AgentConfig | null> {
       'SELECT * FROM tools WHERE agent_id = $1 AND is_active = true',
       [agent.id]
     ),
+    pool.query<Variable>(
+      'SELECT * FROM variables WHERE agent_id = $1 ORDER BY category, key',
+      [agent.id]
+    ),
   ]);
 
   cachedConfig = {
     agent,
     sections: sectionsResult.rows,
     tools: toolsResult.rows,
+    variables: variablesResult.rows,
   };
   cacheExpiry = Date.now() + CACHE_TTL_MS;
 

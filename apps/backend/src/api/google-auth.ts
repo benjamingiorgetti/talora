@@ -1,6 +1,8 @@
 import crypto from 'crypto';
 import { Router } from 'express';
 import { oauth2Client, saveRefreshToken } from '../calendar/client';
+import { config } from '../config';
+import { pool } from '../db/pool';
 import { logger } from '../utils/logger';
 import { authMiddleware } from './middleware';
 
@@ -65,9 +67,29 @@ googleAuthRouter.get('/google/callback', async (req, res) => {
       logger.info('Google Calendar refresh token saved successfully');
     }
     oauth2Client.setCredentials(tokens);
-    res.json({ success: true, message: 'Google Calendar connected successfully' });
+    // Redirect back to frontend agent page with success indicator
+    const frontendUrl = process.env.CORS_ORIGIN || 'http://localhost:3000';
+    res.redirect(`${frontendUrl}/agent?calendar=connected`);
   } catch (err) {
     logger.error('Google OAuth error:', err);
-    res.status(500).json({ error: 'Failed to exchange authorization code' });
+    const frontendUrl = process.env.CORS_ORIGIN || 'http://localhost:3000';
+    res.redirect(`${frontendUrl}/agent?calendar=error`);
   }
+});
+
+// GET /auth/google/status — check Google Calendar connection status (requires auth)
+googleAuthRouter.get('/google/status', authMiddleware, async (_req, res) => {
+  const configured = !!(config.googleClientId && config.googleClientSecret);
+
+  let connected = false;
+  try {
+    const result = await pool.query(
+      "SELECT value FROM bot_config WHERE key = 'google_refresh_token'",
+    );
+    connected = result.rows.length > 0 && !!result.rows[0].value;
+  } catch (err) {
+    logger.error('Error checking Google Calendar status:', err);
+  }
+
+  res.json({ configured, connected });
 });

@@ -26,7 +26,7 @@ Tables: `whatsapp_instances`, `agents`, `prompt_sections`, `tools`, `conversatio
 - Conversations have unique index on `(instance_id, phone_number)`
 - Messages indexed on `(conversation_id, created_at)`
 
-## Shared Types (import from `@bottoo/shared`)
+## Shared Types (import from `@talora/shared`)
 `WhatsAppInstance`, `Agent`, `PromptSection`, `AgentTool`, `Conversation`, `Message`, `Alert`, `BotConfig`, `ApiResponse<T>`, `WsEvent`
 
 ## Evolution API

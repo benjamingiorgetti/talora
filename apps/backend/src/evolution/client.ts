@@ -83,7 +83,7 @@ export class EvolutionClient {
     });
   }
 
-  async createInstance(instanceName: string, webhookUrl: string) {
+  async createInstance(instanceName: string, webhookUrl: string): Promise<{ instance?: Record<string, unknown>; qrcode?: { base64?: string } }> {
     return this.request('POST', '/instance/create', {
       instanceName,
       integration: 'WHATSAPP-BAILEYS',
@@ -117,6 +117,20 @@ export class EvolutionClient {
     return this.request('POST', `/message/sendText/${instanceName}`, {
       number: to,
       text,
+    });
+  }
+
+  async getWebhook(instanceName: string): Promise<{ url?: string }> {
+    return this.request<{ url?: string }>('GET', `/webhook/find/${instanceName}`);
+  }
+
+  async updateWebhook(instanceName: string, webhookUrl: string) {
+    return this.request('POST', `/webhook/set/${instanceName}`, {
+      url: webhookUrl,
+      webhookByEvents: true,
+      webhookBase64: true,
+      events: ['MESSAGES_UPSERT', 'CONNECTION_UPDATE', 'QRCODE_UPDATED'],
+      enabled: true,
     });
   }
 

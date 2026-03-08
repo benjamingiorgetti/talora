@@ -5,7 +5,7 @@ import jwt from 'jsonwebtoken';
 import { pool } from '../db/pool';
 import { config } from '../config';
 import { logger } from '../utils/logger';
-import type { WsEvent, WhatsAppInstance } from '@bottoo/shared';
+import type { WsEvent, WhatsAppInstance } from '@talora/shared';
 
 let wss: WebSocketServer;
 

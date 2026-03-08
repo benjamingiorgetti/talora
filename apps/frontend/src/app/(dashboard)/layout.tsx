@@ -18,7 +18,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
     <ErrorBoundary>
       <div className="min-h-screen bg-background">
         <Navbar />
-        <main className="container py-6">
+        <main className="container py-6 max-w-7xl mx-auto animate-in fade-in-0 duration-150">
           {children}
         </main>
       </div>

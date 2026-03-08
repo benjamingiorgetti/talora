@@ -1,4 +1,4 @@
-// Shared types for bottoo monorepo
+// Shared types for talora monorepo
 
 // --- WhatsApp Instances ---
 export interface WhatsAppInstance {
@@ -17,6 +17,7 @@ export interface Agent {
   id: string;
   name: string;
   model: string;
+  system_prompt: string;
   created_at: string;
   updated_at?: string;
 }
@@ -75,6 +76,37 @@ export interface Alert {
   instance_id: string | null;
   created_at: string;
   resolved_at: string | null;
+}
+
+// --- Variables ---
+export interface Variable {
+  id: string;
+  agent_id: string;
+  key: string;
+  default_value: string;
+  description: string;
+  category: 'system' | 'custom';
+  created_at: string;
+  updated_at?: string;
+}
+
+// --- Test Sessions ---
+export interface TestSession {
+  id: string;
+  agent_id: string;
+  created_at: string;
+  expires_at: string;
+}
+
+// --- Test Messages ---
+export interface TestMessage {
+  id: string;
+  session_id: string;
+  role: 'user' | 'assistant' | 'system' | 'tool';
+  content: string | null;
+  tool_calls: Record<string, unknown>[] | null;
+  tool_call_id: string | null;
+  created_at: string;
 }
 
 // --- Bot Config ---

@@ -2,8 +2,11 @@ import { Router } from 'express';
 import { pool } from '../db/pool';
 import { buildUpdateSet, getNextSectionOrder } from '../db/query-helpers';
 import { getAgentConfig, invalidateAgentCache } from '../cache/agent-cache';
+import { getResolvedPreview } from '../agent/prompt-builder';
+import { handleTestMessage } from '../agent/test-chat';
+import { config } from '../config';
 import { logger } from '../utils/logger';
-import type { PromptSection, AgentTool } from '@bottoo/shared';
+import type { PromptSection, AgentTool, Variable, TestSession, TestMessage } from '@talora/shared';
 
 export const agentShortcutRouter = Router();
 
@@ -174,5 +177,222 @@ agentShortcutRouter.delete('/tools/:toolId', async (req, res) => {
   } catch (err) {
     logger.error('Error deleting tool:', err);
     res.status(500).json({ error: 'Failed to delete tool' });
+  }
+});
+
+// --- Variables ---
+
+agentShortcutRouter.get('/variables', async (_req, res) => {
+  try {
+    const agentId = await getAgentId();
+    if (!agentId) { res.status(404).json({ error: 'No agent configured' }); return; }
+
+    const result = await pool.query<Variable>(
+      'SELECT * FROM variables WHERE agent_id = $1 ORDER BY category, key',
+      [agentId]
+    );
+    res.json({ data: result.rows });
+  } catch (err) {
+    logger.error('Error listing variables:', err);
+    res.status(500).json({ error: 'Failed to list variables' });
+  }
+});
+
+agentShortcutRouter.post('/variables', async (req, res) => {
+  try {
+    const agentId = await getAgentId();
+    if (!agentId) { res.status(404).json({ error: 'No agent configured' }); return; }
+
+    const { key, default_value, description } = req.body;
+    if (!key) { res.status(400).json({ error: 'Key is required' }); return; }
+
+    const result = await pool.query<Variable>(
+      `INSERT INTO variables (agent_id, key, default_value, description, category)
+       VALUES ($1, $2, $3, $4, 'custom') RETURNING *`,
+      [agentId, key, default_value || '', description || '']
+    );
+    invalidateAgentCache();
+    res.status(201).json({ data: result.rows[0] });
+  } catch (err) {
+    logger.error('Error creating variable:', err);
+    res.status(500).json({ error: 'Failed to create variable' });
+  }
+});
+
+agentShortcutRouter.put('/variables/:id', async (req, res) => {
+  const { id } = req.params;
+  const { key, default_value, description } = req.body;
+
+  const update = buildUpdateSet({ key, default_value, description });
+  if (!update) { res.status(400).json({ error: 'No fields to update' }); return; }
+
+  update.values.push(id);
+
+  try {
+    const result = await pool.query<Variable>(
+      `UPDATE variables SET ${update.setClause}
+       WHERE id = $${update.nextIndex} RETURNING *`,
+      update.values
+    );
+    if (result.rows.length === 0) { res.status(404).json({ error: 'Variable not found' }); return; }
+    invalidateAgentCache();
+    res.json({ data: result.rows[0] });
+  } catch (err) {
+    logger.error('Error updating variable:', err);
+    res.status(500).json({ error: 'Failed to update variable' });
+  }
+});
+
+agentShortcutRouter.delete('/variables/:id', async (req, res) => {
+  try {
+    // Only allow deleting custom variables
+    const check = await pool.query<Variable>(
+      'SELECT category FROM variables WHERE id = $1',
+      [req.params.id]
+    );
+    if (check.rows.length === 0) { res.status(404).json({ error: 'Variable not found' }); return; }
+    if (check.rows[0].category === 'system') {
+      res.status(403).json({ error: 'Cannot delete system variables' });
+      return;
+    }
+
+    await pool.query('DELETE FROM variables WHERE id = $1', [req.params.id]);
+    invalidateAgentCache();
+    res.json({ data: { success: true } });
+  } catch (err) {
+    logger.error('Error deleting variable:', err);
+    res.status(500).json({ error: 'Failed to delete variable' });
+  }
+});
+
+// --- Test Chat ---
+
+agentShortcutRouter.post('/test-chat/session', async (_req, res) => {
+  try {
+    const agentId = await getAgentId();
+    if (!agentId) { res.status(404).json({ error: 'No agent configured' }); return; }
+
+    const result = await pool.query<TestSession>(
+      `INSERT INTO test_sessions (agent_id) VALUES ($1) RETURNING *`,
+      [agentId]
+    );
+    res.status(201).json({ data: result.rows[0] });
+  } catch (err) {
+    logger.error('Error creating test session:', err);
+    res.status(500).json({ error: 'Failed to create test session' });
+  }
+});
+
+agentShortcutRouter.post('/test-chat/message', async (req, res) => {
+  try {
+    const { session_id, content } = req.body;
+    if (!session_id || !content) {
+      res.status(400).json({ error: 'session_id and content are required' });
+      return;
+    }
+
+    // Verify session exists and is not expired
+    const sessionResult = await pool.query<TestSession>(
+      'SELECT * FROM test_sessions WHERE id = $1 AND expires_at > NOW()',
+      [session_id]
+    );
+    if (sessionResult.rows.length === 0) {
+      res.status(404).json({ error: 'Test session not found or expired' });
+      return;
+    }
+
+    const response = await handleTestMessage(session_id, content);
+    res.json({ data: response });
+  } catch (err) {
+    logger.error('Error in test chat message:', err);
+    res.status(500).json({ error: 'Failed to process test message' });
+  }
+});
+
+agentShortcutRouter.get('/test-chat/session/:id/messages', async (req, res) => {
+  try {
+    const result = await pool.query<TestMessage>(
+      'SELECT * FROM test_messages WHERE session_id = $1 ORDER BY created_at ASC',
+      [req.params.id]
+    );
+    res.json({ data: result.rows });
+  } catch (err) {
+    logger.error('Error listing test messages:', err);
+    res.status(500).json({ error: 'Failed to list test messages' });
+  }
+});
+
+agentShortcutRouter.delete('/test-chat/session/:id', async (req, res) => {
+  try {
+    const result = await pool.query(
+      'DELETE FROM test_sessions WHERE id = $1 RETURNING id',
+      [req.params.id]
+    );
+    if (result.rows.length === 0) { res.status(404).json({ error: 'Session not found' }); return; }
+    res.json({ data: { success: true } });
+  } catch (err) {
+    logger.error('Error deleting test session:', err);
+    res.status(500).json({ error: 'Failed to delete test session' });
+  }
+});
+
+// --- Unified Prompt ---
+
+agentShortcutRouter.get('/prompt', async (_req, res) => {
+  try {
+    const agentId = await getAgentId();
+    if (!agentId) { res.status(404).json({ error: 'No agent configured' }); return; }
+
+    const result = await pool.query<{ system_prompt: string }>(
+      'SELECT system_prompt FROM agents WHERE id = $1',
+      [agentId]
+    );
+    if (result.rows.length === 0) { res.status(404).json({ error: 'Agent not found' }); return; }
+    res.json({ data: { prompt: result.rows[0].system_prompt } });
+  } catch (err) {
+    logger.error('Error fetching prompt:', err);
+    res.status(500).json({ error: 'Failed to fetch prompt' });
+  }
+});
+
+agentShortcutRouter.put('/prompt', async (req, res) => {
+  try {
+    const agentId = await getAgentId();
+    if (!agentId) { res.status(404).json({ error: 'No agent configured' }); return; }
+
+    const { prompt } = req.body;
+    if (typeof prompt !== 'string') { res.status(400).json({ error: 'prompt must be a string' }); return; }
+
+    await pool.query(
+      'UPDATE agents SET system_prompt = $1, updated_at = NOW() WHERE id = $2',
+      [prompt, agentId]
+    );
+    invalidateAgentCache();
+    res.json({ data: { success: true } });
+  } catch (err) {
+    logger.error('Error updating prompt:', err);
+    res.status(500).json({ error: 'Failed to update prompt' });
+  }
+});
+
+// --- Prompt Preview ---
+
+agentShortcutRouter.get('/prompt-preview', async (_req, res) => {
+  try {
+    const agentConfig = await getAgentConfig();
+    if (!agentConfig) { res.status(404).json({ error: 'No agent configured' }); return; }
+
+    const { agent, variables } = agentConfig;
+
+    const preview = getResolvedPreview({
+      systemPrompt: agent.system_prompt,
+      customVariables: variables,
+      timezone: config.timezone,
+    });
+
+    res.json({ data: { prompt: preview } });
+  } catch (err) {
+    logger.error('Error generating prompt preview:', err);
+    res.status(500).json({ error: 'Failed to generate prompt preview' });
   }
 });

@@ -1,7 +1,7 @@
 import { Router } from 'express';
 import { pool } from '../db/pool';
 import { logger } from '../utils/logger';
-import type { Alert } from '@bottoo/shared';
+import type { Alert } from '@talora/shared';
 
 export const alertsRouter = Router();
 

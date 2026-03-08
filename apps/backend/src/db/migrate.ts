@@ -27,7 +27,7 @@ CREATE TABLE IF NOT EXISTS whatsapp_instances (
 CREATE TABLE IF NOT EXISTS agents (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   name TEXT NOT NULL,
-  model TEXT NOT NULL DEFAULT 'claude-opus-4-6',
+  model TEXT NOT NULL DEFAULT 'gpt-4o-mini',
   created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
@@ -107,7 +107,7 @@ CREATE INDEX IF NOT EXISTS alerts_created_at_idx ON alerts(created_at DESC);
 
 -- Seed default agent
 INSERT INTO agents (name, model)
-VALUES ('Illuminato Assistant', 'claude-opus-4-6')
+VALUES ('Illuminato Assistant', 'gpt-4o-mini')
 ON CONFLICT DO NOTHING;
 
 -- Cleanup resolved alerts older than 30 days
@@ -132,7 +132,7 @@ CREATE INDEX IF NOT EXISTS idx_messages_conversation_id ON messages(conversation
 -- CHECK constraints for status/role columns (Issue #18)
 DO $$ BEGIN
   ALTER TABLE whatsapp_instances ADD CONSTRAINT chk_instance_status
-    CHECK (status IN ('connected', 'disconnected', 'connecting', 'error'));
+    CHECK (status IN ('connected', 'disconnected', 'connecting', 'qr_pending', 'error'));
 EXCEPTION WHEN duplicate_object THEN NULL;
 END $$;
 
@@ -141,6 +141,89 @@ DO $$ BEGIN
     CHECK (role IN ('user', 'assistant', 'system', 'tool'));
 EXCEPTION WHEN duplicate_object THEN NULL;
 END $$;
+
+-- Update model default and existing agents
+ALTER TABLE agents ALTER COLUMN model SET DEFAULT 'gpt-4o-mini';
+UPDATE agents SET model = 'gpt-4o-mini' WHERE model = 'claude-opus-4-6';
+
+-- Seed default prompt sections (fix for empty sections)
+INSERT INTO prompt_sections (agent_id, title, content, "order")
+SELECT a.id, 'Identidad', 'Sos el asistente virtual de un estudio de tatuajes. Fecha y hora actual: {{fechaHoraActual}}', 0
+FROM agents a WHERE a.name = 'Illuminato Assistant'
+  AND NOT EXISTS (SELECT 1 FROM prompt_sections WHERE agent_id = a.id)
+LIMIT 1;
+
+INSERT INTO prompt_sections (agent_id, title, content, "order")
+SELECT a.id, 'Comportamiento', 'Respondé de forma amable y profesional. Usá español rioplatense. El nombre del cliente es {{nombreCliente}} y su número es {{numeroTelefono}}.', 1
+FROM agents a WHERE a.name = 'Illuminato Assistant'
+  AND NOT EXISTS (SELECT 1 FROM prompt_sections WHERE agent_id = a.id AND title = 'Comportamiento')
+LIMIT 1;
+
+-- Custom variables
+CREATE TABLE IF NOT EXISTS variables (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  agent_id UUID NOT NULL REFERENCES agents(id) ON DELETE CASCADE,
+  key TEXT NOT NULL,
+  default_value TEXT NOT NULL DEFAULT '',
+  description TEXT NOT NULL DEFAULT '',
+  category TEXT NOT NULL DEFAULT 'custom',
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+CREATE UNIQUE INDEX IF NOT EXISTS variables_agent_key_idx ON variables(agent_id, key);
+
+-- Seed system variables
+INSERT INTO variables (agent_id, key, default_value, description, category)
+SELECT a.id, v.key, v.default_value, v.description, 'system'
+FROM agents a, (VALUES
+  ('fechaHoraActual', '', 'Fecha y hora actual del servidor'),
+  ('nombreCliente', 'Cliente', 'Nombre del contacto en WhatsApp'),
+  ('numeroTelefono', '', 'Numero de telefono del cliente'),
+  ('horariosDisponibles', 'No disponible', 'Horarios de Google Calendar')
+) AS v(key, default_value, description)
+WHERE a.name = 'Illuminato Assistant'
+  AND NOT EXISTS (SELECT 1 FROM variables WHERE agent_id = a.id AND key = v.key);
+
+-- Test sessions
+CREATE TABLE IF NOT EXISTS test_sessions (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  agent_id UUID NOT NULL REFERENCES agents(id) ON DELETE CASCADE,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  expires_at TIMESTAMPTZ NOT NULL DEFAULT (NOW() + INTERVAL '24 hours')
+);
+
+-- Test messages
+CREATE TABLE IF NOT EXISTS test_messages (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  session_id UUID NOT NULL REFERENCES test_sessions(id) ON DELETE CASCADE,
+  role TEXT NOT NULL CHECK (role IN ('user', 'assistant', 'system', 'tool')),
+  content TEXT,
+  tool_calls JSONB,
+  tool_call_id TEXT,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+CREATE INDEX IF NOT EXISTS test_messages_session_idx ON test_messages(session_id, created_at);
+
+-- Cleanup expired test sessions
+DELETE FROM test_sessions WHERE expires_at < NOW();
+
+-- Fix: add 'qr_pending' to instance status constraint (for existing DBs)
+DO $$ BEGIN
+  ALTER TABLE whatsapp_instances DROP CONSTRAINT IF EXISTS chk_instance_status;
+  ALTER TABLE whatsapp_instances ADD CONSTRAINT chk_instance_status
+    CHECK (status IN ('connected', 'disconnected', 'connecting', 'qr_pending', 'error'));
+END $$;
+
+-- Add system_prompt column to agents
+ALTER TABLE agents ADD COLUMN IF NOT EXISTS system_prompt TEXT NOT NULL DEFAULT '';
+
+-- Migrate existing sections into system_prompt (include title as ## heading)
+UPDATE agents SET system_prompt = COALESCE(
+  (SELECT string_agg('## ' || ps.title || E'\n' || ps.content, E'\n\n' ORDER BY ps."order")
+   FROM prompt_sections ps
+   WHERE ps.agent_id = agents.id AND ps.is_active = true),
+  ''
+) WHERE system_prompt = '';
 `;
 
 async function run() {

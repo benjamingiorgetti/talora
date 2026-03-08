@@ -30,7 +30,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       router.replace("/login");
     }
     setIsLoading(false);
-  }, [pathname, router]);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   // Sync auth state when api.ts removes the token from localStorage (e.g. on 401).
   // storage events only fire in OTHER tabs; focus events catch the same-tab case.
