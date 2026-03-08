@@ -5,11 +5,40 @@ import type { Conversation, Message } from '@bottoo/shared';
 
 export const conversationsRouter = Router();
 
+// --- Input validation helpers ---
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+function isValidUuid(value: string): boolean {
+  return UUID_RE.test(value);
+}
+
+function parsePositiveInt(value: unknown, fallback: number): number | null {
+  if (value === undefined || value === null) return fallback;
+  const parsed = parseInt(String(value), 10);
+  if (isNaN(parsed) || parsed < 0) return null;
+  return parsed;
+}
+
 // GET / — list conversations with optional instance_id filter, paginated
 conversationsRouter.get('/', async (req, res) => {
   const { instance_id, page = '1', limit = '20' } = req.query;
-  const pageNum = Math.max(1, parseInt(page as string, 10) || 1);
-  const limitNum = Math.min(100, Math.max(1, parseInt(limit as string, 10) || 20));
+
+  // Validate instance_id if provided
+  if (instance_id && !isValidUuid(instance_id as string)) {
+    res.status(400).json({ error: 'Invalid instance_id format' });
+    return;
+  }
+
+  const parsedPage = parsePositiveInt(page, 1);
+  const parsedLimit = parsePositiveInt(limit, 20);
+
+  if (parsedPage === null || parsedLimit === null) {
+    res.status(400).json({ error: 'page and limit must be valid positive numbers' });
+    return;
+  }
+
+  const pageNum = Math.max(1, parsedPage);
+  const limitNum = Math.min(100, Math.max(1, parsedLimit));
   const offset = (pageNum - 1) * limitNum;
 
   try {
@@ -45,8 +74,27 @@ conversationsRouter.get('/', async (req, res) => {
 // GET /:id/messages — list messages for conversation (cursor-based pagination)
 conversationsRouter.get('/:id/messages', async (req, res) => {
   const { id } = req.params;
+
+  if (!isValidUuid(id)) {
+    res.status(400).json({ error: 'Invalid conversation ID format' });
+    return;
+  }
+
   const { before, limit: limitParam } = req.query;
-  const limit = Math.min(100, Math.max(1, parseInt(limitParam as string, 10) || 50));
+
+  // Validate 'before' cursor if provided
+  if (before && !isValidUuid(before as string)) {
+    res.status(400).json({ error: 'Invalid cursor format' });
+    return;
+  }
+
+  const parsedLimit = parsePositiveInt(limitParam, 50);
+  if (parsedLimit === null) {
+    res.status(400).json({ error: 'limit must be a valid positive number' });
+    return;
+  }
+
+  const limit = Math.min(100, Math.max(1, parsedLimit));
 
   try {
     let query: string;

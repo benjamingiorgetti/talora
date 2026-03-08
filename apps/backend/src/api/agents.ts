@@ -7,6 +7,17 @@ import type { Agent, PromptSection, AgentTool } from '@bottoo/shared';
 
 export const agentsRouter = Router();
 
+// --- Input validation helpers ---
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+function isValidUuid(value: string): boolean {
+  return UUID_RE.test(value);
+}
+
+function isNonEmptyString(value: unknown): value is string {
+  return typeof value === 'string' && value.trim().length > 0;
+}
+
 // GET / — list all agents
 agentsRouter.get('/', async (_req, res) => {
   try {
@@ -20,6 +31,11 @@ agentsRouter.get('/', async (_req, res) => {
 
 // GET /:id — get agent by id
 agentsRouter.get('/:id', async (req, res) => {
+  if (!isValidUuid(req.params.id)) {
+    res.status(400).json({ error: 'Invalid agent ID format' });
+    return;
+  }
+
   try {
     const result = await pool.query<Agent>('SELECT * FROM agents WHERE id = $1', [req.params.id]);
     if (result.rows.length === 0) {
@@ -38,8 +54,13 @@ agentsRouter.put('/:id/prompt-sections/reorder', async (req, res) => {
   const { id } = req.params;
   const { ids } = req.body as { ids: string[] };
 
-  if (!Array.isArray(ids)) {
-    res.status(400).json({ error: 'ids array is required' });
+  if (!Array.isArray(ids) || ids.length === 0) {
+    res.status(400).json({ error: 'ids must be a non-empty array' });
+    return;
+  }
+
+  if (!ids.every((id: unknown) => typeof id === 'string' && isValidUuid(id as string))) {
+    res.status(400).json({ error: 'All ids must be valid UUIDs' });
     return;
   }
 
@@ -84,8 +105,18 @@ agentsRouter.post('/:id/prompt-sections', async (req, res) => {
   const { id } = req.params;
   const { title, content, order } = req.body;
 
-  if (!title) {
-    res.status(400).json({ error: 'Title is required' });
+  if (!isNonEmptyString(title)) {
+    res.status(400).json({ error: 'Title must be a non-empty string' });
+    return;
+  }
+
+  if (content !== undefined && typeof content !== 'string') {
+    res.status(400).json({ error: 'Content must be a string' });
+    return;
+  }
+
+  if (order !== undefined && (typeof order !== 'number' || !Number.isInteger(order) || order < 0)) {
+    res.status(400).json({ error: 'Order must be a non-negative integer' });
     return;
   }
 
@@ -178,8 +209,23 @@ agentsRouter.post('/:id/tools', async (req, res) => {
   const { id } = req.params;
   const { name, description, parameters, implementation } = req.body;
 
-  if (!name) {
-    res.status(400).json({ error: 'Name is required' });
+  if (!isNonEmptyString(name)) {
+    res.status(400).json({ error: 'Name must be a non-empty string' });
+    return;
+  }
+
+  if (description !== undefined && typeof description !== 'string') {
+    res.status(400).json({ error: 'Description must be a string' });
+    return;
+  }
+
+  if (parameters !== undefined && (typeof parameters !== 'object' || parameters === null)) {
+    res.status(400).json({ error: 'Parameters must be an object' });
+    return;
+  }
+
+  if (implementation !== undefined && typeof implementation !== 'string') {
+    res.status(400).json({ error: 'Implementation must be a string' });
     return;
   }
 
