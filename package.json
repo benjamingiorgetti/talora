@@ -1,0 +1,8 @@
+{
+  "name": "bottoo",
+  "private": true,
+  "workspaces": [
+    "apps/*",
+    "packages/*"
+  ]
+}
