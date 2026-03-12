@@ -8,7 +8,7 @@ import { waitlist } from "@/lib/content";
 
 export function Waitlist() {
   return (
-    <SectionWrapper id="waitlist" className="bg-white">
+    <SectionWrapper id="waitlist" className="bg-surface-cool">
       <FadeIn>
         <div className="mx-auto max-w-xl text-center">
           <h2 className="font-display text-section-mobile md:text-section font-semibold text-text-strong">

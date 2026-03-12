@@ -265,15 +265,19 @@ export function Hero() {
           {/* Headline */}
           <motion.h1
             variants={fadeUp}
-            className="font-display text-hero-mobile md:text-hero font-semibold text-text-strong max-w-3xl whitespace-pre-line"
+            className="font-display text-hero-mobile md:text-hero font-semibold text-text-strong max-w-3xl"
           >
-            {hero.headline}
+            {hero.headline.before}
+            <span className="border-b-[3px] border-mint pb-0.5">
+              {hero.headline.highlight}
+            </span>
+            {hero.headline.after}
           </motion.h1>
 
           {/* Subheadline */}
           <motion.p
             variants={fadeUp}
-            className="mt-4 max-w-xl text-base sm:text-body-lg text-gray-medium whitespace-pre-line"
+            className="mt-4 max-w-xl text-base sm:text-body-lg text-gray-medium"
           >
             {hero.subheadline}
           </motion.p>

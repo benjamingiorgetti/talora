@@ -11,9 +11,12 @@ export const nav = {
 
 export const hero = {
   badge: "Turnos automaticos por WhatsApp",
-  headline: "Tus clientes piden turno por WhatsApp.\nTalora los agenda automaticamente.",
-  subheadline:
-    "Responde, agenda y confirma turnos en tu WhatsApp.\nTodo sincronizado con Google Calendar.",
+  headline: {
+    before: "Mientras vos trabajas, los turnos ",
+    highlight: "se siguen agendando",
+    after: ".",
+  },
+  subheadline: "Talora responde y agenda turnos en tu WhatsApp automaticamente.",
   ctaPrimary: "Ver como funciona",
   ctaPrimaryHref: "#como-funciona",
   ctaSecondary: "Agenda una reunion",
