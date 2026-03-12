@@ -2,10 +2,11 @@
 
 import { useState, useEffect } from "react";
 import { motion, AnimatePresence } from "framer-motion";
+import { CheckCircle2, Scissors, Pen, Stethoscope, Sparkles } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { hero } from "@/lib/content";
-import { fadeUp, staggerContainer } from "@/lib/animations";
+import { fadeUp, scaleIn, staggerContainer } from "@/lib/animations";
 
 const conversations = [
   {
@@ -78,8 +79,8 @@ function WhatsAppMockup() {
 
           {/* WhatsApp header */}
           <div className="flex items-center gap-3 bg-ink px-4 pt-[44px] pb-3">
-            <div className="h-8 w-8 rounded-full bg-white/20 flex items-center justify-center text-white text-xs font-semibold">
-              T
+            <div className="h-8 w-8 rounded-full bg-white/20 flex items-center justify-center overflow-hidden">
+              <img src="/images/icono-negro.png" alt="" width={20} height={20} className="h-5 w-5 object-contain" />
             </div>
             <div>
               <p className="text-sm font-medium text-white">Talora</p>
@@ -245,12 +246,75 @@ function DashboardMockup() {
   );
 }
 
+// Floating UI elements that orbit the mockup area
+function FloatingNotification() {
+  return (
+    <motion.div
+      animate={{ y: [-6, 6] }}
+      transition={{ y: { duration: 3, repeat: Infinity, repeatType: "reverse" as const, ease: "easeInOut" as const } }}
+      className="absolute -right-4 top-8 sm:-right-12 sm:top-12 z-20 hidden sm:flex items-center gap-2 rounded-xl bg-white px-3 py-2 shadow-lg shadow-ink/8 border border-[#E2E4EC]/60"
+    >
+      <div className="h-7 w-7 rounded-full bg-mint flex items-center justify-center">
+        <CheckCircle2 className="h-4 w-4 text-emerald-600" />
+      </div>
+      <div>
+        <p className="text-[11px] font-medium text-ink">Turno confirmado</p>
+        <p className="text-[9px] text-gray-medium">Manana 14:30</p>
+      </div>
+    </motion.div>
+  );
+}
+
+function FloatingStatPill() {
+  return (
+    <motion.div
+      animate={{ y: [-6, 6] }}
+      transition={{ y: { duration: 3.5, repeat: Infinity, repeatType: "reverse" as const, ease: "easeInOut" as const } }}
+      className="absolute -left-2 bottom-16 sm:-left-10 sm:bottom-20 z-20 hidden sm:flex items-center gap-2 rounded-full bg-white px-3 py-1.5 shadow-lg shadow-ink/8 border border-[#E2E4EC]/60"
+    >
+      <span className="text-sm font-bold text-ink">5</span>
+      <span className="text-[10px] text-gray-medium">turnos hoy</span>
+    </motion.div>
+  );
+}
+
+function FloatingConnectedBadge() {
+  return (
+    <motion.div
+      animate={{ y: [-4, 8] }}
+      transition={{ y: { duration: 4, repeat: Infinity, repeatType: "reverse" as const, ease: "easeInOut" as const } }}
+      className="absolute right-2 -bottom-2 sm:right-0 sm:-bottom-6 z-20 hidden sm:flex items-center gap-1.5 rounded-full bg-white px-3 py-1.5 shadow-lg shadow-ink/8 border border-[#E2E4EC]/60"
+    >
+      <div className="h-2 w-2 rounded-full bg-emerald-500" />
+      <span className="text-[10px] font-medium text-emerald-700">Conectado</span>
+    </motion.div>
+  );
+}
+
+const nichePills = [
+  { name: "Peluqueria", icon: Scissors },
+  { name: "Tatuaje", icon: Pen },
+  { name: "Odontologia", icon: Stethoscope },
+  { name: "Estetica", icon: Sparkles },
+];
+
+// Tighter stagger for hero entrance
+const heroStagger = {
+  hidden: {},
+  visible: {
+    transition: { staggerChildren: 0.08 },
+  },
+};
+
 export function Hero() {
   return (
     <section className="relative overflow-hidden bg-white">
+      {/* Subtle radial gradient behind mockup area */}
+      <div className="absolute bottom-0 left-1/2 -translate-x-1/2 w-[800px] h-[600px] bg-[radial-gradient(ellipse_at_center,_rgba(239,233,255,0.15)_0%,_rgba(232,246,235,0.1)_40%,_transparent_70%)] pointer-events-none" />
+
       <div className="container mx-auto max-w-[1200px] px-4 sm:px-6 pb-10 pt-4 sm:pb-14 sm:pt-12 md:pb-20 md:pt-24">
         <motion.div
-          variants={staggerContainer}
+          variants={heroStagger}
           initial="hidden"
           animate="visible"
           className="flex flex-col items-center text-center"
@@ -292,17 +356,47 @@ export function Hero() {
             </Button>
           </motion.div>
 
+          {/* Trust signal + niche pills */}
+          <motion.div variants={fadeUp} className="mt-4 flex flex-col items-center gap-3">
+            {/* Trust signal */}
+            <div className="flex items-center gap-4 text-xs text-gray-medium">
+              <span className="flex items-center gap-1.5">
+                <CheckCircle2 className="h-3.5 w-3.5 text-gray-soft" />
+                Sin tarjeta de credito
+              </span>
+              <span className="flex items-center gap-1.5">
+                <CheckCircle2 className="h-3.5 w-3.5 text-gray-soft" />
+                Setup en 5 minutos
+              </span>
+            </div>
+            {/* Niche pills */}
+            <div className="flex flex-wrap items-center justify-center gap-2">
+              {nichePills.map((niche) => (
+                <span key={niche.name} className="flex items-center gap-1.5 text-xs text-gray-medium">
+                  <niche.icon className="h-3 w-3 text-gray-soft" />
+                  {niche.name}
+                </span>
+              ))}
+              <span className="text-xs text-gray-soft">y mas...</span>
+            </div>
+          </motion.div>
+
           {/* Mockup composition */}
           <motion.div
-            variants={fadeUp}
+            variants={scaleIn}
             className="relative mt-8 sm:mt-12 md:mt-16"
           >
-            {/* Background glow */}
-            <div className="absolute inset-0 -m-4 sm:-m-8 md:-m-12 rounded-3xl bg-gradient-to-b from-surface-cool via-surface-cool/50 to-transparent" />
+            {/* Background glow — clamped on mobile to prevent overflow */}
+            <div className="absolute inset-0 sm:-m-8 md:-m-12 rounded-3xl bg-gradient-to-b from-surface-cool via-surface-cool/50 to-transparent" />
             {/* Dot grid background */}
-            <div className="absolute inset-0 -m-2 sm:-m-4 md:-m-8 dot-grid opacity-40 rounded-3xl" />
+            <div className="absolute inset-0 sm:-m-4 md:-m-8 dot-grid opacity-40 rounded-3xl" />
 
             <div className="relative flex flex-col md:flex-row items-center justify-center gap-4 sm:gap-6 md:gap-10">
+              {/* Floating elements */}
+              <FloatingNotification />
+              <FloatingStatPill />
+              <FloatingConnectedBadge />
+
               <WhatsAppMockup />
               {/* Connector */}
               <div className="hidden md:flex flex-col items-center gap-2 text-gray-soft">

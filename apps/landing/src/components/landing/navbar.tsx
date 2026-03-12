@@ -7,9 +7,12 @@ import { Button } from "@/components/ui/button";
 import { nav } from "@/lib/content";
 import { cn } from "@/lib/utils";
 
+const sectionIds = ["beneficios", "como-funciona", "faq"];
+
 export function Navbar() {
   const [open, setOpen] = useState(false);
   const [scrolled, setScrolled] = useState(false);
+  const [activeSection, setActiveSection] = useState("");
 
   useEffect(() => {
     const onScroll = () => setScrolled(window.scrollY > 16);
@@ -17,38 +20,91 @@ export function Navbar() {
     return () => window.removeEventListener("scroll", onScroll);
   }, []);
 
+  // Active section detection via IntersectionObserver
+  useEffect(() => {
+    const observers: IntersectionObserver[] = [];
+    sectionIds.forEach((id) => {
+      const el = document.getElementById(id);
+      if (!el) return;
+      const observer = new IntersectionObserver(
+        ([entry]) => {
+          if (entry.isIntersecting) setActiveSection(id);
+        },
+        { rootMargin: "-40% 0px -55% 0px" }
+      );
+      observer.observe(el);
+      observers.push(observer);
+    });
+    return () => observers.forEach((o) => o.disconnect());
+  }, []);
+
   return (
     <header
       className={cn(
-        "sticky top-0 z-50 border-b backdrop-blur-md transition-colors duration-300",
+        "sticky top-0 z-50 border-b backdrop-blur-md transition-all duration-300",
         scrolled
-          ? "border-[#E2E4EC] bg-white/90"
+          ? "border-[#E2E4EC] bg-white/90 shadow-sm"
           : "border-transparent bg-white/60"
       )}
     >
-      <div className="container mx-auto flex h-16 max-w-[1200px] items-center justify-between px-4 sm:px-6">
+      <div
+        className={cn(
+          "container mx-auto flex max-w-[1200px] items-center justify-between px-4 sm:px-6 transition-all duration-300",
+          scrolled ? "h-14" : "h-16"
+        )}
+      >
         {/* Logo */}
         <a href="/" className="flex items-center gap-2">
-          <span className="font-display text-xl font-semibold text-ink tracking-tight">Talora</span>
+          {/* Icon only on mobile, full logo on sm+ */}
+          <img
+            src="/images/icono-negro.png"
+            alt="Talora"
+            width={28}
+            height={28}
+            className="block sm:hidden"
+          />
+          <img
+            src="/images/logo-talora.png"
+            alt="Talora"
+            height={32}
+            className="hidden sm:block h-8 w-auto"
+          />
           <span className="hidden sm:inline text-xs text-gray-medium font-medium">{nav.descriptor}</span>
         </a>
 
         {/* Desktop nav */}
         <nav className="hidden md:flex items-center gap-8">
-          {nav.links.map((link) => (
-            <a
-              key={link.href}
-              href={link.href}
-              className="text-sm text-gray-medium hover:text-ink transition-colors"
-            >
-              {link.label}
-            </a>
-          ))}
+          {nav.links.map((link) => {
+            const isActive = activeSection === link.href.replace("#", "");
+            return (
+              <a
+                key={link.href}
+                href={link.href}
+                className={cn(
+                  "relative text-sm transition-colors py-1",
+                  isActive ? "text-ink" : "text-gray-medium hover:text-ink"
+                )}
+              >
+                {link.label}
+                {/* Underline from center */}
+                <span
+                  className={cn(
+                    "absolute bottom-0 left-1/2 h-[2px] bg-ink rounded-full transition-all duration-300 -translate-x-1/2",
+                    isActive ? "w-full" : "w-0 group-hover:w-full"
+                  )}
+                />
+                {/* Hover underline for non-active */}
+                {!isActive && (
+                  <span className="absolute bottom-0 left-1/2 h-[2px] bg-ink/40 rounded-full transition-all duration-300 -translate-x-1/2 w-0 hover-underline" />
+                )}
+              </a>
+            );
+          })}
         </nav>
 
         {/* Desktop CTA */}
         <div className="hidden md:block">
-          <Button size="sm" asChild>
+          <Button size="sm" className="animate-subtle-pulse" asChild>
             <a href={nav.ctaHref}>{nav.cta}</a>
           </Button>
         </div>

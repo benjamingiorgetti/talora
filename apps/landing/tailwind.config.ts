@@ -80,11 +80,16 @@ const config: Config = {
           from: { transform: "translateX(0)" },
           to: { transform: "translateX(-50%)" },
         },
+        "subtle-pulse": {
+          "0%, 100%": { boxShadow: "0 0 0 0 rgba(28, 29, 34, 0)" },
+          "50%": { boxShadow: "0 0 0 4px rgba(28, 29, 34, 0.06)" },
+        },
       },
       animation: {
         "accordion-down": "accordion-down 0.2s ease-out",
         "accordion-up": "accordion-up 0.2s ease-out",
         "marquee": "marquee 30s linear infinite",
+        "subtle-pulse": "subtle-pulse 3s ease-in-out infinite",
       },
     },
   },

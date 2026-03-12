@@ -11,9 +11,20 @@ export function FinalCTA() {
     <SectionWrapper className="relative bg-gradient-to-b from-ink to-[#111318] overflow-hidden">
       {/* Dot grid background */}
       <div className="absolute inset-0 dot-grid-light" />
+      {/* Subtle mesh gradient overlay */}
+      <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_top_left,_rgba(239,233,255,0.06)_0%,_transparent_50%)]" />
+      <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_bottom_right,_rgba(232,246,235,0.05)_0%,_transparent_50%)]" />
 
       <FadeIn>
         <div className="relative mx-auto max-w-2xl text-center">
+          {/* Brand icon */}
+          <img
+            src="/images/icono-blanco.png"
+            alt=""
+            width={40}
+            height={40}
+            className="mx-auto mb-6 h-10 w-10 opacity-80"
+          />
           <h2 className="font-display text-section-mobile md:text-section font-semibold text-white">
             {finalCta.headline}
           </h2>
@@ -21,7 +32,7 @@ export function FinalCTA() {
             {finalCta.subheadline}
           </p>
           <div className="mt-6 sm:mt-8">
-            <Button size="lg" variant="invert" className="w-full sm:w-auto hover:shadow-lg hover:shadow-white/10 transition-shadow" asChild>
+            <Button size="lg" variant="invert" className="w-full sm:w-auto" asChild>
               <a href={finalCta.ctaHref}>{finalCta.cta}</a>
             </Button>
           </div>

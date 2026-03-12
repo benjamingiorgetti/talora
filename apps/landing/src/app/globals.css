@@ -2,6 +2,10 @@
 @tailwind components;
 @tailwind utilities;
 
+html, body {
+  overflow-x: hidden;
+}
+
 html {
   scroll-behavior: smooth;
   padding: env(safe-area-inset-top) env(safe-area-inset-right) env(safe-area-inset-bottom) env(safe-area-inset-left);
@@ -19,7 +23,24 @@ html {
 
 /* Hover effects only on devices that support it */
 @media (hover: hover) {
-  .hover-lift:hover { transform: translateY(-4px); }
+  .hover-lift {
+    transition: transform 200ms ease, box-shadow 200ms ease;
+  }
+  .hover-lift:hover {
+    transform: translateY(-4px) scale(1.02);
+    box-shadow: 0 12px 24px -8px rgba(28, 29, 34, 0.08);
+  }
+  .hover-glow:hover {
+    box-shadow: 0 0 20px rgba(239, 233, 255, 0.5), 0 0 40px rgba(231, 245, 251, 0.3);
+  }
+  .card-interactive {
+    transition: transform 200ms ease, box-shadow 200ms ease, border-color 200ms ease;
+  }
+  .card-interactive:hover {
+    transform: translateY(-4px) scale(1.02);
+    box-shadow: 0 16px 32px -8px rgba(28, 29, 34, 0.1);
+    border-color: rgba(226, 228, 236, 0.9);
+  }
 }
 
 @layer base {
@@ -60,6 +81,13 @@ html {
   ::selection {
     background-color: #EFE9FF;
     color: #1C1D22;
+  }
+}
+
+/* Nav link underline from center on hover */
+@media (hover: hover) {
+  a:hover > .hover-underline {
+    width: 100% !important;
   }
 }
 

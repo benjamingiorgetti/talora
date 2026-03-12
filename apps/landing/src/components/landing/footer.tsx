@@ -7,9 +7,12 @@ export function Footer() {
         <div className="grid gap-6 sm:grid-cols-2 sm:gap-8 md:grid-cols-4 md:gap-10">
           {/* Brand */}
           <div>
-            <p className="font-display text-lg font-semibold text-ink tracking-tight">
-              Talora
-            </p>
+            <img
+              src="/images/logo-talora.png"
+              alt="Talora"
+              height={24}
+              className="h-6 w-auto"
+            />
             <p className="mt-2 text-sm text-gray-medium leading-relaxed">
               Automatiza turnos con WhatsApp e inteligencia artificial.
             </p>

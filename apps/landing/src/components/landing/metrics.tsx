@@ -1,6 +1,7 @@
 "use client";
 
-import { motion } from "framer-motion";
+import { useRef, useState, useEffect } from "react";
+import { motion, useInView } from "framer-motion";
 import {
   Scissors,
   Pen,
@@ -27,19 +28,45 @@ const nicheIconMap = {
   Plus,
 } as const;
 
-// Liquid Glass — pills share a unified translucent style
+// Typewriter effect: reveals characters one at a time
+function TypewriterValue({ value, inView }: { value: string; inView: boolean }) {
+  const [displayed, setDisplayed] = useState("");
+
+  useEffect(() => {
+    if (!inView) return;
+    setDisplayed("");
+    let i = 0;
+    const interval = setInterval(() => {
+      i++;
+      setDisplayed(value.slice(0, i));
+      if (i >= value.length) clearInterval(interval);
+    }, 100);
+    return () => clearInterval(interval);
+  }, [inView, value]);
+
+  return <>{inView ? displayed : value}</>;
+}
 
 export function Metrics() {
+  const statsRef = useRef<HTMLDivElement>(null);
+  const isInView = useInView(statsRef, { once: true, margin: "-64px" });
+
   return (
-    <SectionWrapper className="relative py-12 sm:py-16 md:py-20" style={{ background: "linear-gradient(135deg, rgba(239,233,255,0.5) 0%, rgba(231,245,251,0.5) 50%, rgba(232,246,235,0.5) 100%)" }}>
+    <SectionWrapper className="relative py-16 sm:py-24 md:py-32" style={{ background: "linear-gradient(135deg, rgba(239,233,255,0.5) 0%, rgba(231,245,251,0.5) 50%, rgba(232,246,235,0.5) 100%)" }}>
       <FadeIn>
-        <h2 className="mx-auto max-w-2xl text-center font-display text-section-mobile md:text-section font-semibold text-text-strong">
-          {metrics.title}
-        </h2>
+        <div className="mx-auto max-w-2xl text-center">
+          <span className={`text-sm font-semibold ${metrics.badgeColor} uppercase tracking-wider`}>
+            {metrics.badge}
+          </span>
+          <h2 className="mt-2 font-display text-section-mobile md:text-section font-semibold text-text-strong">
+            {metrics.title}
+          </h2>
+        </div>
       </FadeIn>
 
       {/* Stats */}
       <motion.div
+        ref={statsRef}
         variants={staggerContainer}
         initial="hidden"
         whileInView="visible"
@@ -53,7 +80,7 @@ export function Metrics() {
             className="flex flex-col items-center rounded-2xl bg-white/60 backdrop-blur-xl border border-white/70 shadow-lg shadow-black/[0.04] px-3 py-4 sm:px-4 sm:py-6 text-center"
           >
             <span className="text-2xl sm:text-3xl md:text-4xl font-bold tracking-tight text-ink">
-              {stat.value}
+              <TypewriterValue value={stat.value} inView={isInView} />
             </span>
             <span className="mt-1.5 text-xs sm:text-sm text-gray-medium">
               {stat.label}
@@ -76,7 +103,8 @@ export function Metrics() {
             <motion.div
               key={niche.name}
               variants={fadeUp}
-              className="flex items-center gap-2 rounded-full bg-white/50 backdrop-blur-lg border border-white/60 shadow-sm px-3 py-1.5 sm:px-4 sm:py-2"
+              whileHover={{ scale: 1.05 }}
+              className="flex items-center gap-2 rounded-full bg-white/50 backdrop-blur-lg border border-white/60 shadow-sm px-3 py-1.5 sm:px-4 sm:py-2 transition-shadow duration-200 hover:shadow-md cursor-default"
             >
               <Icon size={16} className="text-ink/70 shrink-0" />
               <span className="text-xs sm:text-sm font-medium text-ink">{niche.name}</span>

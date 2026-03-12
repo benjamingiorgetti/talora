@@ -24,6 +24,8 @@ export const hero = {
 };
 
 export const metrics = {
+  badge: "Resultados",
+  badgeColor: "text-emerald-600" as const,
   title: "Nunca pierdas un turno por WhatsApp",
   stats: [
     { value: "<5s", label: "Tiempo de respuesta" },
@@ -44,6 +46,8 @@ export const metrics = {
 };
 
 export const benefits = {
+  badge: "Beneficios",
+  badgeColor: "text-sky-600" as const,
   title: "Todo lo que Talora hace por vos",
   subtitle:
     "Responde los mensajes, ofrece horarios disponibles y confirma turnos automaticamente.",
@@ -80,6 +84,8 @@ export const benefits = {
 };
 
 export const howItWorks = {
+  badge: "Como funciona",
+  badgeColor: "text-violet-600" as const,
   title: "Como empezas",
   subtitle: "Tres pasos para automatizar tus turnos.",
   steps: [

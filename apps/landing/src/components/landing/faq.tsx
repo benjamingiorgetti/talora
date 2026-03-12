@@ -24,10 +24,10 @@ export function FAQ() {
           <Accordion type="single" collapsible className="w-full">
             {faq.items.map((item, i) => (
               <AccordionItem key={i} value={`item-${i}`}>
-                <AccordionTrigger className="text-left text-sm sm:text-base text-text-strong">
+                <AccordionTrigger className="text-left text-sm sm:text-base text-text-strong hover:text-ink transition-colors">
                   {item.question}
                 </AccordionTrigger>
-                <AccordionContent>{item.answer}</AccordionContent>
+                <AccordionContent className="text-gray-medium">{item.answer}</AccordionContent>
               </AccordionItem>
             ))}
           </Accordion>
