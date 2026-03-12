@@ -188,7 +188,7 @@ export function Benefits() {
               <div className={`absolute top-0 left-0 right-0 h-1 ${colors.accent}`} />
 
               {/* Coded mockup */}
-              <div className="mb-4 transition-transform duration-200 group-hover:scale-[1.02]">
+              <div className={`mb-4 rounded-xl ${colors.mockupBg} p-3 transition-transform duration-200 group-hover:scale-[1.02]`}>
                 <MockupComponent />
               </div>
 

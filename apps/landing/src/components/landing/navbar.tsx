@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { Menu, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -12,10 +12,21 @@ const sectionIds = ["beneficios", "como-funciona", "faq"];
 export function Navbar() {
   const [open, setOpen] = useState(false);
   const [scrolled, setScrolled] = useState(false);
+  const [hidden, setHidden] = useState(false);
   const [activeSection, setActiveSection] = useState("");
+  const lastScrollY = useRef(0);
 
   useEffect(() => {
-    const onScroll = () => setScrolled(window.scrollY > 16);
+    const onScroll = () => {
+      const currentY = window.scrollY;
+      setScrolled(currentY > 16);
+      if (currentY > 60) {
+        setHidden(currentY > lastScrollY.current);
+      } else {
+        setHidden(false);
+      }
+      lastScrollY.current = currentY;
+    };
     window.addEventListener("scroll", onScroll, { passive: true });
     return () => window.removeEventListener("scroll", onScroll);
   }, []);
@@ -42,6 +53,7 @@ export function Navbar() {
     <header
       className={cn(
         "sticky top-0 z-50 border-b backdrop-blur-md transition-all duration-300",
+        hidden ? "-translate-y-full" : "translate-y-0",
         scrolled
           ? "border-[#E2E4EC] bg-white/90 shadow-sm"
           : "border-transparent bg-white/60"

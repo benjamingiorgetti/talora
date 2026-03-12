@@ -6,7 +6,7 @@ import { CheckCircle2, Scissors, Pen, Stethoscope, Sparkles } from "lucide-react
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { hero } from "@/lib/content";
-import { fadeUp, scaleIn, staggerContainer } from "@/lib/animations";
+import { fadeUp, scaleIn, staggerContainer, slideFromRight } from "@/lib/animations";
 
 const conversations = [
   {
@@ -79,8 +79,8 @@ function WhatsAppMockup() {
 
           {/* WhatsApp header */}
           <div className="flex items-center gap-3 bg-ink px-4 pt-[44px] pb-3">
-            <div className="h-8 w-8 rounded-full bg-white/20 flex items-center justify-center overflow-hidden">
-              <img src="/images/icono-negro.png" alt="" width={20} height={20} className="h-5 w-5 object-contain" />
+            <div className="h-8 w-8 rounded-full bg-white/20 flex items-center justify-center text-white text-xs font-semibold">
+              T
             </div>
             <div>
               <p className="text-sm font-medium text-white">Talora</p>
@@ -108,7 +108,7 @@ function WhatsAppMockup() {
           </div>
 
           {/* Messages */}
-          <div className="flex flex-col gap-2 p-3 bg-[#F8F9FC] min-h-[200px] sm:min-h-[240px]">
+          <div className="flex flex-col gap-2 p-3 bg-[#F8F9FC] h-[200px] sm:h-[240px] overflow-hidden">
             <AnimatePresence mode="wait">
               <motion.div
                 key={currentIndex}
@@ -158,7 +158,7 @@ const hours = ["11:00", "12:00", "13:00", "14:00"];
 
 function DashboardMockup() {
   return (
-    <div className="w-full max-w-[260px] sm:max-w-[290px] md:max-w-[320px] rounded-2xl border border-[#E2E4EC] bg-white shadow-xl shadow-ink/5 ring-1 ring-black/[0.03] overflow-hidden -rotate-1">
+    <div className="w-full max-w-[300px] sm:max-w-[340px] md:max-w-[380px] rounded-2xl border border-[#E2E4EC] bg-white shadow-xl shadow-ink/5 ring-1 ring-black/[0.03] overflow-hidden">
       {/* Header */}
       <motion.div
         initial={{ opacity: 0 }}
@@ -199,7 +199,7 @@ function DashboardMockup() {
       </div>
 
       {/* Timeline / Agenda */}
-      <div className="bg-[#F8F9FC] px-4 py-3 relative h-[160px] sm:h-[180px] md:h-[200px]">
+      <div className="bg-[#F8F9FC] px-4 py-3 relative h-[180px] sm:h-[200px] md:h-[230px]">
         {/* Hour labels + grid lines */}
         {hours.map((hour, i) => (
           <div
@@ -409,9 +409,15 @@ export function Hero() {
                   <path d="M12 0v24m0 0l-6-6m6 6l6-6" stroke="#E2E4EC" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" strokeDasharray="4 4" />
                 </svg>
               </div>
-              <div className="hidden sm:block">
+              <motion.div
+                variants={slideFromRight}
+                initial="hidden"
+                whileInView="visible"
+                viewport={{ once: true, margin: "-64px" }}
+                className="hidden sm:block"
+              >
                 <DashboardMockup />
-              </div>
+              </motion.div>
             </div>
           </motion.div>
         </motion.div>
