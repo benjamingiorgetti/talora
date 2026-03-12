@@ -31,8 +31,9 @@ export class ErrorBoundary extends React.Component<
               Ocurrio un error inesperado. Intenta recargar la pagina.
             </p>
             <button
+              type="button"
               onClick={() => window.location.reload()}
-              className="rounded-2xl bg-orange-500 px-6 py-3 font-nunito font-semibold text-white transition-colors hover:bg-orange-600"
+              className="inline-flex items-center justify-center rounded-2xl bg-orange-500 px-6 py-3 font-nunito font-semibold text-white transition-colors hover:bg-orange-600 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-orange-500 focus-visible:ring-offset-2"
             >
               Recargar
             </button>

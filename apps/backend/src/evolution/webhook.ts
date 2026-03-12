@@ -223,7 +223,7 @@ async function handleMessagesUpsert(body: EvolutionWebhookBody) {
         await evolution.sendText(
           instanceName,
           phone,
-          '¡Gracias por tu mensaje! Por ahora solo puedo leer texto. Si querés mostrarme una referencia de tatuaje, describímelo con palabras y te ayudo a encontrar lo que buscás. 🎨',
+          'Gracias por tu mensaje. Por ahora solo puedo procesar texto. Si queres compartir una referencia o explicarme tu consulta, describila con palabras y te ayudo desde aca.',
         );
       } catch (err) {
         logger.error(`Failed to send unsupported media reply to ${phone}:`, err);
@@ -250,24 +250,73 @@ async function handleMessagesUpsert(body: EvolutionWebhookBody) {
   // Update known instances cache
   knownInstances.add(instanceName);
 
-  // Find or create conversation
+  const clientResult = await pool.query<{ professional_id: string | null }>(
+    `SELECT professional_id
+     FROM clients
+     WHERE company_id = $1 AND phone_number = $2
+     LIMIT 1`,
+    [instance.company_id, phone]
+  );
+  const assignedProfessionalId = clientResult.rows[0]?.professional_id ?? null;
+
+  // INVARIANT: COALESCE preserves existing professional_id. A conversation's
+  // professional is set once (from the client lookup) and never silently
+  // overwritten by subsequent messages. Reassignment is an explicit admin action.
   const convResult = await pool.query(
-    `INSERT INTO conversations (instance_id, phone_number, contact_name, last_message_at)
-     VALUES ($1, $2, $3, NOW())
+    `INSERT INTO conversations (company_id, professional_id, instance_id, phone_number, contact_name, last_message_at)
+     VALUES ($1, $2, $3, $4, $5, NOW())
      ON CONFLICT (instance_id, phone_number)
-     DO UPDATE SET contact_name = COALESCE($3, conversations.contact_name), last_message_at = NOW()
+     DO UPDATE SET professional_id = COALESCE(conversations.professional_id, $2),
+                   contact_name = COALESCE($5, conversations.contact_name),
+                   last_message_at = NOW(),
+                   updated_at = NOW()
      RETURNING *`,
-    [instance.id, phone, contactName]
+    [instance.company_id, assignedProfessionalId, instance.id, phone, contactName]
   );
 
   const conversation = convResult.rows[0];
 
   // Save user message
-  await pool.query(
+  const messageResult = await pool.query<{ id: string; created_at: string }>(
     `INSERT INTO messages (conversation_id, role, content)
-     VALUES ($1, 'user', $2)`,
+     VALUES ($1, 'user', $2)
+     RETURNING id, created_at`,
     [conversation.id, messageText]
   );
+
+  // Broadcast conversation update and new message via WebSocket
+  broadcast({
+    type: 'conversation:updated',
+    payload: {
+      id: conversation.id,
+      company_id: conversation.company_id,
+      instance_id: conversation.instance_id,
+      professional_id: conversation.professional_id ?? null,
+      last_message_at: conversation.last_message_at,
+      bot_paused: conversation.bot_paused,
+    },
+  });
+
+  if (messageResult.rows[0]) {
+    broadcast({
+      type: 'message:new',
+      payload: {
+        id: messageResult.rows[0].id,
+        conversation_id: conversation.id,
+        role: 'user',
+        content: messageText,
+        tool_calls: null,
+        tool_call_id: null,
+        created_at: messageResult.rows[0].created_at,
+        company_id: conversation.company_id,
+      },
+    });
+  }
+
+  if (conversation.bot_paused) {
+    logger.info(`Conversation ${conversation.id} is paused; skipping bot response`);
+    return;
+  }
 
   // Handle incoming message with agent
   await handleIncomingMessage(conversation.id, instanceName, messageText);
@@ -298,15 +347,33 @@ async function handleConnectionUpdate(body: EvolutionWebhookBody) {
     `UPDATE whatsapp_instances
      SET status = $1, qr_code = CASE WHEN $1 = 'connected' THEN NULL ELSE qr_code END, updated_at = NOW()
      WHERE evolution_instance_name = $2
-     RETURNING id, status, qr_code`,
+     RETURNING id, company_id, status, qr_code, phone_number`,
     [status, instanceName]
   );
 
   if (result.rows.length > 0) {
     const row = result.rows[0];
+    let phoneNumber = row.phone_number;
+
+    // On connection, fetch and store phone number from Evolution API
+    if (status === 'connected' && !phoneNumber) {
+      try {
+        const info = await evolution.getInstanceInfo(instanceName);
+        if (info.ownerJid) {
+          phoneNumber = info.ownerJid.replace('@s.whatsapp.net', '').replace(/\D/g, '');
+          await pool.query(
+            'UPDATE whatsapp_instances SET phone_number = $1 WHERE id = $2',
+            [phoneNumber, row.id]
+          );
+        }
+      } catch (err) {
+        logger.warn('Failed to fetch phone number on connection:', err);
+      }
+    }
+
     broadcast({
       type: 'instance:status',
-      payload: { id: row.id, status: row.status as any, qr_code: row.qr_code },
+      payload: { id: row.id, company_id: row.company_id, status: row.status as any, qr_code: row.qr_code, phone_number: phoneNumber },
     });
   }
 }
@@ -315,13 +382,22 @@ async function handleQrCodeUpdate(body: EvolutionWebhookBody) {
   const instanceName = body.instance;
   const qrCode = body.data?.qrcode?.base64 || body.data?.base64 || null;
 
-  if (!instanceName || !qrCode) return;
+  if (!instanceName) return;
+
+  if (!qrCode) {
+    logger.warn(`QR webhook for "${instanceName}" arrived without QR data.`, {
+      dataKeys: Object.keys(body.data || {}),
+      hasQrcode: !!body.data?.qrcode,
+      hasBase64: !!body.data?.base64,
+    });
+    return;
+  }
 
   const result = await pool.query<WhatsAppInstance>(
     `UPDATE whatsapp_instances
      SET qr_code = $1, status = 'qr_pending', updated_at = NOW()
      WHERE evolution_instance_name = $2
-     RETURNING id, status, qr_code`,
+     RETURNING id, company_id, status, qr_code`,
     [qrCode, instanceName]
   );
 
@@ -329,7 +405,7 @@ async function handleQrCodeUpdate(body: EvolutionWebhookBody) {
     const row = result.rows[0];
     broadcast({
       type: 'instance:status',
-      payload: { id: row.id, status: 'qr_pending', qr_code: row.qr_code },
+      payload: { id: row.id, company_id: row.company_id, status: 'qr_pending', qr_code: row.qr_code, phone_number: null },
     });
   }
 }

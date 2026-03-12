@@ -1,11 +1,10 @@
 import { WebSocketServer, WebSocket } from 'ws';
 import type { Server } from 'http';
 import type { IncomingMessage } from 'http';
-import jwt from 'jsonwebtoken';
 import { pool } from '../db/pool';
-import { config } from '../config';
 import { logger } from '../utils/logger';
 import type { WsEvent, WhatsAppInstance } from '@talora/shared';
+import { decodeSession, type JwtPayload } from '../auth/session';
 
 let wss: WebSocketServer;
 
@@ -36,7 +35,8 @@ export function setupWebSocket(server: Server) {
     }
 
     try {
-      jwt.verify(token, config.jwtSecret);
+      const session = decodeSession(token);
+      (request as IncomingMessage & { user?: JwtPayload }).user = session;
     } catch {
       logger.warn('WebSocket connection rejected: invalid token');
       socket.write('HTTP/1.1 401 Unauthorized\r\n\r\n');
@@ -64,9 +64,14 @@ export function setupWebSocket(server: Server) {
 
   wss.on('close', () => clearInterval(heartbeat));
 
-  wss.on('connection', async (ws) => {
-    const ext = ws as WebSocket & { isAlive?: boolean };
+  wss.on('connection', async (ws, request) => {
+    const ext = ws as WebSocket & { isAlive?: boolean; companyId?: string | null; professionalId?: string | null; role?: string };
     ext.isAlive = true;
+    const requestWithUser = request as IncomingMessage & { user?: JwtPayload };
+    const session = requestWithUser.user;
+    ext.companyId = session?.companyId ?? null;
+    ext.professionalId = session?.professionalId ?? null;
+    ext.role = session?.role;
 
     ws.on('pong', () => {
       ext.isAlive = true;
@@ -76,8 +81,17 @@ export function setupWebSocket(server: Server) {
 
     // Send current status of all instances on connect
     try {
+      const values: unknown[] = [];
+      let query = 'SELECT id, company_id, status, qr_code, phone_number FROM whatsapp_instances';
+
+      if (session?.role === 'admin_empresa' && session.companyId) {
+        query += ' WHERE company_id = $1';
+        values.push(session.companyId);
+      }
+
       const result = await pool.query<WhatsAppInstance>(
-        'SELECT id, status, qr_code FROM whatsapp_instances'
+        query,
+        values
       );
       for (const instance of result.rows) {
         const event: WsEvent = {
@@ -86,6 +100,7 @@ export function setupWebSocket(server: Server) {
             id: instance.id,
             status: instance.status,
             qr_code: instance.qr_code,
+            phone_number: instance.phone_number,
           },
         };
         ws.send(JSON.stringify(event));
@@ -105,6 +120,39 @@ export function broadcast(event: WsEvent) {
 
   const data = JSON.stringify(event);
   wss.clients.forEach((client) => {
+    const socket = client as WebSocket & { companyId?: string | null; professionalId?: string | null; role?: string };
+
+    // Company admins should only receive events for their own company when payload carries company context.
+    if (socket.role === 'admin_empresa' && socket.companyId) {
+      const payloadCompanyId =
+        'payload' in event && event.payload && typeof event.payload === 'object' && 'company_id' in event.payload
+          ? String((event.payload as { company_id?: string }).company_id)
+          : null;
+
+      if (payloadCompanyId && payloadCompanyId !== socket.companyId) {
+        return;
+      }
+    }
+
+    if (socket.role === 'professional' && socket.companyId) {
+      const payloadCompanyId =
+        'payload' in event && event.payload && typeof event.payload === 'object' && 'company_id' in event.payload
+          ? String((event.payload as { company_id?: string }).company_id)
+          : null;
+      const payloadProfessionalId =
+        'payload' in event && event.payload && typeof event.payload === 'object' && 'professional_id' in event.payload
+          ? String((event.payload as { professional_id?: string }).professional_id)
+          : null;
+
+      if (payloadCompanyId && payloadCompanyId !== socket.companyId) {
+        return;
+      }
+
+      if (socket.professionalId && payloadProfessionalId && payloadProfessionalId !== socket.professionalId) {
+        return;
+      }
+    }
+
     if (client.readyState === WebSocket.OPEN) {
       try {
         client.send(data);

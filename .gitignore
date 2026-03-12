@@ -25,3 +25,16 @@ bun.lockb
 
 # Docker volumes
 pgdata/
+
+# Playwright CLI logs
+.playwright-cli/
+output/
+
+# Claude worktrees
+.claude/worktrees/
+
+# Cursor
+.cursor/
+
+# TypeScript build info
+*.tsbuildinfo

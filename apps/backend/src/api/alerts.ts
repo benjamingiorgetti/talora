@@ -1,12 +1,16 @@
 import { Router } from 'express';
 import { pool } from '../db/pool';
 import { logger } from '../utils/logger';
+import { authMiddleware, getRequestCompanyId, requireCompanyScope } from './middleware';
 import type { Alert } from '@talora/shared';
 
 export const alertsRouter = Router();
 
+alertsRouter.use(authMiddleware, requireCompanyScope);
+
 // GET / — list alerts with pagination
 alertsRouter.get('/', async (req, res) => {
+  const companyId = getRequestCompanyId(req)!;
   const { page = '1', limit = '50' } = req.query;
   const pageNum = Math.max(1, parseInt(page as string, 10) || 1);
   const limitNum = Math.min(100, Math.max(1, parseInt(limit as string, 10) || 50));
@@ -15,10 +19,10 @@ alertsRouter.get('/', async (req, res) => {
   try {
     const [result, countResult] = await Promise.all([
       pool.query<Alert>(
-        'SELECT * FROM alerts ORDER BY created_at DESC LIMIT $1 OFFSET $2',
-        [limitNum, offset]
+        'SELECT * FROM alerts WHERE company_id = $1 ORDER BY created_at DESC LIMIT $2 OFFSET $3',
+        [companyId, limitNum, offset]
       ),
-      pool.query<{ total: string }>('SELECT COUNT(*) as total FROM alerts'),
+      pool.query<{ total: string }>('SELECT COUNT(*) as total FROM alerts WHERE company_id = $1', [companyId]),
     ]);
 
     res.json({

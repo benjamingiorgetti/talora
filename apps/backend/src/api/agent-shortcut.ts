@@ -6,13 +6,15 @@ import { getResolvedPreview } from '../agent/prompt-builder';
 import { handleTestMessage } from '../agent/test-chat';
 import { config } from '../config';
 import { logger } from '../utils/logger';
+import { getRequestCompanyId } from './middleware';
+import { validateBody, testChatMessageSchema } from './validation';
 import type { PromptSection, AgentTool, Variable, TestSession, TestMessage } from '@talora/shared';
 
 export const agentShortcutRouter = Router();
 
 // Reuse the existing agent config cache (60s TTL) instead of a separate cache
-async function getAgentId(): Promise<string | null> {
-  const config = await getAgentConfig();
+async function getAgentId(companyId: string): Promise<string | null> {
+  const config = await getAgentConfig(companyId);
   return config?.agent.id ?? null;
 }
 
@@ -20,7 +22,9 @@ async function getAgentId(): Promise<string | null> {
 
 agentShortcutRouter.get('/sections', async (_req, res) => {
   try {
-    const agentId = await getAgentId();
+    const companyId = getRequestCompanyId(_req);
+    if (!companyId) { res.status(400).json({ error: 'Company context required' }); return; }
+    const agentId = await getAgentId(companyId);
     if (!agentId) { res.status(404).json({ error: 'No agent configured' }); return; }
 
     const result = await pool.query<PromptSection>(
@@ -36,7 +40,9 @@ agentShortcutRouter.get('/sections', async (_req, res) => {
 
 agentShortcutRouter.post('/sections', async (req, res) => {
   try {
-    const agentId = await getAgentId();
+    const companyId = getRequestCompanyId(req);
+    if (!companyId) { res.status(400).json({ error: 'Company context required' }); return; }
+    const agentId = await getAgentId(companyId);
     if (!agentId) { res.status(404).json({ error: 'No agent configured' }); return; }
 
     const { title, content, order } = req.body;
@@ -49,7 +55,7 @@ agentShortcutRouter.post('/sections', async (req, res) => {
        VALUES ($1, $2, $3, $4) RETURNING *`,
       [agentId, title, content || '', sectionOrder]
     );
-    invalidateAgentCache();
+    invalidateAgentCache(companyId);
     res.status(201).json({ data: result.rows[0] });
   } catch (err) {
     logger.error('Error creating section:', err);
@@ -73,7 +79,8 @@ agentShortcutRouter.put('/sections/:sectionId', async (req, res) => {
       update.values
     );
     if (result.rows.length === 0) { res.status(404).json({ error: 'Section not found' }); return; }
-    invalidateAgentCache();
+    const companyId = getRequestCompanyId(req);
+    invalidateAgentCache(companyId ?? undefined);
     res.json({ data: result.rows[0] });
   } catch (err) {
     logger.error('Error updating section:', err);
@@ -88,7 +95,8 @@ agentShortcutRouter.delete('/sections/:sectionId', async (req, res) => {
       [req.params.sectionId]
     );
     if (result.rows.length === 0) { res.status(404).json({ error: 'Section not found' }); return; }
-    invalidateAgentCache();
+    const companyId = getRequestCompanyId(req);
+    invalidateAgentCache(companyId ?? undefined);
     res.json({ data: { success: true } });
   } catch (err) {
     logger.error('Error deleting section:', err);
@@ -100,7 +108,9 @@ agentShortcutRouter.delete('/sections/:sectionId', async (req, res) => {
 
 agentShortcutRouter.get('/tools', async (_req, res) => {
   try {
-    const agentId = await getAgentId();
+    const companyId = getRequestCompanyId(_req);
+    if (!companyId) { res.status(400).json({ error: 'Company context required' }); return; }
+    const agentId = await getAgentId(companyId);
     if (!agentId) { res.status(404).json({ error: 'No agent configured' }); return; }
 
     const result = await pool.query<AgentTool>(
@@ -116,7 +126,9 @@ agentShortcutRouter.get('/tools', async (_req, res) => {
 
 agentShortcutRouter.post('/tools', async (req, res) => {
   try {
-    const agentId = await getAgentId();
+    const companyId = getRequestCompanyId(req);
+    if (!companyId) { res.status(400).json({ error: 'Company context required' }); return; }
+    const agentId = await getAgentId(companyId);
     if (!agentId) { res.status(404).json({ error: 'No agent configured' }); return; }
 
     const { name, description, parameters, implementation } = req.body;
@@ -127,7 +139,7 @@ agentShortcutRouter.post('/tools', async (req, res) => {
        VALUES ($1, $2, $3, $4, $5) RETURNING *`,
       [agentId, name, description || '', JSON.stringify(parameters || {}), implementation || 'webhook']
     );
-    invalidateAgentCache();
+    invalidateAgentCache(companyId);
     res.status(201).json({ data: result.rows[0] });
   } catch (err) {
     logger.error('Error creating tool:', err);
@@ -157,7 +169,8 @@ agentShortcutRouter.put('/tools/:toolId', async (req, res) => {
       update.values
     );
     if (result.rows.length === 0) { res.status(404).json({ error: 'Tool not found' }); return; }
-    invalidateAgentCache();
+    const companyId = getRequestCompanyId(req);
+    invalidateAgentCache(companyId ?? undefined);
     res.json({ data: result.rows[0] });
   } catch (err) {
     logger.error('Error updating tool:', err);
@@ -172,7 +185,8 @@ agentShortcutRouter.delete('/tools/:toolId', async (req, res) => {
       [req.params.toolId]
     );
     if (result.rows.length === 0) { res.status(404).json({ error: 'Tool not found' }); return; }
-    invalidateAgentCache();
+    const companyId = getRequestCompanyId(req);
+    invalidateAgentCache(companyId ?? undefined);
     res.json({ data: { success: true } });
   } catch (err) {
     logger.error('Error deleting tool:', err);
@@ -184,7 +198,9 @@ agentShortcutRouter.delete('/tools/:toolId', async (req, res) => {
 
 agentShortcutRouter.get('/variables', async (_req, res) => {
   try {
-    const agentId = await getAgentId();
+    const companyId = getRequestCompanyId(_req);
+    if (!companyId) { res.status(400).json({ error: 'Company context required' }); return; }
+    const agentId = await getAgentId(companyId);
     if (!agentId) { res.status(404).json({ error: 'No agent configured' }); return; }
 
     const result = await pool.query<Variable>(
@@ -200,7 +216,9 @@ agentShortcutRouter.get('/variables', async (_req, res) => {
 
 agentShortcutRouter.post('/variables', async (req, res) => {
   try {
-    const agentId = await getAgentId();
+    const companyId = getRequestCompanyId(req);
+    if (!companyId) { res.status(400).json({ error: 'Company context required' }); return; }
+    const agentId = await getAgentId(companyId);
     if (!agentId) { res.status(404).json({ error: 'No agent configured' }); return; }
 
     const { key, default_value, description } = req.body;
@@ -211,7 +229,7 @@ agentShortcutRouter.post('/variables', async (req, res) => {
        VALUES ($1, $2, $3, $4, 'custom') RETURNING *`,
       [agentId, key, default_value || '', description || '']
     );
-    invalidateAgentCache();
+    invalidateAgentCache(companyId);
     res.status(201).json({ data: result.rows[0] });
   } catch (err) {
     logger.error('Error creating variable:', err);
@@ -235,7 +253,8 @@ agentShortcutRouter.put('/variables/:id', async (req, res) => {
       update.values
     );
     if (result.rows.length === 0) { res.status(404).json({ error: 'Variable not found' }); return; }
-    invalidateAgentCache();
+    const companyId = getRequestCompanyId(req);
+    invalidateAgentCache(companyId ?? undefined);
     res.json({ data: result.rows[0] });
   } catch (err) {
     logger.error('Error updating variable:', err);
@@ -257,7 +276,8 @@ agentShortcutRouter.delete('/variables/:id', async (req, res) => {
     }
 
     await pool.query('DELETE FROM variables WHERE id = $1', [req.params.id]);
-    invalidateAgentCache();
+    const companyId = getRequestCompanyId(req);
+    invalidateAgentCache(companyId ?? undefined);
     res.json({ data: { success: true } });
   } catch (err) {
     logger.error('Error deleting variable:', err);
@@ -269,7 +289,9 @@ agentShortcutRouter.delete('/variables/:id', async (req, res) => {
 
 agentShortcutRouter.post('/test-chat/session', async (_req, res) => {
   try {
-    const agentId = await getAgentId();
+    const companyId = getRequestCompanyId(_req);
+    if (!companyId) { res.status(400).json({ error: 'Company context required' }); return; }
+    const agentId = await getAgentId(companyId);
     if (!agentId) { res.status(404).json({ error: 'No agent configured' }); return; }
 
     const result = await pool.query<TestSession>(
@@ -283,13 +305,9 @@ agentShortcutRouter.post('/test-chat/session', async (_req, res) => {
   }
 });
 
-agentShortcutRouter.post('/test-chat/message', async (req, res) => {
+agentShortcutRouter.post('/test-chat/message', validateBody(testChatMessageSchema), async (req, res) => {
   try {
     const { session_id, content } = req.body;
-    if (!session_id || !content) {
-      res.status(400).json({ error: 'session_id and content are required' });
-      return;
-    }
 
     // Verify session exists and is not expired
     const sessionResult = await pool.query<TestSession>(
@@ -329,6 +347,8 @@ agentShortcutRouter.delete('/test-chat/session/:id', async (req, res) => {
       [req.params.id]
     );
     if (result.rows.length === 0) { res.status(404).json({ error: 'Session not found' }); return; }
+    const companyId = getRequestCompanyId(req);
+    invalidateAgentCache(companyId ?? undefined);
     res.json({ data: { success: true } });
   } catch (err) {
     logger.error('Error deleting test session:', err);
@@ -340,7 +360,9 @@ agentShortcutRouter.delete('/test-chat/session/:id', async (req, res) => {
 
 agentShortcutRouter.get('/prompt', async (_req, res) => {
   try {
-    const agentId = await getAgentId();
+    const companyId = getRequestCompanyId(_req);
+    if (!companyId) { res.status(400).json({ error: 'Company context required' }); return; }
+    const agentId = await getAgentId(companyId);
     if (!agentId) { res.status(404).json({ error: 'No agent configured' }); return; }
 
     const result = await pool.query<{ system_prompt: string }>(
@@ -357,7 +379,9 @@ agentShortcutRouter.get('/prompt', async (_req, res) => {
 
 agentShortcutRouter.put('/prompt', async (req, res) => {
   try {
-    const agentId = await getAgentId();
+    const companyId = getRequestCompanyId(req);
+    if (!companyId) { res.status(400).json({ error: 'Company context required' }); return; }
+    const agentId = await getAgentId(companyId);
     if (!agentId) { res.status(404).json({ error: 'No agent configured' }); return; }
 
     const { prompt } = req.body;
@@ -367,8 +391,8 @@ agentShortcutRouter.put('/prompt', async (req, res) => {
       'UPDATE agents SET system_prompt = $1, updated_at = NOW() WHERE id = $2',
       [prompt, agentId]
     );
-    invalidateAgentCache();
-    res.json({ data: { success: true } });
+    invalidateAgentCache(companyId);
+    res.json({ data: { prompt } });
   } catch (err) {
     logger.error('Error updating prompt:', err);
     res.status(500).json({ error: 'Failed to update prompt' });
@@ -379,7 +403,9 @@ agentShortcutRouter.put('/prompt', async (req, res) => {
 
 agentShortcutRouter.get('/prompt-preview', async (_req, res) => {
   try {
-    const agentConfig = await getAgentConfig();
+    const companyId = getRequestCompanyId(_req);
+    if (!companyId) { res.status(400).json({ error: 'Company context required' }); return; }
+    const agentConfig = await getAgentConfig(companyId);
     if (!agentConfig) { res.status(404).json({ error: 'No agent configured' }); return; }
 
     const { agent, variables } = agentConfig;
@@ -387,6 +413,7 @@ agentShortcutRouter.get('/prompt-preview', async (_req, res) => {
     const preview = getResolvedPreview({
       systemPrompt: agent.system_prompt,
       customVariables: variables,
+      agentId: agent.id,
       timezone: config.timezone,
     });
 

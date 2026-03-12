@@ -1,0 +1,81 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+html {
+  scroll-behavior: smooth;
+}
+
+@layer base {
+  :root {
+    --background: 228 20% 98%;
+    --foreground: 228 12% 12%;
+    --card: 0 0% 100%;
+    --card-foreground: 228 12% 12%;
+    --primary: 228 12% 12%;
+    --primary-foreground: 0 0% 100%;
+    --secondary: 222 19% 95%;
+    --secondary-foreground: 224 16% 22%;
+    --muted: 222 17% 96%;
+    --muted-foreground: 222 10% 43%;
+    --accent: 222 20% 95%;
+    --accent-foreground: 224 18% 15%;
+    --border: 223 17% 89%;
+    --input: 223 16% 90%;
+    --ring: 228 16% 18%;
+    --radius: 0.75rem;
+  }
+}
+
+@layer base {
+  * {
+    @apply border-border;
+  }
+  body {
+    @apply bg-background text-foreground;
+    font-family: var(--font-body), sans-serif;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+  }
+  h1, h2, h3, h4 {
+    font-family: var(--font-display), serif;
+    letter-spacing: -0.03em;
+  }
+  ::selection {
+    background-color: #EFE9FF;
+    color: #1C1D22;
+  }
+}
+
+@layer utilities {
+  .dot-grid {
+    background-image: radial-gradient(circle, #E2E4EC 1px, transparent 1px);
+    background-size: 24px 24px;
+  }
+  .dot-grid-light {
+    background-image: radial-gradient(circle, rgba(255,255,255,0.06) 1px, transparent 1px);
+    background-size: 24px 24px;
+  }
+}
+
+/* Smooth scrollbar — webkit */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+::-webkit-scrollbar-thumb {
+  background: #D1D5DB;
+  border-radius: 999px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: #9AA1AE;
+}
+@supports (scrollbar-width: thin) {
+  html {
+    scrollbar-width: thin;
+    scrollbar-color: #D1D5DB transparent;
+  }
+}

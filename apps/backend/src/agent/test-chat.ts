@@ -37,13 +37,29 @@ export async function handleTestMessage(
   sessionId: string,
   messageText: string,
 ): Promise<{ content: string; tool_calls?: unknown[] }> {
+  const sessionResult = await pool.query<{ company_id: string }>(
+    `SELECT a.company_id
+     FROM test_sessions ts
+     JOIN agents a ON a.id = ts.agent_id
+     WHERE ts.id = $1
+     LIMIT 1`,
+    [sessionId]
+  );
+  const companyId = sessionResult.rows[0]?.company_id;
+  if (!companyId) {
+    throw new Error('No company configured for test session');
+  }
+
   // Load agent config from cache
-  const agentConfig = await getAgentConfig();
+  const agentConfig = await getAgentConfig(companyId);
   if (!agentConfig) {
     throw new Error('No agent configured');
   }
 
   const { agent, tools, variables } = agentConfig;
+
+  // Ensure system_prompt is a string
+  const systemPromptRaw = agent.system_prompt || '';
 
   // Save user message to test_messages
   await pool.query(
@@ -54,10 +70,12 @@ export async function handleTestMessage(
 
   // Build system prompt with default variable values (no real conversation context)
   const systemPrompt = buildSystemPrompt({
-    systemPrompt: agent.system_prompt,
+    systemPrompt: systemPromptRaw,
     customVariables: variables,
-    conversation: { contact_name: 'Usuario de prueba', phone_number: '+0000000000' },
+    conversation: { id: 'test-session', contact_name: 'Usuario de prueba', phone_number: '+0000000000' },
+    agentId: agent.id,
     timezone: config.timezone,
+    variableOverrides: { contextoCliente: 'Cliente de prueba (modo test)' },
   });
 
   // Load history from test_messages
@@ -94,13 +112,15 @@ export async function handleTestMessage(
     }
   }
 
-  // Build OpenAI tools definition
+  // Build OpenAI tools definition (ensure valid JSON Schema parameters)
   const openaiTools: OpenAI.Chat.ChatCompletionTool[] = tools.map((t) => ({
     type: 'function' as const,
     function: {
       name: t.name,
       description: t.description,
-      parameters: t.parameters as Record<string, unknown>,
+      parameters: (t.parameters && typeof t.parameters === 'object' && Object.keys(t.parameters).length > 0)
+        ? t.parameters as Record<string, unknown>
+        : { type: 'object', properties: {} },
     },
   }));
 

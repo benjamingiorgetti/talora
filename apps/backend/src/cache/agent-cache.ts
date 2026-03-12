@@ -1,13 +1,3 @@
-/**
- * In-memory agent config cache.
- *
- * LIMITATION: Single-instance only. This cache lives in process memory,
- * so it only works correctly when the backend runs as a single process.
- * If you scale to multiple instances (e.g., behind a load balancer), each
- * instance will maintain its own cache and `invalidateAgentCache()` will
- * only clear the local copy. For multi-instance deployments, switch to a
- * shared cache (e.g., Redis) or use a pub/sub invalidation mechanism.
- */
 import { pool } from '../db/pool';
 import type { Agent, PromptSection, AgentTool, Variable } from '@talora/shared';
 
@@ -18,41 +8,51 @@ export interface AgentConfig {
   variables: Variable[];
 }
 
-let cachedConfig: AgentConfig | null = null;
-let cacheExpiry = 0;
-const CACHE_TTL_MS = 60_000; // 60 seconds
+const CACHE_TTL_MS = 60_000;
+const cachedConfig = new Map<string, AgentConfig>();
+const cacheExpiry = new Map<string, number>();
+const pendingFetch = new Map<string, Promise<AgentConfig | null>>();
 
-// Guard against thundering-herd: if multiple callers find the cache expired
-// at the same time, only one should fetch from DB. The rest reuse the same
-// in-flight promise. This works because Node/Bun is single-threaded — the
-// variable is read/written atomically within the same microtask.
-let pendingFetch: Promise<AgentConfig | null> | null = null;
+async function resolveCompanyId(companyId?: string | null): Promise<string | null> {
+  if (companyId) return companyId;
 
-export async function getAgentConfig(): Promise<AgentConfig | null> {
-  const now = Date.now();
-  if (cachedConfig && now < cacheExpiry) {
-    return cachedConfig;
-  }
-
-  // Reuse an in-flight fetch if one exists
-  if (pendingFetch) {
-    return pendingFetch;
-  }
-
-  pendingFetch = fetchAgentConfig()
-    .finally(() => {
-      pendingFetch = null;
-    });
-
-  return pendingFetch;
+  const result = await pool.query<{ company_id: string }>(
+    'SELECT company_id FROM agents ORDER BY created_at ASC LIMIT 1'
+  );
+  return result.rows[0]?.company_id ?? null;
 }
 
-async function fetchAgentConfig(): Promise<AgentConfig | null> {
-  const agentResult = await pool.query<Agent>('SELECT * FROM agents LIMIT 1');
+export async function getAgentConfig(companyId?: string | null): Promise<AgentConfig | null> {
+  const resolvedCompanyId = await resolveCompanyId(companyId);
+  if (!resolvedCompanyId) return null;
+
+  const now = Date.now();
+  const cached = cachedConfig.get(resolvedCompanyId);
+  const expiry = cacheExpiry.get(resolvedCompanyId) ?? 0;
+
+  if (cached && now < expiry) {
+    return cached;
+  }
+
+  if (pendingFetch.has(resolvedCompanyId)) {
+    return pendingFetch.get(resolvedCompanyId)!;
+  }
+
+  const fetchPromise = fetchAgentConfig(resolvedCompanyId).finally(() => {
+    pendingFetch.delete(resolvedCompanyId);
+  });
+  pendingFetch.set(resolvedCompanyId, fetchPromise);
+  return fetchPromise;
+}
+
+async function fetchAgentConfig(companyId: string): Promise<AgentConfig | null> {
+  const agentResult = await pool.query<Agent>(
+    'SELECT * FROM agents WHERE company_id = $1 ORDER BY created_at ASC LIMIT 1',
+    [companyId]
+  );
   if (agentResult.rows.length === 0) return null;
 
   const agent = agentResult.rows[0];
-
   const [sectionsResult, toolsResult, variablesResult] = await Promise.all([
     pool.query<PromptSection>(
       `SELECT * FROM prompt_sections
@@ -70,21 +70,24 @@ async function fetchAgentConfig(): Promise<AgentConfig | null> {
     ),
   ]);
 
-  cachedConfig = {
+  const nextConfig = {
     agent,
     sections: sectionsResult.rows,
     tools: toolsResult.rows,
     variables: variablesResult.rows,
   };
-  cacheExpiry = Date.now() + CACHE_TTL_MS;
-
-  return cachedConfig;
+  cachedConfig.set(companyId, nextConfig);
+  cacheExpiry.set(companyId, Date.now() + CACHE_TTL_MS);
+  return nextConfig;
 }
 
-export function invalidateAgentCache(): void {
-  cachedConfig = null;
-  cacheExpiry = 0;
-  // Note: pendingFetch is intentionally NOT cleared here. If a fetch is
-  // in-flight, it will complete and populate the cache with fresh data.
-  // Clearing it would just cause a redundant second fetch.
+export function invalidateAgentCache(companyId?: string): void {
+  if (companyId) {
+    cachedConfig.delete(companyId);
+    cacheExpiry.delete(companyId);
+    return;
+  }
+
+  cachedConfig.clear();
+  cacheExpiry.clear();
 }

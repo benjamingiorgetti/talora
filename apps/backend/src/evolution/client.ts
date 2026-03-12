@@ -2,9 +2,20 @@ import { config } from '../config';
 import { logger } from '../utils/logger';
 
 /** Total number of attempts (1 initial + retries). RETRY_DELAYS length must be >= MAX_ATTEMPTS - 1. */
-const MAX_ATTEMPTS = 4;
-const RETRY_DELAYS = [1000, 2000, 4000];
-const REQUEST_TIMEOUT = 15_000;
+const MAX_ATTEMPTS = 2;
+const RETRY_DELAYS = [1000];
+const REQUEST_TIMEOUT = 5_000;
+
+export class EvolutionApiError extends Error {
+  constructor(
+    message: string,
+    public readonly statusCode: number,
+    public readonly endpoint: string
+  ) {
+    super(message);
+    this.name = 'EvolutionApiError';
+  }
+}
 
 export class EvolutionClient {
   private baseUrl: string;
@@ -35,7 +46,7 @@ export class EvolutionClient {
 
         if (!response.ok) {
           const errorText = await response.text();
-          const err = new Error(`EvolutionAPI ${method} ${path} failed (${response.status}): ${errorText}`);
+          const err = new EvolutionApiError(`EvolutionAPI ${method} ${path} failed (${response.status}): ${errorText}`, response.status, `${method} ${path}`);
 
           // Don't retry on 4xx (client errors)
           if (response.status >= 400 && response.status < 500) {
@@ -76,11 +87,11 @@ export class EvolutionClient {
   }
 
   async ping(): Promise<void> {
-    await fetch(`${this.baseUrl}/instance/fetchInstances`, {
-      method: 'GET',
-      headers: { apikey: this.apiKey },
-      signal: AbortSignal.timeout(5_000),
-    });
+    await this.request<unknown>('GET', '/instance/fetchInstances');
+  }
+
+  async fetchInstances(): Promise<Array<{ name: string; ownerJid?: string; connectionStatus?: string }>> {
+    return this.request<Array<{ name: string; ownerJid?: string; connectionStatus?: string }>>('GET', '/instance/fetchInstances');
   }
 
   async createInstance(instanceName: string, webhookUrl: string): Promise<{ instance?: Record<string, unknown>; qrcode?: { base64?: string } }> {
@@ -110,7 +121,16 @@ export class EvolutionClient {
   }
 
   async getInstanceStatus(instanceName: string): Promise<{ state: string }> {
-    return this.request<{ state: string }>('GET', `/instance/connectionState/${instanceName}`);
+    // v2.3.7 returns { instance: { instanceName, state } } instead of { state }
+    const res = await this.request<{ instance?: { state?: string }; state?: string }>('GET', `/instance/connectionState/${instanceName}`);
+    const state = res.instance?.state ?? res.state ?? 'unknown';
+    return { state };
+  }
+
+  async getInstanceInfo(instanceName: string): Promise<{ ownerJid?: string; connectionStatus?: string }> {
+    const instances = await this.request<Array<{ name: string; ownerJid?: string; connectionStatus?: string }>>('GET', '/instance/fetchInstances');
+    const instance = instances.find(i => i.name === instanceName);
+    return { ownerJid: instance?.ownerJid, connectionStatus: instance?.connectionStatus };
   }
 
   async sendText(instanceName: string, to: string, text: string) {

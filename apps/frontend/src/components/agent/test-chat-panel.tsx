@@ -6,7 +6,7 @@ import { api } from "@/lib/api";
 import { Button } from "@/components/ui/button";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Badge } from "@/components/ui/badge";
-import { MessageSquare, Send, RotateCcw, Bot, User } from "lucide-react";
+import { MessageSquare, Send, RotateCcw, Bot, User, AlertTriangle } from "lucide-react";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 import { motion, AnimatePresence } from "framer-motion";
@@ -81,13 +81,18 @@ function TypingIndicator() {
   );
 }
 
-export function TestChatPanel() {
+interface TestChatPanelProps {
+  promptSavedAt?: number | null;
+}
+
+export function TestChatPanel({ promptSavedAt }: TestChatPanelProps) {
   const [session, setSession] = useState<TestSession | null>(null);
   const [messages, setMessages] = useState<DisplayMessage[]>([]);
   const [input, setInput] = useState("");
   const [isSending, setIsSending] = useState(false);
   const [isCreatingSession, setIsCreatingSession] = useState(false);
   const [newMessageId, setNewMessageId] = useState<string | null>(null);
+  const [showPromptBanner, setShowPromptBanner] = useState(false);
   const scrollRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
 
@@ -119,17 +124,27 @@ export function TestChatPanel() {
     if (session) {
       try {
         await api.delete(`/agent/test-chat/session/${session.id}`);
-      } catch {
-        // ignore
+      } catch (err) {
+        console.error("Error deleting test session:", err);
+        toast.error("Error al limpiar la sesión");
       }
     }
     await createSession();
+    setShowPromptBanner(false);
+    toast.success("Memoria eliminada exitosamente");
   }, [session, createSession]);
 
   useEffect(() => {
     createSession();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  // Show banner when prompt is saved and there are messages in the chat
+  useEffect(() => {
+    if (promptSavedAt && messages.length > 0) {
+      setShowPromptBanner(true);
+    }
+  }, [messages.length, promptSavedAt]);
 
   useEffect(() => {
     scrollToBottom();
@@ -167,9 +182,10 @@ export function TestChatPanel() {
       };
       setMessages((prev) => [...prev, assistantMsg]);
       setNewMessageId(assistantMsg.id);
-    } catch (err) {
+    } catch (err: unknown) {
       console.error(err);
-      toast.error("Error al enviar el mensaje");
+      const message = err instanceof Error ? err.message : "Error al enviar el mensaje";
+      toast.error(message);
       // Remove the user message on failure
       setMessages((prev) => prev.filter((m) => m.id !== userMsg.id));
     } finally {
@@ -240,6 +256,35 @@ export function TestChatPanel() {
           </div>
         ) : (
           <div className="space-y-3">
+            <AnimatePresence>
+              {showPromptBanner && (
+                <motion.div
+                  initial={{ opacity: 0, height: 0 }}
+                  animate={{ opacity: 1, height: "auto" }}
+                  exit={{ opacity: 0, height: 0 }}
+                  transition={{ duration: 0.2 }}
+                  className="rounded-md border border-yellow-500/30 bg-yellow-500/10 p-2.5 text-xs"
+                >
+                  <div className="flex items-start gap-2">
+                    <AlertTriangle className="h-3.5 w-3.5 text-yellow-500 shrink-0 mt-0.5" />
+                    <div className="flex-1 min-w-0">
+                      <p className="text-yellow-200/90">
+                        El prompt fue actualizado. Limpiá el chat para probar con los nuevos cambios.
+                      </p>
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={clearSession}
+                        className="h-6 text-[11px] text-yellow-400 hover:text-yellow-300 hover:bg-yellow-500/10 px-2 mt-1"
+                      >
+                        <RotateCcw className="mr-1 h-3 w-3" />
+                        Limpiar chat
+                      </Button>
+                    </div>
+                  </div>
+                </motion.div>
+              )}
+            </AnimatePresence>
             {messages.map((msg) => (
               <MessageBubble
                 key={msg.id}
@@ -281,7 +326,7 @@ export function TestChatPanel() {
           />
           <Button
             size="icon"
-            className="h-9 w-9 shrink-0 bg-primary hover:bg-primary/90 text-primary-foreground"
+            className="h-9 w-9 shrink-0 bg-primary hover:bg-primary/90 text-primary-foreground disabled:opacity-50"
             onClick={handleSend}
             disabled={!input.trim() || !session || isSending || isCreatingSession}
             aria-label="Enviar mensaje"

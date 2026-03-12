@@ -4,6 +4,7 @@ import { useEffect } from "react";
 import { useSearchParams } from "next/navigation";
 import useSWR from "swr";
 import { api } from "@/lib/api";
+import { useAuth } from "@/lib/auth";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Calendar, CheckCircle2, AlertTriangle, ExternalLink, Loader2 } from "lucide-react";
@@ -13,6 +14,9 @@ import { cn } from "@/lib/utils";
 interface GoogleCalendarStatus {
   connected: boolean;
   configured: boolean;
+  professional_id?: string | null;
+  calendar_id?: string | null;
+  google_account_email?: string | null;
 }
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:3001";
@@ -23,6 +27,7 @@ function googleStatusFetcher(_key: string): Promise<GoogleCalendarStatus> {
 
 export function CalendarTab() {
   const searchParams = useSearchParams();
+  const { session, token } = useAuth();
 
   const {
     data: status,
@@ -37,17 +42,54 @@ export function CalendarTab() {
   useEffect(() => {
     if (searchParams.get("calendar") === "connected") {
       toast.success("Google Calendar conectado correctamente");
-      mutate();
+      void mutate();
+      return;
+    }
+
+    if (searchParams.get("calendar") === "error") {
+      toast.error("No se pudo conectar Google Calendar");
     }
   }, [searchParams, mutate]);
 
   const handleConnect = () => {
-    const token = typeof window !== "undefined" ? localStorage.getItem("token") : null;
-    const url = token
-      ? `${API_URL}/auth/google?token=${encodeURIComponent(token)}`
-      : `${API_URL}/auth/google`;
-    window.location.href = url;
+    if (!token) {
+      toast.error("La sesión expiró. Volvé a iniciar sesión.");
+      return;
+    }
+
+    const url = new URL(`${API_URL}/auth/google`);
+    url.searchParams.set("token", token);
+    url.searchParams.set("return_to", "/settings/integrations");
+    window.location.href = url.toString();
   };
+
+  const handleDisconnect = async () => {
+    try {
+      await api.post("/auth/google/disconnect");
+      await mutate();
+      toast.success("Google Calendar desconectado");
+    } catch (disconnectError) {
+      toast.error(
+        disconnectError instanceof Error
+          ? disconnectError.message
+          : "No se pudo desconectar Google Calendar"
+      );
+    }
+  };
+
+  if (session?.role !== "professional") {
+    return (
+      <Card className="rounded-lg border border-border">
+        <CardContent className="p-6">
+          <p className="text-sm font-semibold text-foreground">Integraciones por profesional</p>
+          <p className="mt-2 text-sm leading-relaxed text-muted-foreground">
+            En esta versión, cada profesional conecta su propio Google Calendar desde su sesión.
+            Si estás operando como admin, el estado de cada conexión se gestiona desde Configurar empresa.
+          </p>
+        </CardContent>
+      </Card>
+    );
+  }
 
   return (
     <div className="space-y-6">
@@ -94,7 +136,7 @@ export function CalendarTab() {
         ) : !status?.configured ? (
           <NotConfiguredState />
         ) : status.connected ? (
-          <ConnectedState onDisconnect={() => mutate()} />
+          <ConnectedState status={status} onDisconnect={handleDisconnect} />
         ) : (
           <NotConnectedState onConnect={handleConnect} />
         )}
@@ -209,7 +251,13 @@ function NotConnectedState({ onConnect }: { onConnect: () => void }) {
   );
 }
 
-function ConnectedState({ onDisconnect }: { onDisconnect: () => void }) {
+function ConnectedState({
+  status,
+  onDisconnect,
+}: {
+  status: GoogleCalendarStatus;
+  onDisconnect: () => void;
+}) {
   return (
     <Card className="rounded-lg border-l-4 border-primary/60 border-t-border border-r-border border-b-border bg-primary/5">
       <CardContent className="p-5">
@@ -224,18 +272,21 @@ function ConnectedState({ onDisconnect }: { onDisconnect: () => void }) {
           </div>
           <div className="flex-1 min-w-0">
             <div className="flex items-center gap-2 mb-0.5">
-              <p className="text-sm font-semibold text-foreground">Google Calendar conectado</p>
-              <span className={cn(
-                "inline-flex items-center rounded px-1.5 py-0.5 text-xs font-medium",
-                "bg-primary/15 text-primary"
-              )}>
-                Activo
-              </span>
-            </div>
-            <p className="text-sm text-muted-foreground">
-              El bot puede consultar disponibilidad y agendar citas automaticamente.
-            </p>
+            <p className="text-sm font-semibold text-foreground">Google Calendar conectado</p>
+            <span className={cn(
+              "inline-flex items-center rounded px-1.5 py-0.5 text-xs font-medium",
+              "bg-primary/15 text-primary"
+            )}>
+              Activo
+            </span>
           </div>
+          <p className="text-sm text-muted-foreground">
+            {status.google_account_email
+              ? `Conectado con ${status.google_account_email}.`
+              : "El bot puede consultar disponibilidad y agendar citas automáticamente."}
+            {status.calendar_id ? ` Calendario activo: ${status.calendar_id}.` : ""}
+          </p>
+        </div>
           <Button
             variant="outline"
             onClick={onDisconnect}

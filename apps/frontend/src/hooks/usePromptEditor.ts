@@ -1,8 +1,8 @@
 "use client";
 
-import { useState, useEffect, useCallback, useRef } from "react";
+import { useState, useEffect, useCallback } from "react";
 import useSWR from "swr";
-import { fetcher, api } from "@/lib/api";
+import { api } from "@/lib/api";
 import { toast } from "sonner";
 
 export function usePromptEditor() {
@@ -18,24 +18,32 @@ export function usePromptEditor() {
 
   const [localPrompt, setLocalPrompt] = useState("");
   const [isSaving, setIsSaving] = useState(false);
-  const initializedRef = useRef(false);
+  const [hasLocalEdits, setHasLocalEdits] = useState(false);
+  const [promptSavedAt, setPromptSavedAt] = useState<number | null>(null);
 
-  // Initialize local state from server data once
+  // Sync local state from server when server data changes and user hasn't edited
   useEffect(() => {
-    if (serverPrompt !== undefined && !initializedRef.current) {
-      initializedRef.current = true;
+    if (serverPrompt !== undefined && !hasLocalEdits) {
       setLocalPrompt(serverPrompt);
     }
-  }, [serverPrompt]);
+  }, [serverPrompt, hasLocalEdits]);
+
+  const handleSetLocalPrompt = useCallback((value: string) => {
+    setLocalPrompt(value);
+    setHasLocalEdits(true);
+  }, []);
 
   const isDirty = serverPrompt !== undefined && localPrompt !== serverPrompt;
 
   const save = useCallback(async () => {
     setIsSaving(true);
     try {
-      await api.put("/agent/prompt", { prompt: localPrompt });
-      await mutate();
-      initializedRef.current = false;
+      const res = await api.put<{ data: { prompt: string } }>("/agent/prompt", { prompt: localPrompt });
+      const savedPrompt = res.data.prompt;
+      // Optimistic update with the confirmed saved value
+      await mutate(savedPrompt, { revalidate: false });
+      setHasLocalEdits(false);
+      setPromptSavedAt(Date.now());
       toast.success("Cambios guardados");
     } catch (err) {
       console.error(err);
@@ -48,12 +56,13 @@ export function usePromptEditor() {
   const discard = useCallback(() => {
     if (serverPrompt !== undefined) {
       setLocalPrompt(serverPrompt);
+      setHasLocalEdits(false);
     }
   }, [serverPrompt]);
 
   return {
     localPrompt,
-    setLocalPrompt,
+    setLocalPrompt: handleSetLocalPrompt,
     error,
     isLoading: isLoading && serverPrompt === undefined,
     isSaving,
@@ -61,5 +70,6 @@ export function usePromptEditor() {
     save,
     discard,
     mutate,
+    promptSavedAt,
   };
 }

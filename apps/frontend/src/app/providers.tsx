@@ -27,12 +27,13 @@ export function Providers({ children }: { children: React.ReactNode }) {
         offset={24}
         toastOptions={{
           style: {
-            background: "hsl(222 40% 8%)",
-            border: "1px solid hsl(222 20% 16%)",
-            borderRadius: "8px",
+            background: "rgba(255,255,255,0.92)",
+            border: "1px solid hsl(38 28% 86%)",
+            borderRadius: "18px",
             padding: "16px",
             fontSize: "13px",
-            color: "hsl(210 20% 93%)",
+            color: "hsl(154 22% 16%)",
+            boxShadow: "0 24px 60px rgba(88,70,40,0.15)",
           },
         }}
       />

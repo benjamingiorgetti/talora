@@ -105,10 +105,37 @@ CREATE TABLE IF NOT EXISTS alerts (
 
 CREATE INDEX IF NOT EXISTS alerts_created_at_idx ON alerts(created_at DESC);
 
--- Seed default agent
-INSERT INTO agents (name, model)
-VALUES ('Illuminato Assistant', 'gpt-4o-mini')
-ON CONFLICT DO NOTHING;
+-- Seed default agent in a re-entrant way.
+-- Fresh databases still have no company_id on agents at this point, while already-migrated
+-- local databases do. This branch avoids failing on reruns when company_id is NOT NULL.
+DO $$ BEGIN
+  IF EXISTS (
+    SELECT 1
+    FROM information_schema.columns
+    WHERE table_schema = 'public'
+      AND table_name = 'agents'
+      AND column_name = 'company_id'
+  ) AND EXISTS (
+    SELECT 1
+    FROM information_schema.tables
+    WHERE table_schema = 'public'
+      AND table_name = 'companies'
+  ) THEN
+    INSERT INTO agents (company_id, name, model)
+    SELECT c.id, 'Illuminato Assistant', 'gpt-4o-mini'
+    FROM companies c
+    WHERE c.slug = 'talora-base'
+      AND NOT EXISTS (
+        SELECT 1
+        FROM agents a
+        WHERE a.company_id = c.id
+      );
+  ELSE
+    INSERT INTO agents (name, model)
+    SELECT 'Illuminato Assistant', 'gpt-4o-mini'
+    WHERE NOT EXISTS (SELECT 1 FROM agents);
+  END IF;
+END $$;
 
 -- Cleanup resolved alerts older than 30 days
 DELETE FROM alerts WHERE resolved_at IS NOT NULL AND resolved_at < NOW() - INTERVAL '30 days';
@@ -184,6 +211,51 @@ FROM agents a, (VALUES
 WHERE a.name = 'Illuminato Assistant'
   AND NOT EXISTS (SELECT 1 FROM variables WHERE agent_id = a.id AND key = v.key);
 
+-- Seed baseline appointment tools for agents missing them
+INSERT INTO tools (agent_id, name, description, parameters, implementation)
+SELECT a.id,
+       'google_calendar_check',
+       'Consulta disponibilidad real en Google Calendar para un profesional y servicio.',
+       '{"type":"object","properties":{"date":{"type":"string","description":"Fecha y hora ISO propuesta para el turno."},"professionalId":{"type":"string","description":"ID del profesional elegido dentro de Talora."},"serviceId":{"type":"string","description":"ID del servicio elegido dentro de Talora."},"durationMinutes":{"type":"number","description":"Duracion del turno en minutos, si no se usa la del servicio."}},"required":["date"]}'::jsonb,
+       'google_calendar_check'
+FROM agents a
+WHERE NOT EXISTS (
+  SELECT 1 FROM tools t WHERE t.agent_id = a.id AND t.name = 'google_calendar_check'
+);
+
+INSERT INTO tools (agent_id, name, description, parameters, implementation)
+SELECT a.id,
+       'google_calendar_book',
+       'Reserva un turno real y crea el appointment interno para el cliente actual.',
+       '{"type":"object","properties":{"date":{"type":"string","description":"Fecha y hora ISO del turno a reservar."},"professionalId":{"type":"string","description":"ID del profesional elegido dentro de Talora."},"serviceId":{"type":"string","description":"ID del servicio elegido dentro de Talora."},"name":{"type":"string","description":"Nombre del cliente para el evento."},"description":{"type":"string","description":"Notas o aclaraciones del turno."},"durationMinutes":{"type":"number","description":"Duracion del turno en minutos, si no se usa la del servicio."}},"required":["date"]}'::jsonb,
+       'google_calendar_book'
+FROM agents a
+WHERE NOT EXISTS (
+  SELECT 1 FROM tools t WHERE t.agent_id = a.id AND t.name = 'google_calendar_book'
+);
+
+INSERT INTO tools (agent_id, name, description, parameters, implementation)
+SELECT a.id,
+       'google_calendar_reprogram',
+       'Reprograma un turno existente a una nueva fecha y hora disponible.',
+       '{"type":"object","properties":{"appointmentId":{"type":"string","description":"ID interno del turno en Talora."},"startsAt":{"type":"string","description":"Nueva fecha y hora ISO del turno."}},"required":["appointmentId","startsAt"]}'::jsonb,
+       'google_calendar_reprogram'
+FROM agents a
+WHERE NOT EXISTS (
+  SELECT 1 FROM tools t WHERE t.agent_id = a.id AND t.name = 'google_calendar_reprogram'
+);
+
+INSERT INTO tools (agent_id, name, description, parameters, implementation)
+SELECT a.id,
+       'google_calendar_cancel',
+       'Cancela un turno existente en Google Calendar y en Talora.',
+       '{"type":"object","properties":{"appointmentId":{"type":"string","description":"ID interno del turno en Talora."},"eventId":{"type":"string","description":"ID del evento en Google Calendar si ya se conoce."}}}'::jsonb,
+       'google_calendar_cancel'
+FROM agents a
+WHERE NOT EXISTS (
+  SELECT 1 FROM tools t WHERE t.agent_id = a.id AND t.name = 'google_calendar_cancel'
+);
+
 -- Test sessions
 CREATE TABLE IF NOT EXISTS test_sessions (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -217,6 +289,9 @@ END $$;
 -- Add system_prompt column to agents
 ALTER TABLE agents ADD COLUMN IF NOT EXISTS system_prompt TEXT NOT NULL DEFAULT '';
 
+-- Add memory_reset_at for 48h per-client memory window
+ALTER TABLE conversations ADD COLUMN IF NOT EXISTS memory_reset_at TIMESTAMPTZ;
+
 -- Migrate existing sections into system_prompt (include title as ## heading)
 UPDATE agents SET system_prompt = COALESCE(
   (SELECT string_agg('## ' || ps.title || E'\n' || ps.content, E'\n\n' ORDER BY ps."order")
@@ -224,6 +299,267 @@ UPDATE agents SET system_prompt = COALESCE(
    WHERE ps.agent_id = agents.id AND ps.is_active = true),
   ''
 ) WHERE system_prompt = '';
+
+-- Clients table
+CREATE TABLE IF NOT EXISTS clients (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  agent_id UUID NOT NULL REFERENCES agents(id) ON DELETE CASCADE,
+  phone_number TEXT NOT NULL,
+  name TEXT NOT NULL DEFAULT '',
+  client_type TEXT NOT NULL DEFAULT 'cliente',
+  branch TEXT NOT NULL DEFAULT '',
+  delivery_days TEXT NOT NULL DEFAULT '',
+  payment_terms TEXT NOT NULL DEFAULT '',
+  notes TEXT NOT NULL DEFAULT '',
+  is_active BOOLEAN NOT NULL DEFAULT true,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+CREATE UNIQUE INDEX IF NOT EXISTS clients_agent_phone_idx ON clients(agent_id, phone_number);
+CREATE INDEX IF NOT EXISTS clients_phone_lookup_idx ON clients(phone_number);
+
+-- Seed new system variables (userName, phoneNumber, sessionId, idTenant, contextoCliente)
+INSERT INTO variables (agent_id, key, default_value, description, category)
+SELECT a.id, v.key, v.default_value, v.description, 'system'
+FROM agents a, (VALUES
+  ('userName', 'Cliente', 'Nombre del contacto (reemplaza nombreCliente)'),
+  ('phoneNumber', '', 'Numero de telefono del cliente (reemplaza numeroTelefono)'),
+  ('sessionId', '', 'ID de la conversacion actual'),
+  ('idTenant', '', 'ID del agente/tenant'),
+  ('contextoCliente', 'Cliente no registrado', 'Datos del cliente desde la tabla clients')
+) AS v(key, default_value, description)
+WHERE a.name = 'Illuminato Assistant'
+  AND NOT EXISTS (SELECT 1 FROM variables WHERE agent_id = a.id AND key = v.key);
+
+-- Mark old vars as deprecated
+UPDATE variables SET description = description || ' (deprecado, usar userName)'
+WHERE key = 'nombreCliente' AND description NOT LIKE '%deprecado%';
+UPDATE variables SET description = description || ' (deprecado, usar phoneNumber)'
+WHERE key = 'numeroTelefono' AND description NOT LIKE '%deprecado%';
+
+-- Multi-company foundation
+CREATE TABLE IF NOT EXISTS companies (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  name TEXT NOT NULL,
+  slug TEXT UNIQUE NOT NULL,
+  industry TEXT NOT NULL DEFAULT 'general',
+  whatsapp_number TEXT,
+  calendar_connected BOOLEAN NOT NULL DEFAULT false,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+CREATE TABLE IF NOT EXISTS users (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  company_id UUID REFERENCES companies(id) ON DELETE CASCADE,
+  email TEXT UNIQUE NOT NULL,
+  full_name TEXT NOT NULL DEFAULT '',
+  password_hash TEXT NOT NULL DEFAULT '',
+  role TEXT NOT NULL DEFAULT 'admin_empresa',
+  is_active BOOLEAN NOT NULL DEFAULT true,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+DO $$ BEGIN
+  ALTER TABLE users DROP CONSTRAINT IF EXISTS chk_user_role;
+  ALTER TABLE users ADD CONSTRAINT chk_user_role
+    CHECK (role IN ('superadmin', 'admin_empresa', 'professional'));
+EXCEPTION WHEN others THEN NULL;
+END $$;
+
+CREATE TABLE IF NOT EXISTS professionals (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  company_id UUID NOT NULL REFERENCES companies(id) ON DELETE CASCADE,
+  name TEXT NOT NULL,
+  specialty TEXT NOT NULL DEFAULT '',
+  calendar_id TEXT NOT NULL DEFAULT 'primary',
+  color_hex TEXT,
+  is_active BOOLEAN NOT NULL DEFAULT true,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+CREATE TABLE IF NOT EXISTS services (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  company_id UUID NOT NULL REFERENCES companies(id) ON DELETE CASCADE,
+  professional_id UUID REFERENCES professionals(id) ON DELETE SET NULL,
+  name TEXT NOT NULL,
+  duration_minutes INT NOT NULL DEFAULT 60,
+  price_label TEXT NOT NULL DEFAULT '',
+  description TEXT NOT NULL DEFAULT '',
+  is_active BOOLEAN NOT NULL DEFAULT true,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+CREATE TABLE IF NOT EXISTS google_calendar_connections (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  company_id UUID NOT NULL REFERENCES companies(id) ON DELETE CASCADE,
+  professional_id UUID NOT NULL UNIQUE REFERENCES professionals(id) ON DELETE CASCADE,
+  calendar_id TEXT NOT NULL,
+  refresh_token TEXT,
+  google_account_email TEXT,
+  token_updated_at TIMESTAMPTZ,
+  is_active BOOLEAN NOT NULL DEFAULT true,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+CREATE TABLE IF NOT EXISTS appointments (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  company_id UUID NOT NULL REFERENCES companies(id) ON DELETE CASCADE,
+  client_id UUID REFERENCES clients(id) ON DELETE SET NULL,
+  professional_id UUID REFERENCES professionals(id) ON DELETE SET NULL,
+  service_id UUID REFERENCES services(id) ON DELETE SET NULL,
+  conversation_id UUID REFERENCES conversations(id) ON DELETE SET NULL,
+  phone_number TEXT NOT NULL DEFAULT '',
+  client_name TEXT NOT NULL DEFAULT '',
+  google_event_id TEXT,
+  starts_at TIMESTAMPTZ NOT NULL,
+  ends_at TIMESTAMPTZ NOT NULL,
+  status TEXT NOT NULL DEFAULT 'confirmed',
+  source TEXT NOT NULL DEFAULT 'bot',
+  title TEXT NOT NULL DEFAULT '',
+  notes TEXT NOT NULL DEFAULT '',
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+DO $$ BEGIN
+  ALTER TABLE appointments ADD CONSTRAINT chk_appointment_status
+    CHECK (status IN ('confirmed', 'cancelled', 'rescheduled'));
+EXCEPTION WHEN duplicate_object THEN NULL;
+END $$;
+
+DO $$ BEGIN
+  ALTER TABLE appointments ADD CONSTRAINT chk_appointment_source
+    CHECK (source IN ('bot', 'manual', 'google_calendar'));
+EXCEPTION WHEN duplicate_object THEN NULL;
+END $$;
+
+INSERT INTO companies (name, slug, industry, calendar_connected)
+SELECT 'Talora Base', 'talora-base', 'general', false
+WHERE NOT EXISTS (SELECT 1 FROM companies WHERE slug = 'talora-base');
+
+ALTER TABLE agents ADD COLUMN IF NOT EXISTS company_id UUID REFERENCES companies(id) ON DELETE CASCADE;
+ALTER TABLE whatsapp_instances ADD COLUMN IF NOT EXISTS company_id UUID REFERENCES companies(id) ON DELETE CASCADE;
+ALTER TABLE conversations ADD COLUMN IF NOT EXISTS company_id UUID REFERENCES companies(id) ON DELETE CASCADE;
+ALTER TABLE alerts ADD COLUMN IF NOT EXISTS company_id UUID REFERENCES companies(id) ON DELETE CASCADE;
+ALTER TABLE clients ADD COLUMN IF NOT EXISTS company_id UUID REFERENCES companies(id) ON DELETE CASCADE;
+ALTER TABLE users ADD COLUMN IF NOT EXISTS professional_id UUID;
+ALTER TABLE clients ADD COLUMN IF NOT EXISTS professional_id UUID;
+ALTER TABLE conversations ADD COLUMN IF NOT EXISTS professional_id UUID;
+
+ALTER TABLE conversations ADD COLUMN IF NOT EXISTS bot_paused BOOLEAN NOT NULL DEFAULT false;
+ALTER TABLE conversations ADD COLUMN IF NOT EXISTS paused_at TIMESTAMPTZ;
+ALTER TABLE conversations ADD COLUMN IF NOT EXISTS paused_by_user_id UUID REFERENCES users(id) ON DELETE SET NULL;
+
+DO $$ BEGIN
+  ALTER TABLE users DROP CONSTRAINT IF EXISTS fk_users_professional_id;
+  ALTER TABLE users ADD CONSTRAINT fk_users_professional_id
+    FOREIGN KEY (professional_id) REFERENCES professionals(id) ON DELETE SET NULL;
+EXCEPTION WHEN others THEN NULL;
+END $$;
+
+DO $$ BEGIN
+  ALTER TABLE clients DROP CONSTRAINT IF EXISTS fk_clients_professional_id;
+  ALTER TABLE clients ADD CONSTRAINT fk_clients_professional_id
+    FOREIGN KEY (professional_id) REFERENCES professionals(id) ON DELETE SET NULL;
+EXCEPTION WHEN others THEN NULL;
+END $$;
+
+DO $$ BEGIN
+  ALTER TABLE conversations DROP CONSTRAINT IF EXISTS fk_conversations_professional_id;
+  ALTER TABLE conversations ADD CONSTRAINT fk_conversations_professional_id
+    FOREIGN KEY (professional_id) REFERENCES professionals(id) ON DELETE SET NULL;
+EXCEPTION WHEN others THEN NULL;
+END $$;
+
+CREATE TABLE IF NOT EXISTS conversation_pauses (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  conversation_id UUID NOT NULL UNIQUE REFERENCES conversations(id) ON DELETE CASCADE,
+  company_id UUID NOT NULL REFERENCES companies(id) ON DELETE CASCADE,
+  paused_by_user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  paused_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  resumed_at TIMESTAMPTZ
+);
+
+WITH default_company AS (
+  SELECT id FROM companies WHERE slug = 'talora-base' LIMIT 1
+)
+UPDATE agents
+SET company_id = (SELECT id FROM default_company)
+WHERE company_id IS NULL;
+
+WITH default_company AS (
+  SELECT id FROM companies WHERE slug = 'talora-base' LIMIT 1
+)
+UPDATE whatsapp_instances
+SET company_id = (SELECT id FROM default_company)
+WHERE company_id IS NULL;
+
+WITH default_company AS (
+  SELECT id FROM companies WHERE slug = 'talora-base' LIMIT 1
+)
+UPDATE conversations c
+SET company_id = wi.company_id
+FROM whatsapp_instances wi
+WHERE c.company_id IS NULL
+  AND c.instance_id = wi.id;
+
+WITH default_company AS (
+  SELECT id FROM companies WHERE slug = 'talora-base' LIMIT 1
+)
+UPDATE alerts
+SET company_id = COALESCE(
+  (SELECT wi.company_id FROM whatsapp_instances wi WHERE wi.id = alerts.instance_id),
+  (SELECT id FROM default_company)
+)
+WHERE company_id IS NULL;
+
+UPDATE clients cl
+SET company_id = ag.company_id
+FROM agents ag
+WHERE cl.company_id IS NULL
+  AND cl.agent_id = ag.id;
+
+DO $$ BEGIN
+  ALTER TABLE agents ALTER COLUMN company_id SET NOT NULL;
+EXCEPTION WHEN others THEN NULL;
+END $$;
+
+DO $$ BEGIN
+  ALTER TABLE whatsapp_instances ALTER COLUMN company_id SET NOT NULL;
+EXCEPTION WHEN others THEN NULL;
+END $$;
+
+DO $$ BEGIN
+  ALTER TABLE conversations ALTER COLUMN company_id SET NOT NULL;
+EXCEPTION WHEN others THEN NULL;
+END $$;
+
+DO $$ BEGIN
+  ALTER TABLE alerts ALTER COLUMN company_id SET NOT NULL;
+EXCEPTION WHEN others THEN NULL;
+END $$;
+
+DO $$ BEGIN
+  ALTER TABLE clients ALTER COLUMN company_id SET NOT NULL;
+EXCEPTION WHEN others THEN NULL;
+END $$;
+
+CREATE INDEX IF NOT EXISTS idx_agents_company_id ON agents(company_id);
+CREATE INDEX IF NOT EXISTS idx_instances_company_id ON whatsapp_instances(company_id);
+CREATE INDEX IF NOT EXISTS idx_conversations_company_id ON conversations(company_id, last_message_at DESC);
+CREATE INDEX IF NOT EXISTS idx_clients_company_id ON clients(company_id, name);
+CREATE UNIQUE INDEX IF NOT EXISTS idx_users_professional_id_unique ON users(professional_id) WHERE professional_id IS NOT NULL;
+CREATE INDEX IF NOT EXISTS idx_clients_professional_id ON clients(company_id, professional_id, name);
+CREATE INDEX IF NOT EXISTS idx_conversations_professional_id ON conversations(company_id, professional_id, last_message_at DESC);
+CREATE INDEX IF NOT EXISTS idx_professionals_company_id ON professionals(company_id, is_active);
+CREATE INDEX IF NOT EXISTS idx_services_company_id ON services(company_id, is_active);
+CREATE INDEX IF NOT EXISTS idx_appointments_company_id ON appointments(company_id, starts_at DESC);
+CREATE INDEX IF NOT EXISTS idx_conversation_pauses_company_id ON conversation_pauses(company_id, paused_at DESC);
 `;
 
 async function run() {

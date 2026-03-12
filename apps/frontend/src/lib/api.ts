@@ -1,4 +1,7 @@
+import { decodeJwtPayload } from "./jwt";
+
 const BASE_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:3001";
+const ACTIVE_COMPANY_STORAGE_KEY = "talora_active_company_id";
 
 // Promise-based coordination: the first 401 creates the redirect promise,
 // subsequent concurrent 401s await the same promise instead of competing.
@@ -7,6 +10,57 @@ let logoutPromise: Promise<void> | null = null;
 function getToken(): string | null {
   if (typeof window === "undefined") return null;
   return localStorage.getItem("token");
+}
+
+function getRoleFromToken(token: string | null): string | null {
+  if (!token) return null;
+  const payload = decodeJwtPayload(token);
+  return typeof payload?.role === "string" ? payload.role : null;
+}
+
+function getActiveCompanyId(): string | null {
+  if (typeof window === "undefined") return null;
+  return localStorage.getItem(ACTIVE_COMPANY_STORAGE_KEY);
+}
+
+const COMPANY_SCOPED_PREFIXES = [
+  "/dashboard",
+  "/instances",
+  "/conversations",
+  "/alerts",
+  "/professionals",
+  "/services",
+  "/appointments",
+  "/clients",
+  "/companies/current",
+  "/auth/google/status",
+  "/auth/google/calendars",
+  "/auth/google/connect",
+  "/auth/google/disconnect",
+  "/agent",
+];
+
+function shouldInjectCompanyScope(path: string): boolean {
+  return COMPANY_SCOPED_PREFIXES.some((prefix) => path === prefix || path.startsWith(`${prefix}/`) || path.startsWith(`${prefix}?`));
+}
+
+function withCompanyScope(path: string, _method: string, body: unknown, token: string | null) {
+  const role = getRoleFromToken(token);
+  const activeCompanyId = getActiveCompanyId();
+
+  if (role !== "superadmin" || !activeCompanyId || !shouldInjectCompanyScope(path)) {
+    return { path, body };
+  }
+
+  const url = new URL(`${BASE_URL}${path}`);
+  if (!url.searchParams.has("company_id")) {
+    url.searchParams.set("company_id", activeCompanyId);
+  }
+
+  return {
+    path: `${url.pathname}${url.search}`,
+    body,
+  };
 }
 
 const GET_TIMEOUT_MS = 10_000;
@@ -19,6 +73,12 @@ async function request<T>(
   options: RequestInit = {}
 ): Promise<T> {
   const token = getToken();
+  const method = (options.method ?? "GET").toUpperCase();
+  const rawBody =
+    typeof options.body === "string" && options.body.length > 0
+      ? (JSON.parse(options.body) as unknown)
+      : options.body;
+  const scopedRequest = withCompanyScope(path, method, rawBody, token);
   const headers: Record<string, string> = {
     "Content-Type": "application/json",
     ...(options.headers as Record<string, string>),
@@ -27,14 +87,19 @@ async function request<T>(
     headers["Authorization"] = `Bearer ${token}`;
   }
 
-  const method = (options.method ?? "GET").toUpperCase();
   const timeoutMs = MUTATION_METHODS.has(method) ? MUTATION_TIMEOUT_MS : GET_TIMEOUT_MS;
 
   let res: Response;
   try {
-    res = await fetch(`${BASE_URL}${path}`, {
+    res = await fetch(`${BASE_URL}${scopedRequest.path}`, {
       ...options,
       headers,
+      body:
+        method === "GET" || method === "DELETE"
+          ? undefined
+          : scopedRequest.body
+          ? JSON.stringify(scopedRequest.body)
+          : undefined,
       signal: AbortSignal.timeout(timeoutMs),
     });
   } catch (err) {
@@ -53,6 +118,7 @@ async function request<T>(
       if (!logoutPromise) {
         logoutPromise = (async () => {
           localStorage.removeItem("token");
+          localStorage.removeItem("talora_superadmin_token");
           window.location.href = "/login";
         })();
       }
@@ -82,4 +148,14 @@ export const api = {
 export async function fetcher<T>(path: string): Promise<T> {
   const res = await api.get<{ data: T }>(path);
   return res.data;
+}
+
+export type CompanyScopedKey = readonly [path: string, activeCompanyId: string];
+
+export function companyScopedKey(path: string, activeCompanyId: string | null | undefined): CompanyScopedKey | null {
+  return activeCompanyId ? [path, activeCompanyId] : null;
+}
+
+export async function companyScopedFetcher<T>([path]: CompanyScopedKey): Promise<T> {
+  return fetcher<T>(path);
 }

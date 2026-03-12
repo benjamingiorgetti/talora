@@ -1,9 +1,8 @@
 "use client";
 
 import { useRef, useCallback, useState } from "react";
-import { usePromptEditor } from "@/hooks/use-prompt-editor";
+import { usePromptEditor } from "@/hooks/usePromptEditor";
 import { SaveDiscardBar } from "./save-discard-bar";
-import { VariablesPanel } from "./variables-panel";
 import { TestChatPanel } from "./test-chat-panel";
 import { EnvironmentToggle } from "./environment-toggle";
 import { ResolvedView } from "./resolved-view";
@@ -49,38 +48,13 @@ export function PromptEditorTab() {
     save,
     discard,
     mutate,
+    promptSavedAt,
   } = usePromptEditor();
 
   const [mode, setMode] = useState<"production" | "test">("production");
   const [showResolved, setShowResolved] = useState(false);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const backdropRef = useRef<HTMLDivElement>(null);
-
-  const handleInsertVariable = useCallback(
-    (key: string) => {
-      const varText = `{{${key}}}`;
-      const textarea = textareaRef.current;
-      if (!textarea) {
-        setLocalPrompt((prev) => prev + varText);
-        return;
-      }
-
-      const start = textarea.selectionStart;
-      const end = textarea.selectionEnd;
-      const before = localPrompt.slice(0, start);
-      const after = localPrompt.slice(end);
-      const newPrompt = before + varText + after;
-      setLocalPrompt(newPrompt);
-
-      // Restore cursor position after the inserted variable
-      requestAnimationFrame(() => {
-        textarea.focus();
-        const newPos = start + varText.length;
-        textarea.setSelectionRange(newPos, newPos);
-      });
-    },
-    [localPrompt, setLocalPrompt]
-  );
 
   const handleScroll = useCallback(() => {
     if (textareaRef.current && backdropRef.current) {
@@ -203,31 +177,7 @@ export function PromptEditorTab() {
             className="rounded-lg border border-border bg-card overflow-hidden flex flex-col"
             style={{ height: "calc(100vh - 220px)", minHeight: "400px" }}
           >
-            <AnimatePresence mode="wait">
-              {mode === "production" ? (
-                <motion.div
-                  key="variables"
-                  initial={{ opacity: 0 }}
-                  animate={{ opacity: 1 }}
-                  exit={{ opacity: 0 }}
-                  transition={{ duration: 0.12, ease: "easeOut" }}
-                  className="flex flex-col h-full"
-                >
-                  <VariablesPanel onInsertVariable={handleInsertVariable} />
-                </motion.div>
-              ) : (
-                <motion.div
-                  key="test-chat"
-                  initial={{ opacity: 0 }}
-                  animate={{ opacity: 1 }}
-                  exit={{ opacity: 0 }}
-                  transition={{ duration: 0.12, ease: "easeOut" }}
-                  className="flex flex-col h-full"
-                >
-                  <TestChatPanel />
-                </motion.div>
-              )}
-            </AnimatePresence>
+            <TestChatPanel promptSavedAt={promptSavedAt} />
           </div>
         </div>
       </div>

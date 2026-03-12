@@ -2,7 +2,7 @@ import { getCalendarClient } from './client';
 import { config } from '../config';
 import { logger } from '../utils/logger';
 
-const CALENDAR_ID = config.googleCalendarId;
+const DEFAULT_CALENDAR_ID = config.googleCalendarId;
 
 // In-memory lock for booking slots to prevent double-booking (single-instance only)
 // TODO: Use PostgreSQL advisory locks for multi-instance deployments
@@ -18,7 +18,9 @@ export async function bookSlot(
   name: string,
   date: string,
   durationMinutes: number,
-  description: string
+  description: string,
+  calendarId = DEFAULT_CALENDAR_ID,
+  professionalId?: string | null
 ): Promise<{ success: boolean; eventId?: string; error?: string; suggestions?: string[] }> {
   const slotKey = getSlotKey(date, durationMinutes);
 
@@ -34,7 +36,7 @@ export async function bookSlot(
     await pending;
 
     // Check availability first
-    const availability = await checkSlot(date, durationMinutes);
+    const availability = await checkSlot(date, durationMinutes, calendarId, professionalId);
     if (!availability.available) {
       return {
         success: false,
@@ -43,7 +45,7 @@ export async function bookSlot(
       };
     }
     // Create the event
-    return await createEvent(name, date, durationMinutes, description);
+    return await createEvent(name, date, durationMinutes, description, calendarId, professionalId);
   } finally {
     // Release the lock so the next queued booking can proceed
     resolve();
@@ -55,9 +57,11 @@ export async function bookSlot(
 
 export async function checkSlot(
   date: string,
-  durationMinutes: number
+  durationMinutes: number,
+  calendarId = DEFAULT_CALENDAR_ID,
+  professionalId?: string | null
 ): Promise<{ available: boolean; suggestions?: string[] }> {
-  const calendar = await getCalendarClient();
+  const calendar = await getCalendarClient(professionalId);
 
   const start = new Date(date);
   const end = new Date(start.getTime() + durationMinutes * 60 * 1000);
@@ -67,11 +71,11 @@ export async function checkSlot(
     requestBody: {
       timeMin: start.toISOString(),
       timeMax: end.toISOString(),
-      items: [{ id: CALENDAR_ID }],
+      items: [{ id: calendarId }],
     },
   });
 
-  const busySlots = freeBusyResponse.data.calendars?.[CALENDAR_ID]?.busy || [];
+  const busySlots = freeBusyResponse.data.calendars?.[calendarId]?.busy || [];
   const isAvailable = busySlots.length === 0;
 
   if (isAvailable) {
@@ -87,11 +91,11 @@ export async function checkSlot(
     requestBody: {
       timeMin: searchStart.toISOString(),
       timeMax: searchEnd.toISOString(),
-      items: [{ id: CALENDAR_ID }],
+      items: [{ id: calendarId }],
     },
   });
 
-  const allBusy = extendedFreeBusy.data.calendars?.[CALENDAR_ID]?.busy || [];
+  const allBusy = extendedFreeBusy.data.calendars?.[calendarId]?.busy || [];
 
   // Check each 30-minute slot
   let candidateTime = new Date(searchStart);
@@ -118,15 +122,17 @@ export async function createEvent(
   name: string,
   date: string,
   durationMinutes: number,
-  description: string
+  description: string,
+  calendarId = DEFAULT_CALENDAR_ID,
+  professionalId?: string | null
 ): Promise<{ success: boolean; eventId?: string }> {
-  const calendar = await getCalendarClient();
+  const calendar = await getCalendarClient(professionalId);
 
   const start = new Date(date);
   const end = new Date(start.getTime() + durationMinutes * 60 * 1000);
 
   const event = await calendar.events.insert({
-    calendarId: CALENDAR_ID,
+    calendarId,
     requestBody: {
       summary: name,
       description,
@@ -144,13 +150,15 @@ export async function createEvent(
 }
 
 export async function deleteEvent(
-  eventId: string
+  eventId: string,
+  calendarId = DEFAULT_CALENDAR_ID,
+  professionalId?: string | null
 ): Promise<{ success: boolean; error?: string }> {
-  const calendar = await getCalendarClient();
+  const calendar = await getCalendarClient(professionalId);
 
   try {
     await calendar.events.delete({
-      calendarId: CALENDAR_ID,
+      calendarId,
       eventId,
     });
     return { success: true };
@@ -167,4 +175,61 @@ export async function deleteEvent(
     logger.error(`deleteEvent: unexpected error for event ${eventId}:`, err);
     return { success: false, error: 'Failed to delete event' };
   }
+}
+
+export async function updateEvent(
+  eventId: string,
+  date: string,
+  durationMinutes: number,
+  calendarId = DEFAULT_CALENDAR_ID,
+  professionalId?: string | null,
+  summary?: string,
+  description?: string
+): Promise<{ success: boolean; error?: string }> {
+  const calendar = await getCalendarClient(professionalId);
+  const start = new Date(date);
+  const end = new Date(start.getTime() + durationMinutes * 60 * 1000);
+
+  try {
+    await calendar.events.patch({
+      calendarId,
+      eventId,
+      requestBody: {
+        ...(summary ? { summary } : {}),
+        ...(description ? { description } : {}),
+        start: { dateTime: start.toISOString() },
+        end: { dateTime: end.toISOString() },
+      },
+    });
+    return { success: true };
+  } catch (err) {
+    logger.error(`updateEvent: unexpected error for event ${eventId}:`, err);
+    return { success: false, error: 'Failed to update event' };
+  }
+}
+
+export async function listEvents(
+  start: string,
+  end: string,
+  calendarId = DEFAULT_CALENDAR_ID,
+  professionalId?: string | null
+): Promise<Array<{ id: string; summary: string; description: string; starts_at: string; ends_at: string }>> {
+  const calendar = await getCalendarClient(professionalId);
+  const result = await calendar.events.list({
+    calendarId,
+    timeMin: new Date(start).toISOString(),
+    timeMax: new Date(end).toISOString(),
+    singleEvents: true,
+    orderBy: 'startTime',
+  });
+
+  return (result.data.items ?? [])
+    .filter((item) => item.id && item.start?.dateTime && item.end?.dateTime)
+    .map((item) => ({
+      id: item.id!,
+      summary: item.summary ?? '',
+      description: item.description ?? '',
+      starts_at: item.start!.dateTime!,
+      ends_at: item.end!.dateTime!,
+    }));
 }

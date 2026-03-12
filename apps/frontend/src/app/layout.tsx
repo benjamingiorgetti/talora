@@ -6,6 +6,7 @@ import { Providers } from "./providers";
 const plusJakarta = Plus_Jakarta_Sans({
   subsets: ["latin"],
   weight: ["400", "500", "600"],
+  variable: "--font-ui",
 });
 
 export const metadata: Metadata = {
@@ -15,8 +16,8 @@ export const metadata: Metadata = {
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
-    <html lang="es" className="dark" suppressHydrationWarning>
-      <body className={`${plusJakarta.className} antialiased`}>
+    <html lang="es" suppressHydrationWarning>
+      <body className={`${plusJakarta.variable} antialiased`} style={{ ["--font-display" as string]: "var(--font-ui)" }}>
         <Providers>{children}</Providers>
       </body>
     </html>

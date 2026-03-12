@@ -1,6 +1,7 @@
 "use client";
 
 import { cn } from "@/lib/utils";
+import { Button } from "@/components/ui/button";
 
 interface EnvironmentToggleProps {
   mode: "production" | "test";
@@ -14,10 +15,12 @@ export function EnvironmentToggle({ mode, onChange }: EnvironmentToggleProps) {
       role="group"
       aria-label="Seleccionar modo de entorno"
     >
-      <button
+      <Button
+        variant="ghost"
+        size="sm"
         onClick={() => onChange("production")}
         className={cn(
-          "relative rounded px-3 py-1 text-xs font-medium transition-all duration-150",
+          "relative h-auto rounded px-3 py-1 text-xs font-medium transition-all duration-150",
           mode === "production"
             ? "bg-background text-foreground shadow-sm"
             : "text-muted-foreground hover:text-foreground"
@@ -25,11 +28,13 @@ export function EnvironmentToggle({ mode, onChange }: EnvironmentToggleProps) {
         aria-pressed={mode === "production"}
       >
         Produccion
-      </button>
-      <button
+      </Button>
+      <Button
+        variant="ghost"
+        size="sm"
         onClick={() => onChange("test")}
         className={cn(
-          "relative rounded px-3 py-1 text-xs font-medium transition-all duration-150",
+          "relative h-auto rounded px-3 py-1 text-xs font-medium transition-all duration-150",
           mode === "test"
             ? "bg-background text-foreground shadow-sm"
             : "text-muted-foreground hover:text-foreground"
@@ -37,7 +42,7 @@ export function EnvironmentToggle({ mode, onChange }: EnvironmentToggleProps) {
         aria-pressed={mode === "test"}
       >
         Test
-      </button>
+      </Button>
     </div>
   );
 }

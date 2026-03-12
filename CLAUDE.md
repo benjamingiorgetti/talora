@@ -1,193 +1,144 @@
 # Talora
 
-WhatsApp conversational agent for tattoo studios. Admin panel to configure agents, monitor conversations, and manage WhatsApp instances via Evolution API.
+Talora ya no debe pensarse solo como producto para tatuajes. El estado actual del repo es una plataforma multiempresa de turnos por WhatsApp. Este archivo es memoria de proyecto; usar `AGENTS.md` para comportamiento y policy del agente.
 
-## Stack
+## Stack / Overview
 
-- **Monorepo**: Bun workspaces (`apps/*`, `packages/*`)
-- **Backend**: Express + TypeScript on Bun (`apps/backend/`, port 3001)
-- **Frontend**: Next.js 14 + Tailwind + shadcn/ui (`apps/frontend/`, port 3000)
-- **Shared types**: `packages/shared/src/index.ts` (imported as `@talora/shared`)
-- **Infrastructure**: Docker Compose (PostgreSQL 16 + Evolution API v2.2.3)
-- **AI**: Anthropic SDK (`@anthropic-ai/sdk`)
-- **DB**: PostgreSQL, migrations in `apps/backend/src/db/migrate.ts`
-- **WebSocket**: `ws` library (`apps/backend/src/ws/server.ts`)
-- **Auth**: JWT (`jsonwebtoken`)
-- **Calendar**: Google Calendar API (`googleapis`) — optional integration
+- Monorepo on Bun workspaces: `apps/*`, `packages/*`
+- Backend: Express + TypeScript on Bun in `apps/backend` on port `3001`
+- Frontend: Next.js 14 + Tailwind + shadcn/ui in `apps/frontend` on port `3000`
+- Shared types: `packages/shared/src/index.ts` imported as `@talora/shared`
+- Infra: Docker Compose with PostgreSQL 16 + Evolution API v2.2.3
+- AI: OpenAI SDK (`openai` v4.x, default model `gpt-4o-mini`)
+- Optional integration: Google Calendar via `googleapis`
 
-## How to Run
+## Current Product State
 
-```bash
-# 1. Copy backend env and fill in values
-cp .env.example apps/backend/.env
+- Talora tiene dos experiencias separadas:
+  - `superadmin`: configura empresas, integraciones, profesionales y servicios
+  - `admin_empresa`: opera su workspace cliente
+- Superficies principales:
+  - `superadmin`: `/superadmin/companies`
+  - `cliente`: `/workspace`, `/workspace/calendar`, `/workspace/whatsapp`, `/workspace/appointments`, `/workspace/clients`
+- `/agent` sigue existiendo, pero es consola interna/técnica. No es la UX principal del cliente.
+- Modelo actual:
+  - multiempresa (`companies`)
+  - roles `superadmin` y `admin_empresa`
+  - un workspace por empresa
+  - Google Calendar como fuente de verdad de turnos
+  - Evolution API para WhatsApp
 
-# 2. Create root .env for docker-compose (must match backend EVOLUTION_API_KEY)
-echo "EVOLUTION_API_KEY=dev-api-key" > .env
+## Current MVP Priorities
 
-# 3. Install dependencies
-bun install
+Seguir este orden antes de agregar features:
 
-# 4. Start Docker Desktop, then infrastructure
-docker-compose up -d
+1. Google Calendar real por profesional
+2. WhatsApp / Evolution real con QR usable
+3. Flujo end-to-end sobre una empresa demo
+4. QA manual del MVP vendible
 
-# 5. Run database migrations
-cd apps/backend && bun run migrate
+Antes de arrancar trabajo nuevo, leer `todos.md`.
 
-# 6. Start backend (port 3001)
-cd apps/backend && bun run dev
+## Principios de Trabajo (Himno Talora)
 
-# 7. Start frontend (port 3000)
-cd apps/frontend && bun run dev
-```
+1. No bajar la vara por usar LLMs. Si una feature no es claramente valiosa, no se shippea.
+2. Decisiones de shipping no se toman en soledad. Si hay duda, alinear con el core team.
+3. Prototipo no gana contra pensamiento de producto: primero el porqué, después el cómo.
+4. Si el diseño original quedó mal, se refactoriza. Dejar el código mejor que como estaba.
+5. Más valor en limpiar y mejorar lo existente que en perseguir la próxima feature.
+6. Velocidad real > gratificación inmediata. Usar agentes no debe erosionar el criterio.
 
-## Environment Variables
+## Project-Specific Skills
 
-All defined in `.env.example`. Critical ones:
-- `DATABASE_URL` - PostgreSQL connection string (default works with docker-compose)
-- `JWT_SECRET` - Required for auth, must be set
-- `ADMIN_EMAIL` / `ADMIN_PASSWORD` - Admin login credentials
-- `EVOLUTION_API_URL` - Default `http://localhost:8080`
-- `EVOLUTION_API_KEY` - Required, set in Evolution API container config
-- `ANTHROPIC_API_KEY` - Required for AI agent responses
-- `NEXT_PUBLIC_API_URL` - Frontend -> Backend URL, must be `http://localhost:3001`
-- `NEXT_PUBLIC_WS_URL` - WebSocket URL, must be `ws://localhost:3001`
+- `talora-mvp-qa`: usar para validar si algo del MVP realmente funciona de punta a punta o para preparar una demo company
+- `talora-live-debug`: usar para pantallas en blanco, cargas infinitas, problemas de Google Calendar/Evolution o estados operativos engañosos
 
-Optional (Google Calendar integration):
-- `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET`, `GOOGLE_REDIRECT_URI`
-- `GOOGLE_CALENDAR_ID` - Defaults to `primary`
+## Commands
 
-Optional (infrastructure):
-- `CORS_ORIGIN` - **Must set to `http://localhost:3000`** (default is `http://localhost:5173` which is wrong for Next.js)
-- `WEBHOOK_BASE_URL` - Base URL for webhook registration (default `http://localhost:3001`)
-- `WEBHOOK_ALLOWED_HOSTS` - Comma-separated allowed webhook hosts
+| Command | Description |
+|---------|-------------|
+| `bun install` | Install workspace dependencies |
+| `cp .env.example apps/backend/.env` | Create backend env file |
+| `echo "EVOLUTION_API_KEY=dev-api-key" > .env` | Create root env for Docker Compose |
+| `docker-compose up -d` | Start PostgreSQL + Evolution API |
+| `cd apps/backend && bun run migrate` | Run DB migrations |
+| `cd apps/backend && bun run dev` | Start backend on `3001` |
+| `cd apps/frontend && bun run dev` | Start frontend on `3000` |
+| `cd apps/backend && bun run typecheck` | Validate backend TypeScript |
+| `cd apps/frontend && bun run lint` | Lint frontend |
+| `curl http://localhost:3001/api/health` | Check backend health |
 
-## Key Conventions
+## Architecture / Key Files
 
-- **ALWAYS launch multiple agents in parallel** for any task. NEVER use a single agent alone. Decompose every task into at least 2 independent sub-tasks and launch them concurrently (e.g., one agent for backend research/changes and another for frontend, or one for exploration and another for implementation planning). This is a hard requirement — no exceptions.
-- **Before implementing a new feature**, ask if the user wants a plan first
-- **Before running the app**, verify `.env` exists and has all required keys populated
-- **Shared types** go in `packages/shared/src/index.ts` - import as `@talora/shared`
-- **Frontend API URL** must point to `http://localhost:3001` (NOT 4000 or other ports). The fallback in `apps/frontend/src/lib/api.ts` is `localhost:4000` which is WRONG - always set `NEXT_PUBLIC_API_URL=http://localhost:3001` in `.env`
-- **Backend config** is centralized in `apps/backend/src/config.ts` - use `requireEnv()` / `optionalEnv()` helpers
-- **CORS origin** defaults to `http://localhost:5173` in config.ts - **set `CORS_ORIGIN=http://localhost:3000` in `.env`**
-- After editing TypeScript files, validate types compile: `cd apps/backend && bunx tsc --noEmit`
+- `apps/backend/src/index.ts`: Express entrypoint, route mounting, CORS, healthcheck, WebSocket bootstrap
+- `apps/backend/src/config.ts`: centralized env loading via `requireEnv()` and `optionalEnv()`
+- `apps/backend/src/agent/index.ts`: OpenAI agent orchestration
+- `apps/backend/src/agent/tool-executor.ts`: agent tool execution
+- `apps/backend/src/cache/agent-cache.ts`: cached agent configuration
+- `apps/backend/src/evolution/client.ts`: Evolution API HTTP wrapper
+- `apps/backend/src/evolution/webhook.ts`: inbound WhatsApp webhook handling
+- `apps/backend/src/ws/server.ts`: WebSocket broadcasting + heartbeat
+- `apps/frontend/src/lib/api.ts`: frontend API client; fallback base URL is `http://localhost:3001`
+- `packages/shared/src/index.ts`: shared API and domain types
 
-## Workflow Preferences
+Backend routes worth knowing:
+- Public: `/api/health`, `/auth/login`, `/auth/google/*`, `/webhook/*`
+- Protected: `/instances`, `/conversations`, `/alerts`, `/agent/sections`, `/agent/tools`, `/clients`, `/companies`, `/appointments`, `/professionals`, `/services`, `/api/agents`
 
-- Before implementing any non-trivial feature, ask 10+ clarification questions to understand scope, edge cases, and priorities
-- Always explore existing code before writing new code — read relevant files first
-- After implementation, run a verification checklist: type-check (`tsc --noEmit`), lint, and manual test
-- When debugging, check in this order: env vars → service health (`docker ps`, ports) → logs → code
-- Default to planning mode for features that touch 3+ files
+Setup y rutas nuevas importantes:
+- `GET /companies`: listado superadmin con overview de setup
+- `GET /companies/current`: contexto actual del workspace cliente
+- `GET /auth/google/status?company_id=...`: estado de OAuth y mapeo
+- `GET /auth/google/calendars?company_id=...`: calendarios reales accesibles + validación por profesional
+- `/appointments`: CRUD operativo de turnos
+- `/professionals`, `/services`: setup operativo por empresa
 
-## Brand Guidelines
+## Environment + Gotchas
 
-- **Brand name**: Talora
-- **Primary font**: Plus Jakarta Sans (Google Font, loaded in `layout.tsx`)
-- **Secondary font**: Sohne (self-hosted or fallback to system sans-serif)
-- **Theme**: Dark mode
-- **Primary color**: HSL `142 60% 55%` — green
-- **Background**: HSL `222 47% 6%` — dark navy
-- **Card/Surface**: HSL `222 40% 8%` — slightly lighter navy
-- **Border**: HSL `222 20% 16%`
-- **Logo**: `public/talora-logo.png`, `public/talora-logo-transparent.png`
-- **Color tokens** defined in `apps/frontend/src/app/globals.css`
+- Root `.env` must exist with `EVOLUTION_API_KEY`; `docker-compose.yml` interpolates it and must match the backend key.
+- Backend runtime env lives in `apps/backend/.env` and is based on `.env.example`.
+- `CORS_ORIGIN` must be `http://localhost:3000`.
+- `NEXT_PUBLIC_API_URL` must be `http://localhost:3001`.
+- `NEXT_PUBLIC_WS_URL` must be `ws://localhost:3001`.
+- `WEBHOOK_BASE_URL` should be `http://host.docker.internal:3001` for local Docker; `localhost` will not work from the Evolution API container.
+- Shared types belong in `packages/shared/src/index.ts`.
+- External API clients belong in `apps/backend/src/<service>/client.ts` with timeout, retry, and normalized errors.
+- Docker Desktop must be running before `docker-compose up -d`.
+- There is no automated test framework configured yet.
+- `WEBHOOK_BASE_URL=http://host.docker.internal:3001` is the correct local default for Dockerized Evolution. `localhost` inside the container breaks webhooks.
+- If port `3001` is busy, inspect the running backend before changing code. A stale live process is common during debugging.
 
-## Design Standards
+## Google Calendar Notes
 
-- UI aesthetic: Dark, minimal, clean
-- Animation library: Framer Motion (motion variants in `apps/frontend/src/lib/motion.ts`)
-- Component library: shadcn/ui + Radix UI primitives
-- Design principle: Maximum clarity, minimal cognitive load — interfaces should be intuitive at first glance
+- Google Calendar is the source of truth for appointments.
+- The current MVP expects one calendar per professional.
+- If Google OAuth is already connected, do not accept invented or inaccessible `calendar_id` values.
+- Superadmin setup should use `GET /auth/google/calendars?company_id=...` to populate real options, not free text.
+- `calendar_connected` is not "OAuth exists"; it should reflect whether the company has real mapped calendars for active professionals.
 
-## Integration Patterns
+## WhatsApp / Evolution Notes
 
-- All external API clients go in `apps/backend/src/<service>/client.ts`
-- Wrap all external calls with timeout + retry + error normalization
-- Types for external APIs go in `packages/shared/src/index.ts`
+- `qr_pending` is a valid operational state, not an automatic error.
+- Superadmin setup must show QR/state for the instance and poll until `connected`.
+- Before blaming the frontend, verify:
+  - Evolution container health
+  - instance status in `/instances`
+  - QR/state in `/instances/:id/qr`
 
-## Debugging Checklist
+## Verification Workflow
 
-When something doesn't work:
-1. Check `.env` has all required vars (compare with `.env.example`)
-2. Verify Docker containers are running: `docker ps`
-3. Check port availability: 3000 (frontend), 3001 (backend), 5432 (postgres), 8080 (evolution)
-4. Check backend logs for errors
-5. Verify `CORS_ORIGIN` matches frontend URL (`http://localhost:3000`)
+- After backend or shared TypeScript changes: `cd apps/backend && bun run typecheck`
+- After frontend changes: `cd apps/frontend && bun run lint`
+- For end-to-end sanity: `curl http://localhost:3001/api/health`, then manually verify frontend on `http://localhost:3000`
+- When debugging, check in this order: env vars, running containers/ports, backend logs, then code
 
-## Quick Commands
+## Session Learnings / Repeated Patterns
 
-```bash
-# Type-check backend
-cd apps/backend && bunx tsc --noEmit
-
-# Lint frontend
-cd apps/frontend && bun run lint
-
-# Check health
-curl http://localhost:3001/api/health
-```
-
-## Backend API Routes
-
-Public:
-- `GET /api/health` - Health check (DB + Evolution API status)
-- `POST /auth/login` - Admin login
-- `/auth/google/*` - Google Calendar OAuth flow
-- `/webhook/*` - Evolution API webhook receiver
-
-Protected (require JWT):
-- `/instances` - WhatsApp instance CRUD
-- `/conversations` - Conversation listing
-- `/alerts` - Alert management
-- `/agent/sections` - Single-tenant prompt sections shortcut
-- `/agent/tools` - Single-tenant agent tools shortcut
-- `/api/agents` - Full agents CRUD (direct API access)
-
-## Key Files
-
-- `apps/backend/src/index.ts` - Backend entry point, route mounting
-- `apps/backend/src/config.ts` - Centralized env config (`requireEnv`/`optionalEnv`)
-- `apps/backend/src/evolution/webhook.ts` - WhatsApp message webhook handler
-- `apps/backend/src/agent/index.ts` - AI agent logic (Anthropic SDK)
-- `apps/frontend/src/lib/api.ts` - Frontend HTTP client (fallback port is wrong, use env var)
-- `packages/shared/src/index.ts` - Shared TypeScript types
-- `apps/backend/src/evolution/client.ts` - Evolution API HTTP client wrapper
-- `apps/backend/src/ws/server.ts` - WebSocket server (heartbeat, broadcasting)
-- `apps/backend/src/cache/agent-cache.ts` - Agent config caching layer
-- `apps/backend/src/agent/tool-executor.ts` - Agent tool execution logic
-- `apps/backend/src/calendar/operations.ts` - Google Calendar slot checking
-
-## Database
-
-PostgreSQL tables: `whatsapp_instances`, `agents`, `prompt_sections`, `tools`, `conversations`, `messages`, `bot_config`, `alerts`
-
-Run migrations: `cd apps/backend && bun run migrate`
-
-## Gotchas
-
-- Root `.env` must exist with `EVOLUTION_API_KEY` — `docker-compose.yml` interpolates it. Without it, the container uses a default key that won't match the backend's key.
-- Docker Desktop must be running before `docker-compose up -d`
-- No test framework is set up yet — no automated tests exist
-- The frontend API fallback port (`localhost:4000`) in `api.ts` is wrong — always set `NEXT_PUBLIC_API_URL` in `.env`
-
-## Custom Agents
-
-- **evolution-api-backend-dev** (Opus): Backend tasks, Evolution API integration, webhook logic
-- **frontend-ui-craftsman** (Sonnet): Frontend UI components, animations, dashboard design
-- **code-auditor** (Sonnet): Code quality audits, security reviews, dead code detection, performance bottlenecks
-- **integrations** (Opus): Third-party API integrations, OAuth2 flows, Google Calendar, scheduling, external services (replaces calendar-integrations)
-- **prompt-engineer** (Opus): System prompt design, tool definitions, Anthropic SDK patterns, bot response quality
-- **infra-devops** (Sonnet): Docker, CI/CD, deployment, monitoring, security
-- **db-migrations** (Sonnet): Schema design, migrations, query optimization, PostgreSQL
-- **testing** (Sonnet): Test infrastructure, unit/integration tests, mocks, coverage
-
-## Skills (Slash Commands)
-
-- `/launch` — Start full dev environment (Docker, migrations, backend, frontend)
-- `/preflight` — Read-only diagnostics (env vars, ports, types, URL alignment)
-- `/audit` — Full codebase quality audit with parallel agents
-- `/debug` — Systematic debugging (env → services → logs → code)
-- `/plan-deep` — Deep planning with 10-15 clarification questions before implementation
-- `/integrate <api>` — Scaffold a new API/library integration
-- `/rename <old> <new>` — Rename a brand/identifier across the entire codebase
+- If a Next.js page is blank, do not assume the route code is the problem first.
+  1. Check auth/redirect state
+  2. Check `/_next/static/*` asset responses
+  3. Restart `cd apps/frontend && bun run dev`
+  4. Then inspect route-specific render/hydration issues
+- Route-specific white screens can also come from invalid nested interactive HTML such as `button > button`; check the rendered structure before chasing fetch logic.
+- Do not mark work as `Done` in `todos.md` unless it has real validation or objective evidence.
+- For this repo, "implemented" and "vendible" are different states. Prefer proving real flows over adding more surfaces.
