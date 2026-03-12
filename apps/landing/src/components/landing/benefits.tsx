@@ -29,7 +29,7 @@ export function Benefits() {
           <h2 className="font-display text-section-mobile md:text-section font-semibold text-text-strong">
             {benefits.title}
           </h2>
-          <p className="mt-4 text-body-lg text-gray-medium">
+          <p className="mt-4 text-base sm:text-body-lg text-gray-medium">
             {benefits.subtitle}
           </p>
         </div>
@@ -40,7 +40,7 @@ export function Benefits() {
         initial="hidden"
         whileInView="visible"
         viewport={{ once: true, margin: "-64px" }}
-        className="mt-16 grid gap-6 sm:grid-cols-2"
+        className="mt-6 sm:mt-12 md:mt-16 grid gap-3 sm:gap-4 md:gap-6 sm:grid-cols-2"
       >
         {benefits.items.map((item) => {
           const Icon = iconMap[item.icon];
@@ -49,16 +49,16 @@ export function Benefits() {
             <motion.div
               key={item.title}
               variants={fadeUp}
-              className={`group relative overflow-hidden rounded-2xl bg-white/60 backdrop-blur-xl border border-white/70 shadow-lg shadow-black/[0.04] p-8 transition-all duration-300 hover:-translate-y-1 hover:shadow-xl hover:shadow-ink/5 ${colors.hover}`}
+              className={`group relative overflow-hidden rounded-2xl bg-white/60 backdrop-blur-xl border border-white/70 shadow-lg shadow-black/[0.04] p-5 sm:p-6 md:p-8 transition-all duration-300 hover-lift hover:shadow-xl hover:shadow-ink/5 ${colors.hover}`}
             >
               {/* Top accent line */}
               <div className={`absolute top-0 left-0 right-0 h-1 ${colors.accent}`} />
               <div
-                className={`inline-flex h-12 w-12 items-center justify-center rounded-2xl ${colors.bg}`}
+                className={`inline-flex h-10 w-10 sm:h-12 sm:w-12 items-center justify-center rounded-2xl ${colors.bg}`}
               >
-                <Icon size={22} className="text-ink" />
+                <Icon className="h-5 w-5 sm:h-[22px] sm:w-[22px] text-ink" />
               </div>
-              <h3 className="mt-5 font-display text-lg font-semibold text-text-strong">
+              <h3 className="mt-3 sm:mt-5 font-display text-base sm:text-lg font-semibold text-text-strong">
                 {item.title}
               </h3>
               <p className="mt-2 text-sm leading-relaxed text-gray-medium">

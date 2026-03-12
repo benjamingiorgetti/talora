@@ -13,7 +13,7 @@ export const hero = {
   badge: "Turnos automaticos por WhatsApp",
   headline: "Tus clientes piden turno por WhatsApp.\nTalora los agenda automaticamente.",
   subheadline:
-    "Un agente de IA responde, agenda y confirma turnos en tu WhatsApp.\nTodo sincronizado con Google Calendar.",
+    "Responde, agenda y confirma turnos en tu WhatsApp.\nTodo sincronizado con Google Calendar.",
   ctaPrimary: "Ver como funciona",
   ctaPrimaryHref: "#como-funciona",
   ctaSecondary: "Agenda una reunion",
@@ -21,7 +21,7 @@ export const hero = {
 };
 
 export const metrics = {
-  title: "Funciona para negocios que reciben turnos por WhatsApp",
+  title: "Nunca pierdas un turno por WhatsApp",
   stats: [
     { value: "<5s", label: "Tiempo de respuesta" },
     { value: "24/7", label: "Sin pausas ni feriados" },
@@ -41,9 +41,9 @@ export const metrics = {
 };
 
 export const benefits = {
-  title: "Todo lo que necesitas para gestionar turnos",
+  title: "Todo lo que Talora hace por vos",
   subtitle:
-    "Una plataforma que conecta WhatsApp, calendario e inteligencia artificial para que tu negocio funcione solo.",
+    "Responde los mensajes, ofrece horarios disponibles y confirma turnos automaticamente.",
   items: [
     {
       title: "WhatsApp",
@@ -77,7 +77,7 @@ export const benefits = {
 };
 
 export const howItWorks = {
-  title: "Asi de simple",
+  title: "Como empezas",
   subtitle: "Tres pasos para automatizar tus turnos.",
   steps: [
     {
@@ -137,6 +137,16 @@ export const faq = {
         "El agente deriva la conversacion a un humano cuando detecta que no puede resolver el pedido. Nunca deja colgado al cliente.",
     },
   ],
+};
+
+export const waitlist = {
+  title: "Sumate a la lista de espera",
+  subtitle:
+    "Estamos abriendo acceso de a poco. Agenda una reunion y te mostramos como funciona.",
+  cta: "Quiero probar Talora",
+  ctaHref: "https://calendly.com/giorgettibenjamin/30min",
+  trust: ["Sin compromiso", "Setup en 5 minutos", "Soporte incluido"],
+  counter: "+30 negocios ya se anotaron",
 };
 
 export const finalCta = {

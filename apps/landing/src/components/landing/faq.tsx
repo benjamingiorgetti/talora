@@ -20,11 +20,11 @@ export function FAQ() {
       </FadeIn>
 
       <FadeIn>
-        <div className="mx-auto mt-12 max-w-2xl">
+        <div className="mx-auto mt-8 sm:mt-12 max-w-2xl">
           <Accordion type="single" collapsible className="w-full">
             {faq.items.map((item, i) => (
               <AccordionItem key={i} value={`item-${i}`}>
-                <AccordionTrigger className="text-left text-base text-text-strong">
+                <AccordionTrigger className="text-left text-sm sm:text-base text-text-strong">
                   {item.question}
                 </AccordionTrigger>
                 <AccordionContent>{item.answer}</AccordionContent>

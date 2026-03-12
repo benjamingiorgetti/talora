@@ -4,6 +4,22 @@
 
 html {
   scroll-behavior: smooth;
+  padding: env(safe-area-inset-top) env(safe-area-inset-right) env(safe-area-inset-bottom) env(safe-area-inset-left);
+}
+
+/* Respect reduced-motion preferences */
+@media (prefers-reduced-motion: reduce) {
+  html { scroll-behavior: auto; }
+  *, *::before, *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+}
+
+/* Hover effects only on devices that support it */
+@media (hover: hover) {
+  .hover-lift:hover { transform: translateY(-4px); }
 }
 
 @layer base {

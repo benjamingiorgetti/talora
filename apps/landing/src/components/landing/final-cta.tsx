@@ -17,21 +17,21 @@ export function FinalCTA() {
           <h2 className="font-display text-section-mobile md:text-section font-semibold text-white">
             {finalCta.headline}
           </h2>
-          <p className="mt-4 text-body-lg text-white/50">
+          <p className="mt-4 text-sm sm:text-base md:text-body-lg text-white/50">
             {finalCta.subheadline}
           </p>
-          <div className="mt-8">
-            <Button size="lg" variant="invert" className="hover:shadow-lg hover:shadow-white/10 transition-shadow" asChild>
+          <div className="mt-6 sm:mt-8">
+            <Button size="lg" variant="invert" className="w-full sm:w-auto hover:shadow-lg hover:shadow-white/10 transition-shadow" asChild>
               <a href={finalCta.ctaHref}>{finalCta.cta}</a>
             </Button>
           </div>
-          <div className="mt-8 flex flex-wrap items-center justify-center gap-6">
+          <div className="mt-6 sm:mt-8 flex flex-wrap items-center justify-center gap-3 sm:gap-4 md:gap-6">
             {finalCta.trust.map((item) => (
               <span
                 key={item}
-                className="flex items-center gap-2 text-sm text-white/50"
+                className="flex items-center gap-2 text-xs sm:text-sm text-white/50"
               >
-                <CheckCircle2 size={16} className="text-white/60" />
+                <CheckCircle2 className="h-3.5 w-3.5 sm:h-4 sm:w-4 text-white/60" />
                 {item}
               </span>
             ))}

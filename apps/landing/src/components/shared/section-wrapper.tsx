@@ -9,8 +9,8 @@ interface SectionWrapperProps {
 
 export function SectionWrapper({ children, className, id, style }: SectionWrapperProps) {
   return (
-    <section id={id} className={cn("py-24 md:py-32", className)} style={style}>
-      <div className="container mx-auto max-w-[1200px] px-6">{children}</div>
+    <section id={id} className={cn("py-12 sm:py-20 md:py-24 lg:py-32", className)} style={style}>
+      <div className="container mx-auto max-w-[1200px] px-4 sm:px-6">{children}</div>
     </section>
   );
 }
