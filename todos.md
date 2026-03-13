@@ -68,7 +68,12 @@
   - Resultado esperado: el registro canónico de tools core funciona en conversación real y las tools custom siguen editables sin romper contratos internos.
   - Criterio de cierre: prueba manual de alta/edición/desactivación de tools core y custom sobre una empresa demo, con evidencia de que el runtime usa las core desde código.
 
-- [ ] `ARCH-5 · Definir estrategia para historial sin trazas`
+- [ ] `ARCH-5 · Convention: declare functions before useEffect that references them`
+  - Resultado esperado: componentes no crashean por TDZ (Temporal Dead Zone) cuando un useEffect llama una función declarada después de un early return.
+  - Contexto: `/appointments` crasheaba porque `useEffect(() => { closePanel() }, [activeCompanyId])` se ejecutaba antes de `const closePanel = () => {...}` que estaba declarada después de un early return. No hay ESLint rule estándar para esto; documentar la convención y considerar un custom rule si el patrón se repite.
+  - Criterio de cierre: convención documentada en CLAUDE.md o linting setup, auditoría de componentes existentes para patrones similares.
+
+- [ ] `ARCH-6 · Definir estrategia para historial sin trazas`
   - Resultado esperado: las conversaciones viejas sin `agent_message_traces` tienen una política clara de compatibilidad.
   - Criterio de cierre: decisión explícita entre dejar estado degradado permanente, backfill parcial o reconstrucción limitada; UI y backend alineados con esa decisión.
 
