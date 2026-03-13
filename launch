@@ -1,0 +1,93 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+ROOT="$(cd "$(dirname "$0")" && pwd)"
+BACK_PID="" FRONT_PID=""
+
+cleanup() {
+  echo ""
+  echo "Shutting down..."
+  [ -n "$BACK_PID" ] && kill "$BACK_PID" 2>/dev/null
+  [ -n "$FRONT_PID" ] && kill "$FRONT_PID" 2>/dev/null
+  wait 2>/dev/null
+  echo "Done. (Docker containers still running — use 'docker-compose down' to stop them)"
+}
+trap cleanup EXIT INT TERM
+
+# Colors
+green() { printf "\033[32m%s\033[0m\n" "$1"; }
+red()   { printf "\033[31m%s\033[0m\n" "$1"; }
+dim()   { printf "\033[2m%s\033[0m\n" "$1"; }
+
+echo "=== Talora Dev ==="
+echo ""
+
+# 1. Check .env
+if [ ! -f "$ROOT/apps/backend/.env" ]; then
+  red "Missing apps/backend/.env — copy from .env.example and fill in values."
+  exit 1
+fi
+green "✓ .env found"
+
+# 2. Install deps
+dim "Installing dependencies..."
+cd "$ROOT" && bun install --silent 2>/dev/null
+green "✓ Dependencies installed"
+
+# 3. Start Docker containers
+dim "Starting Docker containers (PostgreSQL + Evolution API)..."
+cd "$ROOT"
+
+# Check if Docker is running
+if ! docker info >/dev/null 2>&1; then
+  dim "Starting Docker Desktop..."
+  open -a Docker
+  # Wait up to 30s for Docker to be ready
+  for i in $(seq 1 30); do
+    docker info >/dev/null 2>&1 && break
+    sleep 1
+  done
+  if ! docker info >/dev/null 2>&1; then
+    red "Docker Desktop didn't start in time. Open it manually and re-run."
+    exit 1
+  fi
+fi
+
+docker-compose up -d --quiet-pull 2>/dev/null || docker compose up -d --quiet-pull 2>/dev/null
+green "✓ Docker containers started"
+
+# 4. Wait for PostgreSQL to be healthy
+dim "Waiting for PostgreSQL..."
+for i in $(seq 1 30); do
+  if docker-compose exec -T postgres pg_isready -U talora >/dev/null 2>&1 || \
+     docker compose exec -T postgres pg_isready -U talora >/dev/null 2>&1; then
+    break
+  fi
+  sleep 1
+done
+green "✓ PostgreSQL ready"
+
+# 5. Run migrations
+dim "Running migrations..."
+cd "$ROOT/apps/backend" && bun run migrate 2>/dev/null
+green "✓ Migrations done"
+
+# 6. Start backend
+dim "Starting backend on :3001..."
+cd "$ROOT/apps/backend" && bun run dev &
+BACK_PID=$!
+
+# 7. Start frontend
+dim "Starting frontend on :3000..."
+cd "$ROOT/apps/frontend" && bun run dev &
+FRONT_PID=$!
+
+# 8. Wait for readiness
+sleep 3
+echo ""
+green "Backend:  http://localhost:3001"
+green "Frontend: http://localhost:3000"
+echo ""
+dim "Press Ctrl+C to stop both."
+
+wait
