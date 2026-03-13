@@ -140,6 +140,17 @@ export class EvolutionClient {
     });
   }
 
+  async sendReaction(
+    instanceName: string,
+    key: { id: string; remoteJid: string; fromMe?: boolean },
+    reaction: string
+  ) {
+    return this.request('POST', `/message/sendReaction/${instanceName}`, {
+      key,
+      reaction,
+    });
+  }
+
   async getWebhook(instanceName: string): Promise<{ url?: string }> {
     return this.request<{ url?: string }>('GET', `/webhook/find/${instanceName}`);
   }

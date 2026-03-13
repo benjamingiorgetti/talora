@@ -7,6 +7,7 @@ const uuid = z.string().uuid();
 const optionalUuid = z.string().uuid().optional().or(z.literal('').transform(() => undefined));
 const isoDatetime = z.string().min(1, 'ISO datetime string required');
 const hexColor = z.string().regex(/^#[0-9a-fA-F]{6}$/, 'Must be a hex color like #FF00AA');
+const serviceAliases = z.array(z.string().trim().min(1).max(100)).max(20);
 
 // --- Middleware ---
 
@@ -94,8 +95,9 @@ export const updateProfessionalSchema = z.object({
 export const createServiceSchema = z.object({
   name: z.string().min(1, 'name is required').max(200),
   professional_id: optionalUuid,
+  aliases: serviceAliases.default([]),
   duration_minutes: z.number().int().min(5).max(480).default(60),
-  price_label: z.string().max(100).default(''),
+  price: z.number().int().min(0),
   description: z.string().max(1000).default(''),
   is_active: z.boolean().default(true),
 });
@@ -103,10 +105,32 @@ export const createServiceSchema = z.object({
 export const updateServiceSchema = z.object({
   name: z.string().min(1).max(200).optional(),
   professional_id: optionalUuid.nullable(),
+  aliases: serviceAliases.optional(),
   duration_minutes: z.number().int().min(5).max(480).optional(),
-  price_label: z.string().max(100).optional(),
+  price: z.number().int().min(0).optional(),
   description: z.string().max(1000).optional(),
   is_active: z.boolean().optional(),
+});
+
+export const serviceImportPreviewSchema = z.object({
+  rows: z.array(z.object({
+    row_number: z.number().int().min(2),
+    name: z.string().max(2000).optional().default(''),
+    price: z.number().int().nullable().optional().default(null),
+    duration_minutes: z.number().nullable().optional().default(null),
+  })).min(1).max(1000),
+});
+
+export const serviceImportApplySchema = z.object({
+  items: z.array(z.object({
+    row_number: z.number().int().min(2),
+    action: z.enum(['create', 'update', 'invalid']),
+    service_id: z.string().uuid().nullable().optional().default(null),
+    name: z.string().max(2000).optional().default(''),
+    price: z.number().int().nullable().optional().default(null),
+    duration_minutes: z.number().nullable().optional().default(null),
+    error: z.string().nullable().optional().default(null),
+  })).min(1).max(1000),
 });
 
 // --- Client schemas ---
@@ -152,8 +176,9 @@ export const createCompanySchema = z.object({
   })).default([]),
   services: z.array(z.object({
     name: z.string().max(200).optional(),
+    aliases: serviceAliases.optional(),
     duration_minutes: z.number().int().min(5).max(480).optional(),
-    price_label: z.string().max(100).optional(),
+    price: z.number().int().min(0).optional(),
     description: z.string().max(1000).optional(),
   })).default([]),
 });
@@ -169,4 +194,5 @@ export const manualMessageSchema = z.object({
 export const testChatMessageSchema = z.object({
   session_id: uuid,
   content: z.string().min(1, 'content is required').max(5000),
+  mode: z.enum(['live', 'simulate']).optional(),
 });

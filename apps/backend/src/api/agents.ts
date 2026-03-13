@@ -1,9 +1,11 @@
 import { Router } from 'express';
 import { pool } from '../db/pool';
 import { buildUpdateSet, getNextSectionOrder } from '../db/query-helpers';
-import { invalidateAgentCache } from '../cache/agent-cache';
+import { invalidateAgentCacheByAgentId } from '../cache/agent-cache';
 import { logger } from '../utils/logger';
 import type { Agent, PromptSection, AgentTool } from '@talora/shared';
+import { listEffectiveAgentTools, resolveToolSource, canMutateCoreToolFields } from '../agent/tool-config';
+import { isCoreToolImplementation, isCoreToolName } from '../agent/core-tool-registry';
 
 export const agentsRouter = Router();
 
@@ -78,7 +80,7 @@ agentsRouter.put('/:id/prompt-sections/reorder', async (req, res) => {
       'SELECT * FROM prompt_sections WHERE agent_id = $1 ORDER BY "order" ASC',
       [id]
     );
-    invalidateAgentCache();
+    await invalidateAgentCacheByAgentId(id);
     res.json({ data: result.rows });
   } catch (err) {
     logger.error('Error reordering sections:', err);
@@ -129,7 +131,7 @@ agentsRouter.post('/:id/prompt-sections', async (req, res) => {
        RETURNING *`,
       [id, title, content || '', sectionOrder]
     );
-    invalidateAgentCache();
+    await invalidateAgentCacheByAgentId(id);
     res.status(201).json({ data: result.rows[0] });
   } catch (err) {
     logger.error('Error creating prompt section:', err);
@@ -161,7 +163,7 @@ agentsRouter.put('/:id/prompt-sections/:sectionId', async (req, res) => {
       res.status(404).json({ error: 'Section not found' });
       return;
     }
-    invalidateAgentCache();
+    await invalidateAgentCacheByAgentId(id);
     res.json({ data: result.rows[0] });
   } catch (err) {
     logger.error('Error updating prompt section:', err);
@@ -182,7 +184,7 @@ agentsRouter.delete('/:id/prompt-sections/:sectionId', async (req, res) => {
       res.status(404).json({ error: 'Section not found' });
       return;
     }
-    invalidateAgentCache();
+    await invalidateAgentCacheByAgentId(id);
     res.json({ data: { success: true } });
   } catch (err) {
     logger.error('Error deleting prompt section:', err);
@@ -193,11 +195,8 @@ agentsRouter.delete('/:id/prompt-sections/:sectionId', async (req, res) => {
 // GET /:id/tools — list tools
 agentsRouter.get('/:id/tools', async (req, res) => {
   try {
-    const result = await pool.query<AgentTool>(
-      'SELECT * FROM tools WHERE agent_id = $1 ORDER BY created_at ASC',
-      [req.params.id]
-    );
-    res.json({ data: result.rows });
+    const tools = await listEffectiveAgentTools(req.params.id);
+    res.json({ data: tools });
   } catch (err) {
     logger.error('Error listing tools:', err);
     res.status(500).json({ error: 'Failed to list tools' });
@@ -228,15 +227,19 @@ agentsRouter.post('/:id/tools', async (req, res) => {
     res.status(400).json({ error: 'Implementation must be a string' });
     return;
   }
+  if (isCoreToolName(name) || isCoreToolImplementation(implementation || name)) {
+    res.status(400).json({ error: 'Core tools are defined in code and cannot be created manually' });
+    return;
+  }
 
   try {
     const result = await pool.query<AgentTool>(
-      `INSERT INTO tools (agent_id, name, description, parameters, implementation)
-       VALUES ($1, $2, $3, $4, $5)
+      `INSERT INTO tools (agent_id, name, description, parameters, implementation, source)
+       VALUES ($1, $2, $3, $4, $5, 'custom')
        RETURNING *`,
       [id, name, description || '', JSON.stringify(parameters || {}), implementation || 'webhook']
     );
-    invalidateAgentCache();
+    await invalidateAgentCacheByAgentId(id);
     res.status(201).json({ data: result.rows[0] });
   } catch (err) {
     logger.error('Error creating tool:', err);
@@ -248,22 +251,35 @@ agentsRouter.post('/:id/tools', async (req, res) => {
 agentsRouter.put('/:id/tools/:toolId', async (req, res) => {
   const { id, toolId } = req.params;
   const { name, description, parameters, implementation, is_active } = req.body;
-
-  const update = buildUpdateSet({
-    name,
-    description,
-    parameters: parameters !== undefined ? JSON.stringify(parameters) : undefined,
-    implementation,
-    is_active,
-  });
-  if (!update) {
-    res.status(400).json({ error: 'No fields to update' });
-    return;
-  }
-
-  update.values.push(toolId, id);
-
   try {
+    const toolSource = await resolveToolSource(id, toolId);
+    if (!toolSource) {
+      res.status(404).json({ error: 'Tool not found' });
+      return;
+    }
+
+    if (toolSource === 'core' && !canMutateCoreToolFields({ name, description, parameters, implementation })) {
+      res.status(400).json({ error: 'Core tools only allow changing is_active. Schema and copy come from code.' });
+      return;
+    }
+    if (toolSource === 'custom' && (isCoreToolName(name || '') || isCoreToolImplementation(implementation || ''))) {
+      res.status(400).json({ error: 'Custom tools cannot impersonate core tool names or implementations' });
+      return;
+    }
+
+    const update = buildUpdateSet({
+      name: toolSource === 'custom' ? name : undefined,
+      description: toolSource === 'custom' ? description : undefined,
+      parameters: toolSource === 'custom' && parameters !== undefined ? JSON.stringify(parameters) : undefined,
+      implementation: toolSource === 'custom' ? implementation : undefined,
+      is_active,
+    });
+    if (!update) {
+      res.status(400).json({ error: 'No fields to update' });
+      return;
+    }
+
+    update.values.push(toolId, id);
     const result = await pool.query<AgentTool>(
       `UPDATE tools SET ${update.setClause}
        WHERE id = $${update.nextIndex} AND agent_id = $${update.nextIndex + 1}
@@ -274,8 +290,10 @@ agentsRouter.put('/:id/tools/:toolId', async (req, res) => {
       res.status(404).json({ error: 'Tool not found' });
       return;
     }
-    invalidateAgentCache();
-    res.json({ data: result.rows[0] });
+    await invalidateAgentCacheByAgentId(id);
+    const tools = await listEffectiveAgentTools(id);
+    const updatedTool = tools.find((tool) => tool.id === toolId || (toolSource === 'core' && tool.implementation === result.rows[0].implementation));
+    res.json({ data: updatedTool ?? result.rows[0] });
   } catch (err) {
     logger.error('Error updating tool:', err);
     res.status(500).json({ error: 'Failed to update tool' });
@@ -287,6 +305,16 @@ agentsRouter.delete('/:id/tools/:toolId', async (req, res) => {
   const { id, toolId } = req.params;
 
   try {
+    const toolSource = await resolveToolSource(id, toolId);
+    if (!toolSource) {
+      res.status(404).json({ error: 'Tool not found' });
+      return;
+    }
+    if (toolSource === 'core') {
+      res.status(400).json({ error: 'Core tools cannot be deleted. Disable them instead.' });
+      return;
+    }
+
     const result = await pool.query(
       'DELETE FROM tools WHERE id = $1 AND agent_id = $2 RETURNING id',
       [toolId, id]
@@ -295,7 +323,7 @@ agentsRouter.delete('/:id/tools/:toolId', async (req, res) => {
       res.status(404).json({ error: 'Tool not found' });
       return;
     }
-    invalidateAgentCache();
+    await invalidateAgentCacheByAgentId(id);
     res.json({ data: { success: true } });
   } catch (err) {
     logger.error('Error deleting tool:', err);

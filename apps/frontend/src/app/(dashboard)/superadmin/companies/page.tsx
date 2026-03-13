@@ -1,12 +1,12 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import Image from "next/image";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import useSWR from "swr";
 import type { Company, Professional, Service, WhatsAppInstance } from "@talora/shared";
-import { ArrowRight, Building2, CalendarRange, Link2, Plus, RefreshCw, ShieldCheck, Trash2, Wand2, Wifi } from "lucide-react";
+import { ArrowRight, Building2, CalendarRange, Link2, Plus, RefreshCw, Trash2, Wand2, Wifi } from "lucide-react";
 import { toast } from "sonner";
 import { api, fetcher } from "@/lib/api";
 import { useAuth } from "@/lib/auth";
@@ -69,6 +69,10 @@ type ProfessionalEditDraft = Partial<Professional> & {
   user_is_active?: boolean;
 };
 
+type ServiceEditDraft = Partial<Service> & {
+  aliases_text?: string;
+};
+
 const verticalOptions = ["Peluqueria", "Dentista", "Tatuajes", "Service del auto"];
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:3001";
 
@@ -95,8 +99,9 @@ const emptyProfessional = {
 
 const emptyService = {
   name: "",
+  aliases: "",
   duration_minutes: "60",
-  price_label: "",
+  price: "",
   description: "",
   professional_id: "all",
 };
@@ -111,6 +116,11 @@ function parseCommaList(value: string) {
     .split(",")
     .map((item) => item.trim())
     .filter(Boolean);
+}
+
+function parsePriceInput(value: string) {
+  const digits = value.replace(/[^\d]/g, "");
+  return digits ? Number.parseInt(digits, 10) : null;
 }
 
 function statusBadge(ready: boolean) {
@@ -135,8 +145,11 @@ export default function SuperadminCompaniesPage() {
   const [creatingInstance, setCreatingInstance] = useState(false);
   const [impersonatingId, setImpersonatingId] = useState<string | null>(null);
   const [professionalEdits, setProfessionalEdits] = useState<Record<string, ProfessionalEditDraft>>({});
-  const [serviceEdits, setServiceEdits] = useState<Record<string, Partial<Service>>>({});
+  const [serviceEdits, setServiceEdits] = useState<Record<string, ServiceEditDraft>>({});
   const [instanceQr, setInstanceQr] = useState<Record<string, string | null>>({});
+  const professionalsSectionRef = useRef<HTMLDivElement | null>(null);
+  const servicesSectionRef = useRef<HTMLDivElement | null>(null);
+  const whatsappSectionRef = useRef<HTMLDivElement | null>(null);
 
   useEffect(() => {
     if (activeCompanyId && activeCompanyId !== selectedCompanyId) {
@@ -303,7 +316,7 @@ export default function SuperadminCompaniesPage() {
         services: parseCommaList(companyForm.services).map((name) => ({
           name,
           duration_minutes: 60,
-          price_label: "",
+          price: 0,
           description: "",
         })),
       });
@@ -414,12 +427,19 @@ export default function SuperadminCompaniesPage() {
       toast.error("Completa al menos el nombre del servicio.");
       return;
     }
+    const price = parsePriceInput(serviceDraft.price);
+    if (price === null) {
+      toast.error("El precio es obligatorio y debe ser un entero.");
+      return;
+    }
     setCreatingService(true);
     try {
       await api.post(`/services?company_id=${selectedCompanyId}`, {
         ...serviceDraft,
         name: serviceDraft.name.trim(),
+        aliases: parseCommaList(serviceDraft.aliases),
         duration_minutes: Number(serviceDraft.duration_minutes) || 60,
+        price,
         professional_id: serviceDraft.professional_id === "all" ? null : serviceDraft.professional_id,
       });
       setServiceDraft(emptyService);
@@ -515,7 +535,8 @@ export default function SuperadminCompaniesPage() {
   };
 
   const handleConnectGoogle = () => {
-    toast.error("Elegí un profesional y conectá su Google desde su tarjeta.");
+    professionalsSectionRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
+    toast.message("Primero crea o elige un profesional. La conexión de Google está en su tarjeta.");
   };
 
   const handleConnectProfessionalGoogle = (professionalId: string) => {
@@ -545,24 +566,66 @@ export default function SuperadminCompaniesPage() {
   const professionalValidationMap = new Map(
     (googleCalendars?.professionals ?? []).map((item) => [item.id, item])
   );
+  const setupSteps = selectedCompany
+    ? [
+        {
+          step: "1",
+          title: "Empresa",
+          status: "listo",
+          description: `${selectedCompany.name} ya está creada y activa.`,
+        },
+        {
+          step: "2",
+          title: "Profesionales + Google",
+          status: (googleStatus?.connected_professional_count ?? 0) > 0 ? "en curso" : "pendiente",
+          description:
+            (googleStatus?.connected_professional_count ?? 0) > 0
+              ? `${googleStatus?.connected_professional_count ?? 0} profesional(es) con Google conectado.`
+              : "Crea profesionales y conecta Google desde cada tarjeta.",
+        },
+        {
+          step: "3",
+          title: "Servicios",
+          status: (services?.length ?? 0) > 0 ? "listo" : "pendiente",
+          description: (services?.length ?? 0) > 0 ? `${services?.length ?? 0} servicio(s) cargados.` : "Define qué se puede reservar.",
+        },
+        {
+          step: "4",
+          title: "WhatsApp",
+          status: (instances?.some((instance) => instance.status === "connected") ?? false) ? "listo" : "pendiente",
+          description:
+            (instances?.length ?? 0) > 0
+              ? `${instances?.filter((instance) => instance.status === "connected").length ?? 0} instancia(s) conectadas.`
+              : "Crea la instancia y pedí QR.",
+        },
+        {
+          step: "5",
+          title: "Workspace",
+          status: selectedCompany.setup_ready ? "listo" : "bloqueado",
+          description: selectedCompany.setup_ready ? "Ya podés entrar como cliente." : "Solo tiene sentido entrar cuando los pasos previos cierran.",
+        },
+      ]
+    : [];
 
   return (
     <div className="space-y-6">
       <section className="grid gap-4 xl:grid-cols-[1.2fr_0.8fr]">
-        <Card className="rounded-[30px] border-[#e9dfd2] bg-[linear-gradient(135deg,#fffdf8_0%,#f7f1e7_100%)] shadow-none">
-          <CardContent className="p-7">
-            <p className="text-[11px] uppercase tracking-[0.22em] text-slate-400">Superadmin Talora</p>
-            <h2 className="mt-3 max-w-3xl text-3xl font-semibold tracking-[-0.05em] text-slate-950">
-              Alta operativa de empresas: rubro, agenda, WhatsApp, profesionales y servicios sin tocar codigo.
-            </h2>
-            <p className="mt-4 max-w-2xl text-sm leading-6 text-slate-600">
-              Esta consola existe para dejar una cuenta realmente vendible: setup claro, integraciones visibles y posibilidad de entrar al workspace final sin ruido tecnico.
-            </p>
+        <Card className="rounded-[30px] border-[#e9dfd2] bg-white shadow-none">
+          <CardContent className="p-5 sm:p-6">
+            <div className="flex flex-wrap items-end justify-between gap-3">
+              <div>
+                <p className="text-[11px] uppercase tracking-[0.22em] text-slate-400">Cuentas</p>
+                <h2 className="mt-2 text-2xl font-semibold tracking-[-0.04em] text-slate-950">Empresas activas</h2>
+              </div>
+              <span className="rounded-full border border-[#eadfce] bg-[#fcfaf6] px-3 py-1.5 text-xs font-semibold text-slate-600">
+                {companies?.length ?? 0} seleccionables
+              </span>
+            </div>
 
-            <div className="mt-8 grid gap-4 md:grid-cols-4">
+            <div className="mt-5 grid gap-4 md:grid-cols-4">
               {[
                 { label: "Empresas", value: companies?.length ?? 0 },
-                { label: "Listas para demo", value: totals.ready },
+                { label: "Listas", value: totals.ready },
                 { label: "Profesionales", value: totals.professionals },
                 { label: "Servicios", value: totals.services },
               ].map((item) => (
@@ -579,12 +642,12 @@ export default function SuperadminCompaniesPage() {
 
         <Card className="rounded-[30px] border-[#e9dfd2] bg-white shadow-none">
           <CardContent className="p-7">
-            <div className="flex items-center gap-3">
+              <div className="flex items-center gap-3">
               <div className="flex h-12 w-12 items-center justify-center rounded-[20px] bg-[#17352d] text-white">
                 <Plus className="h-5 w-5" />
               </div>
               <div>
-                <p className="text-[11px] uppercase tracking-[0.18em] text-slate-400">Onboarding minimo</p>
+                <p className="text-[11px] uppercase tracking-[0.18em] text-slate-400">Paso 0</p>
                 <h3 className="mt-1 text-xl font-semibold tracking-[-0.03em] text-slate-950">Crear nueva empresa</h3>
               </div>
             </div>
@@ -640,7 +703,7 @@ export default function SuperadminCompaniesPage() {
 
               <Button disabled={creatingCompany} onClick={handleCreateCompany} className="mt-2 h-11 rounded-2xl bg-[#17352d] hover:bg-[#21453a]">
                 <Plus className="mr-2 h-4 w-4" />
-                {creatingCompany ? "Creando..." : "Crear empresa en modo setup"}
+                {creatingCompany ? "Creando..." : "Crear empresa"}
               </Button>
             </div>
           </CardContent>
@@ -656,11 +719,10 @@ export default function SuperadminCompaniesPage() {
               </div>
               <p className="mt-6 text-[11px] uppercase tracking-[0.18em] text-slate-400">Primera cuenta</p>
               <h3 className="mt-3 text-balance text-3xl font-semibold tracking-[-0.04em] text-slate-950">
-                Crea la primera empresa para activar el workspace
+                Crea la primera empresa para empezar
               </h3>
               <p className="mt-4 max-w-lg text-pretty text-sm leading-7 text-slate-500">
-                Talora no trabaja sin contexto. Completa el onboarding mínimo de arriba y la app va a dejar una empresa
-                activa automáticamente para entrar directo al producto.
+                Completa los datos básicos y después seguí con profesionales, Google, servicios y WhatsApp.
               </p>
             </div>
           </CardContent>
@@ -768,6 +830,34 @@ export default function SuperadminCompaniesPage() {
                   </span>
                 </div>
 
+                <div className="grid gap-3 md:grid-cols-5">
+                  {setupSteps.map((item) => (
+                    <div key={item.step} className="rounded-[22px] border border-[#ece2d5] bg-[#fcfaf6] p-4">
+                      <div className="flex items-center justify-between gap-3">
+                        <span className="rounded-full border border-[#e4d7c6] bg-white px-2.5 py-1 text-[11px] font-semibold text-slate-700">
+                          Paso {item.step}
+                        </span>
+                        <span
+                          className={cn(
+                            "rounded-full px-2.5 py-1 text-[11px] font-semibold",
+                            item.status === "listo"
+                              ? "bg-emerald-50 text-emerald-700"
+                              : item.status === "en curso"
+                                ? "bg-sky-50 text-sky-700"
+                                : item.status === "bloqueado"
+                                  ? "bg-slate-100 text-slate-600"
+                                  : "bg-amber-50 text-amber-700"
+                          )}
+                        >
+                          {item.status}
+                        </span>
+                      </div>
+                      <p className="mt-3 text-sm font-semibold text-slate-950">{item.title}</p>
+                      <p className="mt-2 text-sm leading-6 text-slate-500">{item.description}</p>
+                    </div>
+                  ))}
+                </div>
+
                 <div className="grid gap-3 md:grid-cols-3">
                   <div className="rounded-[24px] border border-[#efe4d5] bg-[#fcfaf6] p-4">
                     <div className="flex items-center gap-2 text-sm font-semibold text-slate-900">
@@ -782,7 +872,7 @@ export default function SuperadminCompaniesPage() {
                     <div className="mt-4 flex flex-wrap gap-2">
                       <Button variant="outline" onClick={handleConnectGoogle} className="h-10 rounded-2xl border-[#e5d9c8] bg-white px-4 hover:bg-[#f7efe4]">
                         <CalendarRange className="mr-2 h-4 w-4" />
-                        Conectar desde una tarjeta
+                        Ir a profesionales
                       </Button>
                       {googleStatus?.connected && (
                         <Button variant="outline" onClick={() => void mutateGoogleCalendars()} className="h-10 rounded-2xl border-[#e5d9c8] bg-white px-4 hover:bg-[#f7efe4]">
@@ -807,7 +897,7 @@ export default function SuperadminCompaniesPage() {
                     )}
                   </div>
 
-                  <div className="rounded-[24px] border border-[#efe4d5] bg-[#fcfaf6] p-4">
+                  <div ref={whatsappSectionRef} className="rounded-[24px] border border-[#efe4d5] bg-[#fcfaf6] p-4">
                     <div className="flex items-center gap-2 text-sm font-semibold text-slate-900">
                       <Wifi className="h-4 w-4 text-[#17352d]" />
                       WhatsApp
@@ -834,6 +924,13 @@ export default function SuperadminCompaniesPage() {
                           </Button>
                         </>
                       )}
+                      <Button
+                        variant="outline"
+                        onClick={() => whatsappSectionRef.current?.scrollIntoView({ behavior: "smooth", block: "start" })}
+                        className="h-10 rounded-2xl border-[#e5d9c8] bg-white px-4 hover:bg-[#f7efe4]"
+                      >
+                        Ver estado
+                      </Button>
                     </div>
                     {(instances ?? []).length > 0 && (
                       <div className="mt-4 space-y-3">
@@ -886,18 +983,24 @@ export default function SuperadminCompaniesPage() {
                     <p className="mt-2 text-sm text-slate-500">
                       {selectedCompany.setup_progress}% completo · {googleStatus?.connected_professional_count ?? 0} profesionales con Google · {selectedCompany.connected_instance_count} instancias conectadas.
                     </p>
-                    <Button asChild variant="outline" className="mt-4 h-10 rounded-2xl border-[#e5d9c8] bg-white px-4 hover:bg-[#f7efe4]">
-                      <Link href="/admin/ai">Abrir administracion</Link>
+                    <Button
+                      type="button"
+                      disabled={!selectedCompany.setup_ready || impersonatingId === selectedCompany.id}
+                      variant="outline"
+                      onClick={() => void handleImpersonate(selectedCompany.id)}
+                      className="mt-4 h-10 rounded-2xl border-[#e5d9c8] bg-white px-4 hover:bg-[#f7efe4]"
+                    >
+                      {impersonatingId === selectedCompany.id ? "Abriendo..." : "Abrir workspace"}
                     </Button>
                   </div>
                 </div>
 
                 <div className="grid gap-4 xl:grid-cols-2">
-                  <Card className="rounded-[26px] border-[#ece2d5] bg-[#fcfaf6] shadow-none">
+                  <Card ref={professionalsSectionRef} className="rounded-[26px] border-[#ece2d5] bg-[#fcfaf6] shadow-none">
                     <CardContent className="p-5">
                       <div className="flex items-center justify-between gap-3">
                         <div>
-                          <p className="text-[11px] uppercase tracking-[0.18em] text-slate-400">Profesionales</p>
+                          <p className="text-[11px] uppercase tracking-[0.18em] text-slate-400">Paso 2 · Profesionales</p>
                           <h4 className="mt-2 text-lg font-semibold tracking-[-0.03em] text-slate-950">Agenda por persona</h4>
                         </div>
                         <Button variant="outline" onClick={() => void mutateProfessionals()} className="h-9 rounded-2xl border-[#e5d9c8] bg-white px-3 hover:bg-[#f7efe4]">
@@ -1070,18 +1173,19 @@ export default function SuperadminCompaniesPage() {
                     </CardContent>
                   </Card>
 
-                  <Card className="rounded-[26px] border-[#ece2d5] bg-[#fcfaf6] shadow-none">
+                  <Card ref={servicesSectionRef} className="rounded-[26px] border-[#ece2d5] bg-[#fcfaf6] shadow-none">
                     <CardContent className="p-5">
                       <div>
-                        <p className="text-[11px] uppercase tracking-[0.18em] text-slate-400">Servicios</p>
-                        <h4 className="mt-2 text-lg font-semibold tracking-[-0.03em] text-slate-950">Catalogo operativo del bot</h4>
+                        <p className="text-[11px] uppercase tracking-[0.18em] text-slate-400">Paso 3 · Servicios</p>
+                        <h4 className="mt-2 text-lg font-semibold tracking-[-0.03em] text-slate-950">Qué se puede reservar</h4>
                       </div>
 
                       <div className="mt-5 grid gap-3">
                         <Input value={serviceDraft.name} onChange={(event) => setServiceDraft((current) => ({ ...current, name: event.target.value }))} className="h-10 rounded-2xl border-[#eadfcd]" placeholder="Nombre del servicio" />
+                        <Input value={serviceDraft.aliases} onChange={(event) => setServiceDraft((current) => ({ ...current, aliases: event.target.value }))} className="h-10 rounded-2xl border-[#eadfcd]" placeholder="Aliases para el bot: corte, pelo, corte clasico" />
                         <div className="grid gap-3 md:grid-cols-[120px_1fr]">
                           <Input value={serviceDraft.duration_minutes} onChange={(event) => setServiceDraft((current) => ({ ...current, duration_minutes: event.target.value }))} className="h-10 rounded-2xl border-[#eadfcd]" placeholder="60" />
-                          <Input value={serviceDraft.price_label} onChange={(event) => setServiceDraft((current) => ({ ...current, price_label: event.target.value }))} className="h-10 rounded-2xl border-[#eadfcd]" placeholder="Precio informativo" />
+                          <Input value={serviceDraft.price} onChange={(event) => setServiceDraft((current) => ({ ...current, price: event.target.value }))} className="h-10 rounded-2xl border-[#eadfcd]" placeholder="25000" />
                         </div>
                         <select
                           value={serviceDraft.professional_id}
@@ -1113,6 +1217,19 @@ export default function SuperadminCompaniesPage() {
                                   onChange={(event) => setServiceEdits((current) => ({ ...current, [service.id]: { ...current[service.id], name: event.target.value } }))}
                                   className="h-10 rounded-2xl border-[#eadfcd]"
                                 />
+                                <Input
+                                  value={draft.aliases_text ?? (service.aliases ?? []).join(", ")}
+                                  onChange={(event) => setServiceEdits((current) => ({
+                                    ...current,
+                                    [service.id]: {
+                                      ...current[service.id],
+                                      aliases_text: event.target.value,
+                                      aliases: parseCommaList(event.target.value),
+                                    },
+                                  }))}
+                                  className="h-10 rounded-2xl border-[#eadfcd]"
+                                  placeholder="Aliases para el bot"
+                                />
                                 <div className="grid gap-3 md:grid-cols-[120px_1fr]">
                                   <Input
                                     value={String((draft.duration_minutes as number | undefined) ?? service.duration_minutes)}
@@ -1120,8 +1237,8 @@ export default function SuperadminCompaniesPage() {
                                     className="h-10 rounded-2xl border-[#eadfcd]"
                                   />
                                   <Input
-                                    value={(draft.price_label as string | undefined) ?? service.price_label}
-                                    onChange={(event) => setServiceEdits((current) => ({ ...current, [service.id]: { ...current[service.id], price_label: event.target.value } }))}
+                                    value={String((draft.price as number | undefined) ?? service.price)}
+                                    onChange={(event) => setServiceEdits((current) => ({ ...current, [service.id]: { ...current[service.id], price: parsePriceInput(event.target.value) ?? service.price } }))}
                                     className="h-10 rounded-2xl border-[#eadfcd]"
                                     placeholder="Precio"
                                   />
@@ -1167,42 +1284,6 @@ export default function SuperadminCompaniesPage() {
                   </Card>
                 </div>
 
-                <div className="grid gap-4 md:grid-cols-3">
-                  {[
-                    {
-                      title: "Google mapeado",
-                      body: googleStatus?.connected
-                        ? `${googleStatus.connected_professional_count ?? 0} de ${googleStatus.professional_count ?? 0} profesionales ya conectaron su Google Calendar.`
-                        : "Falta terminar la conexión individual de Google Calendar para los profesionales.",
-                      icon: CalendarRange,
-                    },
-                    {
-                      title: "Inbox vendible",
-                      body: (instances?.length ?? 0) > 0
-                        ? `Hay ${instances?.length ?? 0} instancia(s) creadas para entrar a WhatsApp desde Talora.`
-                        : "Sin instancia de Evolution el cliente no va a sentir que tiene una consola operativa.",
-                      icon: Wifi,
-                    },
-                    {
-                      title: "Workspace limpio",
-                      body: "Cuando la cuenta queda lista, la demo correcta es Dashboard, Turnos, Calendario y WhatsApp. No la consola tecnica.",
-                      icon: ShieldCheck,
-                    },
-                  ].map((item) => {
-                    const Icon = item.icon;
-                    return (
-                      <Card key={item.title} className="rounded-[24px] border-[#ece2d5] bg-[#fcfaf6] shadow-none">
-                        <CardContent className="p-5">
-                          <div className="flex h-11 w-11 items-center justify-center rounded-2xl bg-white text-[#17352d]">
-                            <Icon className="h-5 w-5" />
-                          </div>
-                          <h4 className="mt-4 text-base font-semibold text-slate-950">{item.title}</h4>
-                          <p className="mt-2 text-sm leading-6 text-slate-600">{item.body}</p>
-                        </CardContent>
-                      </Card>
-                    );
-                  })}
-                </div>
               </div>
             ) : (
               <div className="flex min-h-[420px] items-center justify-center rounded-[28px] border border-dashed border-[#e7dbc8] bg-[#fcfaf6] text-center">
@@ -1210,7 +1291,7 @@ export default function SuperadminCompaniesPage() {
                   <Building2 className="mx-auto h-10 w-10 text-slate-300" />
                   <p className="mt-4 text-lg font-semibold text-slate-950">Todavia no hay empresas seleccionadas</p>
                   <p className="mt-2 text-sm leading-6 text-slate-500">
-                    Crea una cuenta o elige una empresa existente para cerrar Google Calendar, WhatsApp, profesionales y servicios desde un solo lugar.
+                    Elegí una empresa y seguí el orden: profesionales, Google, servicios, WhatsApp y recién después workspace.
                   </p>
                 </div>
               </div>

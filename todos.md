@@ -36,6 +36,42 @@
   - Resultado esperado: cualquier próximo agente puede probar una cuenta nueva sin depender del contexto histórico de esta sesión.
   - Criterio de cierre: checklist operativo documentado en el repo con pasos, validaciones y orden de prueba.
 
+- [ ] `MVP-9 · Validar consola admin/messages con trazas reales`
+  - Resultado esperado: la vista `admin/messages` sirve para debug interno de Talora con conversaciones reales, mostrando prompt resuelto, contexto inyectado y tools ejecutadas por vuelta.
+  - Qué falta cerrar: generar conversaciones nuevas después de la migración, validar que las trazas persisten y se leen bien en UI, revisar si la jerarquía visual de las islas alcanza para uso diario y decidir si `Alertas` sigue en la misma pantalla o se separa.
+
+- [ ] `MVP-9 · Ejecutar migración local del archivado de conversaciones`
+  - Resultado esperado: la base local ya tiene `archived_at` y `archive_reason`, con índices y constraint aplicados.
+  - Criterio de cierre: `bun run migrate` ejecutado sin errores y queries de conversaciones activas/archivadas funcionando sobre la DB real.
+
+- [ ] `MVP-10 · Validar /reset real con Evolution`
+  - Resultado esperado: `/reset` deja de mandar texto visible por WhatsApp y responde solo con reacción `✅`.
+  - Criterio de cierre: prueba real sobre una conversación de WhatsApp donde el usuario no vea mensaje del bot, solo la reacción, y el chat pase a archivado.
+
+- [ ] `MVP-11 · QA end-to-end de archivado y reapertura automática`
+  - Resultado esperado: la bandeja `Activos / Archivados` refleja bien reset, inactividad de 48h y reapertura por mensaje nuevo.
+  - Criterio de cierre: caso probado para `activo -> /reset -> archivado`, `activo -> 48h sin interacción -> archivado`, y `archivado -> mensaje nuevo -> activo`, con historial completo visible y evento de sistema correcto.
+
+- [ ] `ARCH-1 · Normalizar un solo agent por empresa`
+  - Resultado esperado: cada `company` tiene un único `agent` operativo y el backend deja de depender de `ORDER BY created_at ASC LIMIT 1` para elegirlo.
+  - Criterio de cierre: datos duplicados limpiados, constraint o regla de creación aplicada y rutas/cache usando selección explícita del agent activo.
+
+- [ ] `ARCH-2 · Sacar locks e idempotencia de memoria local`
+  - Resultado esperado: `conversationLocks`, `processedMessages`, `knownInstances` y caches críticas no dependen de un solo proceso de Node/Bun.
+  - Criterio de cierre: estrategia compatible con múltiples procesos definida e implementada, sin duplicación de mensajes ni carreras por conversación.
+
+- [ ] `ARCH-3 · Partir migrate.ts y dejar solo migraciones estructurales`
+  - Resultado esperado: las migraciones dejan de mezclar schema, seeds y semántica operativa en un único archivo acumulativo.
+  - Criterio de cierre: `migrate.ts` dividido o reemplazado por migraciones versionadas, sin backfills semánticos de prompt/tools core.
+
+- [ ] `ARCH-4 · Validar runtime core/custom del agente en flujo real`
+  - Resultado esperado: el registro canónico de tools core funciona en conversación real y las tools custom siguen editables sin romper contratos internos.
+  - Criterio de cierre: prueba manual de alta/edición/desactivación de tools core y custom sobre una empresa demo, con evidencia de que el runtime usa las core desde código.
+
+- [ ] `ARCH-5 · Definir estrategia para historial sin trazas`
+  - Resultado esperado: las conversaciones viejas sin `agent_message_traces` tienen una política clara de compatibilidad.
+  - Criterio de cierre: decisión explícita entre dejar estado degradado permanente, backfill parcial o reconstrucción limitada; UI y backend alineados con esa decisión.
+
 ## Built / Unvalidated
 - [ ] `BASE-1 · Multiempresa y auth`
   - Qué ya existe: `superadmin`, `admin_empresa`, JWT con `companyId` e impersonación con vuelta a Talora.
@@ -50,12 +86,20 @@
   - Qué falta validar: que el setup completo deje una cuenta realmente operativa sin intervención manual extra fuera del flujo previsto.
 
 - [ ] `BASE-4 · Turnos y agente`
-  - Qué ya existe: `appointments`, create / reprogram / cancel desde UI, tools por defecto del agente y contexto de servicios/profesionales.
-  - Qué falta validar: ejecución real del agente con Google Calendar y uso correcto de `professionalId` y `serviceId` en conversaciones reales.
+  - Qué ya existe: `appointments`, create / reprogram / cancel desde UI, tools core del agente definidas en código y contexto de servicios/profesionales.
+  - Qué falta validar: ejecución real del agente con Google Calendar y uso correcto de resolución de `professionalName` / `serviceName` en conversaciones reales.
 
 - [ ] `BASE-5 · Inbox operativa`
   - Qué ya existe: listado de conversaciones, apertura de mensajes, pausa, resume y envío manual.
   - Qué falta validar: operación real contra Evolution con conversaciones reales, takeover humano y persistencia consistente.
+
+- [ ] `BASE-6 · Observabilidad admin/messages`
+  - Qué ya existe: persistencia de `agent_message_traces`, endpoint `/conversations/:id/traces` y UI admin con islas para prompt, contexto inyectado y tools ejecutadas.
+  - Qué falta validar: datos reales post-migración, asociaciones correctas entre respuesta assistant y traza, manejo de errores/timeouts y comportamiento sobre historial viejo sin trazas.
+
+- [ ] `BASE-6 · Reset silencioso + archivado`
+  - Qué ya existe: modelo de conversación archivada, `/conversations?state=...`, reset como evento de sistema, reacción `✅` en webhook y tabs `Activos / Archivados` en la bandeja.
+  - Qué falta validar: migración aplicada en base real, reacción soportada por Evolution real y consistencia de websocket/reapertura automática con conversaciones reales.
 
 ## Done
 - [x] `OPS-1 · Base local validada`

@@ -5,18 +5,14 @@ import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import useSWR from "swr";
 import type { Appointment, Company, Conversation, DashboardMetrics, WhatsAppInstance } from "@talora/shared";
-import { ArrowRight, CalendarCheck2, CalendarDays, CheckCircle2, Clock3, MessageSquareText, Sparkles } from "lucide-react";
+import { ArrowRight, CalendarCheck2, CalendarDays, Clock3, MessageSquareText, Sparkles } from "lucide-react";
 import { companyScopedFetcher, companyScopedKey } from "@/lib/api";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { LoadingSpinner } from "@/components/ui/loading-spinner";
 import { useAuth } from "@/lib/auth";
 import { cn } from "@/lib/utils";
-import {
-  WorkspaceEmptyState,
-  WorkspaceMetricCard,
-  WorkspaceSectionHeader,
-} from "@/components/workspace/chrome";
+import { WorkspaceEmptyState, WorkspaceMetricCard, WorkspaceSectionHeader } from "@/components/workspace/chrome";
 
 type WorkspaceAppointment = Appointment & {
   professional_name?: string | null;
@@ -43,36 +39,6 @@ function formatSlot(value: string) {
   });
 }
 
-function buildCalendarMatrix(reference: Date) {
-  const year = reference.getFullYear();
-  const month = reference.getMonth();
-  const firstDay = new Date(year, month, 1);
-  const lastDay = new Date(year, month + 1, 0);
-  const leading = (firstDay.getDay() + 6) % 7;
-  const trailing = 41 - leading - lastDay.getDate();
-  const days: Array<{ day: number; currentMonth: boolean; date: Date }> = [];
-
-  for (let index = leading; index > 0; index -= 1) {
-    const date = new Date(year, month, 1 - index);
-    days.push({ day: date.getDate(), currentMonth: false, date });
-  }
-
-  for (let day = 1; day <= lastDay.getDate(); day += 1) {
-    days.push({ day, currentMonth: true, date: new Date(year, month, day) });
-  }
-
-  for (let day = 1; day <= trailing; day += 1) {
-    const date = new Date(year, month + 1, day);
-    days.push({ day: date.getDate(), currentMonth: false, date });
-  }
-
-  const weeks = [];
-  for (let index = 0; index < days.length; index += 7) {
-    weeks.push(days.slice(index, index + 7));
-  }
-  return weeks;
-}
-
 export default function WorkspaceDashboardPage() {
   const pathname = usePathname();
   const router = useRouter();
@@ -88,7 +54,7 @@ export default function WorkspaceDashboardPage() {
     return (appointments ?? [])
       .filter((appointment) => appointment.status !== "cancelled" && new Date(appointment.starts_at).getTime() >= today.getTime())
       .sort((left, right) => new Date(left.starts_at).getTime() - new Date(right.starts_at).getTime())
-      .slice(0, 5);
+      .slice(0, 6);
   }, [appointments, today]);
 
   const todayAppointments = useMemo(() => {
@@ -106,8 +72,6 @@ export default function WorkspaceDashboardPage() {
     () => (instances ?? []).filter((instance) => instance.status === "connected"),
     [instances]
   );
-
-  const calendarWeeks = useMemo(() => buildCalendarMatrix(today), [today]);
 
   useEffect(() => {
     if (pathname === "/workspace") {
@@ -127,98 +91,94 @@ export default function WorkspaceDashboardPage() {
       value: formatMetric(todayAppointments.length),
       tone: "lilac" as const,
       icon: CalendarDays,
-      caption: "Volumen real que el equipo tiene encima hoy.",
-    },
-    {
-      label: "Confirmados",
-      value: formatMetric(metrics?.confirmed_appointments ?? 0),
-      tone: "sky" as const,
-      icon: CheckCircle2,
-      caption: "Agenda ya validada y lista para ejecutarse.",
+      caption: "Carga real del dia.",
     },
     {
       label: "Pendientes",
       value: formatMetric(pausedConversations.length),
       tone: "sand" as const,
       icon: Clock3,
-      caption: "Casos donde conviene takeover o revisión humana.",
+      caption: "Casos que piden revision humana.",
     },
     {
-      label: "Resolución automática",
+      label: "Resolucion automatica",
       value: formatMetric(metrics?.automation_rate ?? 0, "%"),
       tone: "mint" as const,
       icon: Sparkles,
-      caption: "Cuánto de la operación avanza sin intervención.",
+      caption: "Operacion resuelta sin intervencion.",
     },
   ];
 
-  return (
-    <div className="grid gap-5 lg:gap-6 xl:grid-cols-[minmax(0,1.32fr)_340px]">
-      <div className="space-y-6">
-        <section className="grid gap-3 sm:gap-4 md:grid-cols-2 xl:grid-cols-4">
-          {dashboardMetrics.map((metric) => (
-            <WorkspaceMetricCard
-              key={metric.label}
-              label={metric.label}
-              value={metric.value}
-              caption={metric.caption}
-              icon={metric.icon}
-              tone={metric.tone}
-            />
-          ))}
-        </section>
+  const operationalAlerts: Array<{
+    key: string;
+    label: string;
+    title: string;
+    note: string;
+    href: string;
+    action: string;
+    icon: typeof CalendarCheck2;
+    tone: "sky" | "sand" | "mint";
+  }> = [
+    !company?.calendar_connected
+      ? {
+          key: "calendar",
+          label: "Agenda",
+          title: "Google Calendar pendiente",
+          note: "La disponibilidad todavia no es confiable para operar con agenda automatica.",
+          href: "/calendar",
+          action: "Revisar agenda",
+          icon: CalendarCheck2,
+          tone: "sand" as const,
+        }
+      : null,
+    connectedInstances.length === 0
+      ? {
+          key: "whatsapp",
+          label: "WhatsApp",
+          title: "WhatsApp sin conexion",
+          note: "Todavia no hay una instancia conectada para atender mensajes reales.",
+          href: "/whatsapp",
+          action: "Abrir WhatsApp",
+          icon: MessageSquareText,
+          tone: "sand" as const,
+        }
+      : null,
+    pausedConversations.length > 0
+      ? {
+          key: "review",
+          label: "Seguimiento",
+          title: `${pausedConversations.length} conversacion(es) en revision`,
+          note: "Hay conversaciones pausadas esperando intervencion humana.",
+          href: "/whatsapp",
+          action: "Revisar casos",
+          icon: Clock3,
+          tone: "sky" as const,
+        }
+      : null,
+  ].filter((item): item is NonNullable<typeof item> => item !== null);
 
+  return (
+    <div className="mx-auto max-w-[1080px] space-y-6">
+      <section className="grid gap-3 sm:gap-4 md:grid-cols-3">
+        {dashboardMetrics.map((metric) => (
+          <WorkspaceMetricCard
+            key={metric.label}
+            label={metric.label}
+            value={metric.value}
+            caption={metric.caption}
+            icon={metric.icon}
+            tone={metric.tone}
+          />
+        ))}
+      </section>
+
+      {operationalAlerts.length > 0 ? (
         <Card className="rounded-[28px] border-[#e6e7ec] bg-white shadow-none sm:rounded-[30px]">
           <CardContent className="p-5 sm:p-6 lg:p-7">
-            <WorkspaceSectionHeader
-              eyebrow="Operación del día"
-              title="Qué necesita atención y qué ya está resuelto"
-              description="La lógica visual acá es simple: paneles neutros para estructura, color pastel solo para los bloques que resumen estado."
-              action={
-                <Button asChild variant="outline" className="h-11 rounded-2xl border-[#dde1ea] px-4 hover:bg-[#f6f7fb]">
-                  <Link href="/calendar">
-                    Ver calendario completo
-                    <ArrowRight className="ml-2 h-4 w-4" />
-                  </Link>
-                </Button>
-              }
-            />
+            <WorkspaceSectionHeader eyebrow="Atencion" title="Alertas operativas" />
 
-            <div className="mt-6 grid gap-4 lg:grid-cols-3">
-              {[
-                {
-                  title: "Agenda activa",
-                  description: company?.calendar_connected
-                    ? "La agenda ya está vinculada y la disponibilidad puede usarse como fuente real."
-                    : "Hasta cerrar la conexión, la disponibilidad no es 100% confiable.",
-                  icon: CalendarCheck2,
-                  tone: "sky" as const,
-                  status: company?.calendar_connected ? "Google Calendar conectado" : "Falta terminar la conexión",
-                },
-                {
-                  title: "Bandeja operativa",
-                  description:
-                    connectedInstances.length > 0
-                      ? "Talora ya puede usarse como inbox real cuando una conversación necesita intervención."
-                      : "Conectar WhatsApp es lo que termina de volver vendible el workspace.",
-                  icon: MessageSquareText,
-                  tone: "mint" as const,
-                  status: connectedInstances.length > 0 ? "Lista para takeover humano" : "WhatsApp todavía pendiente",
-                },
-                {
-                  title: "Acción inmediata",
-                  description:
-                    pausedConversations.length > 0
-                      ? "Entrá a WhatsApp para revisar los casos fuera de guion y no dejar huecos en la agenda."
-                      : "El bot está operando sin fricción visible sobre la cuenta activa.",
-                  icon: Clock3,
-                  tone: "sand" as const,
-                  status:
-                    pausedConversations.length > 0
-                      ? `${pausedConversations.length} conversaciones piden revisión`
-                      : "No hay excepciones abiertas",
-                },
-              ].map((item) => {
+            <div className="mt-5 space-y-3">
+              {operationalAlerts.map((item) => {
                 const Icon = item.icon;
                 const accentClass =
                   item.tone === "sky"
@@ -228,144 +188,94 @@ export default function WorkspaceDashboardPage() {
                       : "bg-[hsl(var(--surface-sand))]";
 
                 return (
-                  <div
-                    key={item.title}
-                    className="interactive-soft rounded-[24px] border border-[#e6e7ec] bg-[linear-gradient(180deg,#ffffff_0%,#f8f9fc_100%)] p-5 sm:rounded-[28px]"
+                  <Link
+                    key={item.key}
+                    href={item.href}
+                    className="interactive-soft flex flex-col gap-4 rounded-[24px] border border-[#e6e7ec] bg-[linear-gradient(180deg,#ffffff_0%,#f8f9fc_100%)] p-4 sm:flex-row sm:items-start sm:justify-between sm:rounded-[28px]"
                   >
-                    <div className="flex items-center gap-3">
-                      <div className={cn("flex h-11 w-11 items-center justify-center rounded-[18px] text-slate-900", accentClass)}>
+                    <div className="flex min-w-0 items-start gap-3">
+                      <div className={cn("mt-0.5 flex h-11 w-11 shrink-0 items-center justify-center rounded-[18px] text-slate-900", accentClass)}>
                         <Icon className="h-5 w-5" />
                       </div>
-                      <div>
-                        <p className="text-sm text-slate-500">{item.title}</p>
-                        <p className="text-lg font-semibold text-slate-950">{item.status}</p>
+                      <div className="min-w-0">
+                        <p className="text-sm text-slate-500">{item.label}</p>
+                        <p className="mt-1 text-lg font-semibold text-slate-950">{item.title}</p>
+                        <p className="mt-2 text-sm leading-6 text-slate-500">{item.note}</p>
                       </div>
                     </div>
-                    <p className="mt-4 text-pretty text-sm leading-6 text-slate-500">{item.description}</p>
-                  </div>
+
+                    <div className="flex shrink-0 items-center gap-2 rounded-full border border-[#dde1ea] bg-white px-3 py-2 text-sm font-medium text-slate-700">
+                      <span>{item.action}</span>
+                      <ArrowRight className="h-4 w-4 text-slate-500" />
+                    </div>
+                  </Link>
                 );
               })}
             </div>
           </CardContent>
         </Card>
-      </div>
+      ) : null}
 
-      <div className="space-y-6">
-        <Card className="rounded-[28px] border-[#e6e7ec] bg-white shadow-none sm:rounded-[30px]">
-          <CardContent className="p-5 sm:p-6">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-[11px] font-medium uppercase tracking-[0.16em] text-slate-400">Calendario</p>
-                <h3 className="font-display mt-2 text-[2.1rem] leading-none text-slate-950">
-                  {today.toLocaleDateString("es-AR", {
-                    month: "long",
-                    year: "numeric",
-                  })}
-                </h3>
-              </div>
-              <div className="rounded-[20px] border border-[#dde1ea] bg-[#f6f7fb] px-3 py-2 text-sm font-medium text-slate-600">
-                {today.toLocaleDateString("es-AR", {
-                  day: "2-digit",
-                  month: "long",
-                  year: "numeric",
-                })}
-              </div>
-            </div>
+      <Card className="rounded-[28px] border-[#e6e7ec] bg-white shadow-none sm:rounded-[30px]">
+        <CardContent className="p-5 sm:p-6 lg:p-7">
+          <WorkspaceSectionHeader
+            eyebrow="Agenda"
+            title="Proximos turnos"
+            description={
+              upcomingAppointments.length > 0
+                ? `${todayAppointments.length} hoy · ${upcomingAppointments.length} visibles desde ahora.`
+                : "No hay turnos programados por ahora."
+            }
+            action={
+              <Button asChild variant="outline" className="h-11 rounded-2xl border-[#dde1ea] px-4 hover:bg-[#f6f7fb]">
+                <Link href="/appointments">
+                  Ver turnos
+                  <ArrowRight className="ml-2 h-4 w-4" />
+                </Link>
+              </Button>
+            }
+          />
 
-            <div className="mt-6 grid grid-cols-7 gap-2 text-center text-xs font-medium uppercase text-slate-400">
-              {["L", "M", "X", "J", "V", "S", "D"].map((day) => (
-                <span key={day}>{day}</span>
-              ))}
-            </div>
-
-            <div className="mt-3 space-y-2">
-              {calendarWeeks.map((week, index) => (
-                <div key={index} className="grid grid-cols-7 gap-2">
-                  {week.map((day) => {
-                    const isCurrentDay = isSameDay(day.date.toISOString(), today);
-
-                    return (
-                      <div
-                        key={day.date.toISOString()}
-                        className={cn(
-                          "flex h-11 items-center justify-center rounded-[18px] border text-sm tabular-nums",
-                          day.currentMonth
-                            ? "border-transparent text-slate-800"
-                            : "border-transparent text-slate-300",
-                          isCurrentDay && "border-[#d8dcf0] bg-[hsl(var(--surface-lilac))] font-semibold text-slate-950"
-                        )}
-                      >
-                        {day.day}
+          <div className="mt-6 space-y-3">
+            {upcomingAppointments.length > 0 ? (
+              upcomingAppointments.map((appointment) => (
+                <div
+                  key={appointment.id}
+                  className="rounded-[24px] border border-[#e6e7ec] bg-[linear-gradient(180deg,#ffffff_0%,#f8f9fc_100%)] p-4 sm:rounded-[28px]"
+                >
+                  <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+                    <div className="min-w-0">
+                      <div className="flex flex-wrap items-center gap-2">
+                        <p className="text-base font-semibold text-slate-950">{appointment.client_name}</p>
+                        <span className="rounded-full border border-[#dde1ea] bg-white px-2.5 py-1 text-xs font-semibold text-slate-600">
+                          {new Date(appointment.starts_at).toLocaleDateString("es-AR", {
+                            weekday: "short",
+                            day: "2-digit",
+                            month: "short",
+                          })}
+                        </span>
                       </div>
-                    );
-                  })}
-                </div>
-              ))}
-            </div>
-          </CardContent>
-        </Card>
-
-        <Card className="rounded-[28px] border-[#e6e7ec] bg-white shadow-none sm:rounded-[30px]">
-          <CardContent className="p-5 sm:p-6">
-            <WorkspaceSectionHeader
-              eyebrow="Próximos turnos"
-              title="Lo que viene ahora"
-              action={
-                <Button asChild variant="ghost" className="h-10 rounded-2xl px-3 text-slate-600 hover:bg-[#f4f5fa]">
-                  <Link href="/appointments">Ver todos</Link>
-                </Button>
-              }
-            />
-
-            <div className="mt-6 space-y-3">
-              {upcomingAppointments.length > 0 ? (
-                upcomingAppointments.map((appointment, index) => (
-                  <div
-                    key={appointment.id}
-                    className="interactive-soft flex gap-4 rounded-[24px] border border-[#e6e7ec] bg-[linear-gradient(180deg,#ffffff_0%,#f7f8fc_100%)] p-4"
-                  >
-                    <div className="flex w-14 shrink-0 flex-col items-center justify-center rounded-[20px] border border-[#dde1ea] bg-white text-center shadow-sm">
-                      <span className="tabular-nums text-lg font-semibold text-slate-950">
-                        {formatSlot(appointment.starts_at)}
-                      </span>
-                    </div>
-                    <div className="min-w-0 flex-1">
-                      <p className="truncate text-sm font-semibold text-slate-950">{appointment.client_name}</p>
-                      <p className="mt-1 truncate text-sm text-slate-500">
+                      <p className="mt-2 text-sm text-slate-500">
                         {appointment.service_name ?? "Turno"} · {appointment.professional_name ?? "Profesional"}
                       </p>
-                      <p className="mt-2 text-xs text-slate-400">
-                        {new Date(appointment.starts_at).toLocaleDateString("es-AR", {
-                          weekday: "long",
-                          day: "2-digit",
-                          month: "long",
-                        })}
-                      </p>
                     </div>
-                    <div
-                      className={cn(
-                        "mt-1 h-16 w-1 rounded-full",
-                        index === 0
-                          ? "bg-[#c8b8f6]"
-                          : index === 1
-                            ? "bg-[#f0c8d5]"
-                            : index === 2
-                              ? "bg-[#c5e8f3]"
-                              : "bg-[#d7ead8]"
-                      )}
-                    />
+
+                    <div className="rounded-[18px] border border-[#dde1ea] bg-white px-4 py-3 text-sm font-semibold text-slate-900">
+                      {formatSlot(appointment.starts_at)}
+                    </div>
                   </div>
-                ))
-              ) : (
-                <WorkspaceEmptyState
-                  title="Todavía no hay turnos programados."
-                  description="Cuando la agenda se empiece a mover, este panel va a mostrar lo siguiente que viene para el equipo."
-                />
-              )}
-            </div>
-          </CardContent>
-        </Card>
-      </div>
+                </div>
+              ))
+            ) : (
+              <WorkspaceEmptyState
+                className="px-4 py-10"
+                title="Sin turnos proximos."
+                description="Cuando entren reservas, este panel va a mostrar lo siguiente que viene."
+              />
+            )}
+          </div>
+        </CardContent>
+      </Card>
     </div>
   );
 }

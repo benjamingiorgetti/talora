@@ -1,12 +1,11 @@
 "use client";
 
 import { useState, useEffect, useRef, useCallback } from "react";
-import type { TestSession } from "@talora/shared";
+import type { TestChatMode, TestChatResponse, TestSession, TestToolTrace } from "@talora/shared";
 import { api } from "@/lib/api";
 import { Button } from "@/components/ui/button";
-import { ScrollArea } from "@/components/ui/scroll-area";
 import { Badge } from "@/components/ui/badge";
-import { MessageSquare, Send, RotateCcw, Bot, User, AlertTriangle } from "lucide-react";
+import { MessageSquare, Send, RotateCcw, Bot, User, AlertTriangle, Wrench, CheckCircle2, XCircle } from "lucide-react";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 import { motion, AnimatePresence } from "framer-motion";
@@ -16,6 +15,29 @@ interface DisplayMessage {
   role: "user" | "assistant";
   content: string;
   createdAt: string;
+  traces?: TestToolTrace[];
+}
+
+function isResetCommand(value: string) {
+  const normalized = value.trim().toLowerCase();
+  return normalized === "/reset" || normalized === "reset";
+}
+
+function formatTraceSummary(trace: TestToolTrace) {
+  if (trace.error) return trace.error;
+  if (typeof trace.output === "string") return trace.output;
+  if (trace.output && typeof trace.output === "object") {
+    if ("message" in trace.output && typeof trace.output.message === "string") {
+      return trace.output.message;
+    }
+    if ("error" in trace.output && typeof trace.output.error === "string") {
+      return trace.output.error;
+    }
+    if ("success" in trace.output && trace.output.success === true) {
+      return "Ejecución completada.";
+    }
+  }
+  return "Ejecución completada.";
 }
 
 function MessageBubble({
@@ -41,13 +63,53 @@ function MessageBubble({
       )}
       <div
         className={cn(
-          "max-w-[80%] rounded-lg px-3 py-2 text-sm leading-relaxed border",
+          "max-w-[80%] rounded-lg border px-3 py-2 text-sm leading-relaxed",
           isUser
             ? "bg-accent border-border text-foreground"
             : "bg-primary/15 border-primary/20 text-foreground"
         )}
       >
         <p className="whitespace-pre-wrap">{message.content}</p>
+        {!isUser && message.traces && message.traces.length > 0 && (
+          <div className="mt-3 space-y-2 rounded-md border border-primary/15 bg-background/75 p-2">
+            <div className="flex items-center gap-2 text-[10px] font-semibold uppercase tracking-[0.16em] text-muted-foreground">
+              <Wrench className="h-3.5 w-3.5" />
+              Tools ejecutadas
+            </div>
+            {message.traces.map((trace) => (
+              <div
+                key={trace.tool_call_id}
+                className="rounded-md border border-border/70 bg-background px-2.5 py-2"
+              >
+                <div className="flex items-center justify-between gap-2">
+                  <div className="min-w-0">
+                    <p className="truncate text-xs font-semibold text-foreground">{trace.name}</p>
+                    <p className="mt-0.5 text-[11px] text-muted-foreground">{formatTraceSummary(trace)}</p>
+                  </div>
+                  <div className="flex items-center gap-1.5">
+                    <Badge variant="outline" className="h-5 px-1.5 text-[10px] font-medium">
+                      {trace.mode === "live" ? "Real" : "Simulado"}
+                    </Badge>
+                    <span
+                      className={cn(
+                        "inline-flex h-5 w-5 items-center justify-center rounded-full",
+                        trace.status === "success"
+                          ? "bg-emerald-100 text-emerald-700"
+                          : "bg-rose-100 text-rose-700"
+                      )}
+                    >
+                      {trace.status === "success" ? (
+                        <CheckCircle2 className="h-3.5 w-3.5" />
+                      ) : (
+                        <XCircle className="h-3.5 w-3.5" />
+                      )}
+                    </span>
+                  </div>
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
         <p className="mt-1 text-[10px] text-muted-foreground/70 text-right">
           {new Date(message.createdAt).toLocaleTimeString("es-AR", {
             hour: "2-digit",
@@ -89,6 +151,7 @@ export function TestChatPanel({ promptSavedAt }: TestChatPanelProps) {
   const [session, setSession] = useState<TestSession | null>(null);
   const [messages, setMessages] = useState<DisplayMessage[]>([]);
   const [input, setInput] = useState("");
+  const [mode, setMode] = useState<TestChatMode>("live");
   const [isSending, setIsSending] = useState(false);
   const [isCreatingSession, setIsCreatingSession] = useState(false);
   const [newMessageId, setNewMessageId] = useState<string | null>(null);
@@ -153,6 +216,7 @@ export function TestChatPanel({ promptSavedAt }: TestChatPanelProps) {
   const handleSend = useCallback(async () => {
     const content = input.trim();
     if (!content || !session || isSending) return;
+    const resetCommand = isResetCommand(content);
 
     const userMsg: DisplayMessage = {
       id: `user-${Date.now()}`,
@@ -167,20 +231,24 @@ export function TestChatPanel({ promptSavedAt }: TestChatPanelProps) {
     setIsSending(true);
 
     try {
-      const res = await api.post<{
-        data: { content: string; tool_calls?: unknown[] };
-      }>("/agent/test-chat/message", {
+      const res = await api.post<{ data: TestChatResponse }>("/agent/test-chat/message", {
         session_id: session.id,
         content,
+        mode,
       });
 
       const assistantMsg: DisplayMessage = {
         id: `assistant-${Date.now()}`,
         role: "assistant",
         content: res.data.content,
+        traces: res.data.executed_tools,
         createdAt: new Date().toISOString(),
       };
-      setMessages((prev) => [...prev, assistantMsg]);
+      if (resetCommand) {
+        setMessages([assistantMsg]);
+      } else {
+        setMessages((prev) => [...prev, assistantMsg]);
+      }
       setNewMessageId(assistantMsg.id);
     } catch (err: unknown) {
       console.error(err);
@@ -192,7 +260,7 @@ export function TestChatPanel({ promptSavedAt }: TestChatPanelProps) {
       setIsSending(false);
       textareaRef.current?.focus();
     }
-  }, [input, session, isSending]);
+  }, [input, isSending, mode, session]);
 
   const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
     if (e.key === "Enter" && !e.shiftKey) {
@@ -217,18 +285,46 @@ export function TestChatPanel({ promptSavedAt }: TestChatPanelProps) {
           >
             Sesion temporal
           </Badge>
+          <Badge
+            variant={mode === "live" ? "default" : "outline"}
+            className="text-[10px] px-1.5 py-0 h-4 font-normal"
+          >
+            {mode === "live" ? "Modo real" : "Modo simulado"}
+          </Badge>
         </div>
-        <Button
-          variant="ghost"
-          size="sm"
-          onClick={clearSession}
-          disabled={isCreatingSession}
-          className="h-7 text-xs text-muted-foreground hover:text-foreground"
-          aria-label="Limpiar chat y crear nueva sesion"
-        >
-          <RotateCcw className="mr-1.5 h-3.5 w-3.5" />
-          Limpiar
-        </Button>
+        <div className="flex items-center gap-2">
+          <div className="flex items-center gap-1 rounded-md border border-border bg-background p-1">
+            <Button
+              variant={mode === "live" ? "default" : "ghost"}
+              size="sm"
+              onClick={() => setMode("live")}
+              disabled={isSending || isCreatingSession}
+              className="h-7 px-2 text-[11px]"
+            >
+              Real
+            </Button>
+            <Button
+              variant={mode === "simulate" ? "default" : "ghost"}
+              size="sm"
+              onClick={() => setMode("simulate")}
+              disabled={isSending || isCreatingSession}
+              className="h-7 px-2 text-[11px]"
+            >
+              Simular
+            </Button>
+          </div>
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={clearSession}
+            disabled={isCreatingSession}
+            className="h-7 text-xs text-muted-foreground hover:text-foreground"
+            aria-label="Limpiar chat y crear nueva sesion"
+          >
+            <RotateCcw className="mr-1.5 h-3.5 w-3.5" />
+            Limpiar
+          </Button>
+        </div>
       </div>
 
       {/* Messages area */}
@@ -251,7 +347,7 @@ export function TestChatPanel({ promptSavedAt }: TestChatPanelProps) {
               Prueba tu agente
             </p>
             <p className="text-xs text-muted-foreground mt-1">
-              Escribe un mensaje para comenzar
+              Escribe un mensaje para comenzar y ver qué tools corren de verdad.
             </p>
           </div>
         ) : (

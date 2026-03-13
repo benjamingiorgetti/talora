@@ -1,5 +1,6 @@
 import { pool } from '../db/pool';
 import type { Agent, PromptSection, AgentTool, Variable } from '@talora/shared';
+import { listEffectiveAgentTools } from '../agent/tool-config';
 
 export interface AgentConfig {
   agent: Agent;
@@ -53,17 +54,14 @@ async function fetchAgentConfig(companyId: string): Promise<AgentConfig | null> 
   if (agentResult.rows.length === 0) return null;
 
   const agent = agentResult.rows[0];
-  const [sectionsResult, toolsResult, variablesResult] = await Promise.all([
+  const [sectionsResult, tools, variablesResult] = await Promise.all([
     pool.query<PromptSection>(
       `SELECT * FROM prompt_sections
        WHERE agent_id = $1 AND is_active = true
        ORDER BY "order" ASC`,
       [agent.id]
     ),
-    pool.query<AgentTool>(
-      'SELECT * FROM tools WHERE agent_id = $1 AND is_active = true',
-      [agent.id]
-    ),
+    listEffectiveAgentTools(agent.id).then((items) => items.filter((tool) => tool.is_active)),
     pool.query<Variable>(
       'SELECT * FROM variables WHERE agent_id = $1 ORDER BY category, key',
       [agent.id]
@@ -73,7 +71,7 @@ async function fetchAgentConfig(companyId: string): Promise<AgentConfig | null> 
   const nextConfig = {
     agent,
     sections: sectionsResult.rows,
-    tools: toolsResult.rows,
+    tools,
     variables: variablesResult.rows,
   };
   cachedConfig.set(companyId, nextConfig);
@@ -90,4 +88,12 @@ export function invalidateAgentCache(companyId?: string): void {
 
   cachedConfig.clear();
   cacheExpiry.clear();
+}
+
+export async function invalidateAgentCacheByAgentId(agentId: string): Promise<void> {
+  const result = await pool.query<{ company_id: string }>(
+    'SELECT company_id FROM agents WHERE id = $1 LIMIT 1',
+    [agentId]
+  );
+  invalidateAgentCache(result.rows[0]?.company_id ?? undefined);
 }

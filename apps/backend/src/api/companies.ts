@@ -5,14 +5,9 @@ import { authMiddleware, getRequestCompanyId, requireCompanyScope, requireSupera
 import { validateBody, createCompanySchema } from './validation';
 import type { Company, Professional, Service, User } from '@talora/shared';
 import { getCompanyOverview, listCompanyOverviews } from '../companies/overview';
+import { buildDefaultCoreTools } from '../agent/core-tool-registry';
 
 export const companiesRouter = Router();
-
-type DefaultToolDefinition = {
-  name: string;
-  description: string;
-  parameters: Record<string, unknown>;
-};
 
 function slugify(value: string): string {
   return value
@@ -31,68 +26,15 @@ function buildDefaultPrompt(companyName: string, industry: string): string {
     'Podes consultar disponibilidad, reservar, reprogramar y cancelar turnos.',
     'Habla claro, amable y profesional.',
     'Si falta informacion, pedila de forma concreta.',
+    'Nunca hables de IDs internos ni datos tecnicos del sistema.',
+    'Si el servicio no esta claro, ofrece opciones humanas breves antes de avanzar.',
+    'Si el cliente menciona un profesional por nombre, usa ese nombre humano en la tool y no un ID interno.',
+    'Si sirve, podes apoyarte en el ultimo turno confirmado del cliente para sugerir repetirlo.',
     'Usa {{userName}} y {{phoneNumber}} cuando haya datos del cliente.',
     'Servicios disponibles: {{availableServices}}.',
     'Profesionales disponibles: {{availableProfessionals}}.',
+    'Historial reciente del cliente: {{recentBookingsSummary}}.',
   ].join('\n');
-}
-
-function getDefaultTools(): DefaultToolDefinition[] {
-  return [
-    {
-      name: 'google_calendar_check',
-      description: 'Consulta disponibilidad real en Google Calendar para un profesional y servicio.',
-      parameters: {
-        type: 'object',
-        properties: {
-          date: { type: 'string', description: 'Fecha y hora ISO propuesta para el turno.' },
-          professionalId: { type: 'string', description: 'ID del profesional elegido dentro de Talora.' },
-          serviceId: { type: 'string', description: 'ID del servicio elegido dentro de Talora.' },
-          durationMinutes: { type: 'number', description: 'Duracion del turno en minutos, si no se usa la del servicio.' },
-        },
-        required: ['date'],
-      },
-    },
-    {
-      name: 'google_calendar_book',
-      description: 'Reserva un turno real y crea el appointment interno para el cliente actual.',
-      parameters: {
-        type: 'object',
-        properties: {
-          date: { type: 'string', description: 'Fecha y hora ISO del turno a reservar.' },
-          professionalId: { type: 'string', description: 'ID del profesional elegido dentro de Talora.' },
-          serviceId: { type: 'string', description: 'ID del servicio elegido dentro de Talora.' },
-          name: { type: 'string', description: 'Nombre del cliente para el evento.' },
-          description: { type: 'string', description: 'Notas o aclaraciones del turno.' },
-          durationMinutes: { type: 'number', description: 'Duracion del turno en minutos, si no se usa la del servicio.' },
-        },
-        required: ['date'],
-      },
-    },
-    {
-      name: 'google_calendar_reprogram',
-      description: 'Reprograma un turno existente a una nueva fecha y hora disponible.',
-      parameters: {
-        type: 'object',
-        properties: {
-          appointmentId: { type: 'string', description: 'ID interno del turno en Talora.' },
-          startsAt: { type: 'string', description: 'Nueva fecha y hora ISO del turno.' },
-        },
-        required: ['appointmentId', 'startsAt'],
-      },
-    },
-    {
-      name: 'google_calendar_cancel',
-      description: 'Cancela un turno existente en Google Calendar y en Talora.',
-      parameters: {
-        type: 'object',
-        properties: {
-          appointmentId: { type: 'string', description: 'ID interno del turno en Talora.' },
-          eventId: { type: 'string', description: 'ID del evento en Google Calendar si ya se conoce.' },
-        },
-      },
-    },
-  ];
 }
 
 companiesRouter.get('/', authMiddleware, requireSuperadmin, async (_req, res) => {
@@ -169,6 +111,7 @@ companiesRouter.post('/', authMiddleware, requireSuperadmin, validateBody(create
       ['availableServices', '', 'Servicios configurados para este negocio'],
       ['availableProfessionals', '', 'Profesionales configurados para este negocio'],
       ['contextoCliente', 'Cliente no registrado', 'Notas y contexto del cliente'],
+      ['recentBookingsSummary', 'Sin turnos confirmados previos.', 'Ultimos turnos confirmados del cliente para sugerir repetir un servicio'],
     ];
     for (const [key, defaultValue, description] of systemVariables) {
       await client.query(
@@ -179,12 +122,12 @@ companiesRouter.post('/', authMiddleware, requireSuperadmin, validateBody(create
       );
     }
 
-    for (const tool of getDefaultTools()) {
+    for (const tool of buildDefaultCoreTools(agentId)) {
       await client.query(
-        `INSERT INTO tools (agent_id, name, description, parameters, implementation)
-         VALUES ($1, $2, $3, $4, $5)
+        `INSERT INTO tools (agent_id, name, description, parameters, implementation, source)
+         VALUES ($1, $2, $3, $4, $5, $6)
          ON CONFLICT DO NOTHING`,
-        [agentId, tool.name, tool.description, JSON.stringify(tool.parameters), tool.name]
+        [agentId, tool.name, tool.description, JSON.stringify(tool.parameters), tool.implementation, tool.source]
       );
     }
 
@@ -213,14 +156,15 @@ companiesRouter.post('/', authMiddleware, requireSuperadmin, validateBody(create
     for (const service of services as Array<Partial<Service>>) {
       if (!service?.name) continue;
       await client.query(
-        `INSERT INTO services (company_id, professional_id, name, duration_minutes, price_label, description, is_active)
-         VALUES ($1, $2, $3, $4, $5, $6, true)`,
+        `INSERT INTO services (company_id, professional_id, name, aliases, duration_minutes, price, description, is_active)
+         VALUES ($1, $2, $3, $4, $5, $6, $7, true)`,
         [
           company.id,
           service.professional_id || null,
           service.name,
+          service.aliases || [],
           service.duration_minutes || 60,
-          service.price_label || '',
+          service.price ?? 0,
           service.description || '',
         ]
       );

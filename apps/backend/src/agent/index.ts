@@ -8,8 +8,8 @@ import { checkSlot } from '../calendar/operations';
 import { getAgentConfig } from '../cache/agent-cache';
 import { logger } from '../utils/logger';
 import { withTimeout } from '../utils/timeout';
-import { deserializeToolCalls } from './utils';
-import type { Message, Conversation } from '@talora/shared';
+import { buildOpenAiMessages, buildOpenAiTools } from './openai-runtime';
+import type { AgentToolExecutionTrace, Message, Conversation } from '@talora/shared';
 
 const openai = new OpenAI({ apiKey: config.openaiApiKey, maxRetries: 3, timeout: 60_000 });
 const evolution = new EvolutionClient();
@@ -23,6 +23,10 @@ const conversationLocks = new Map<string, Promise<void>>();
 const availabilityCache = new Map<string, { result: { available: boolean; suggestions?: string[] }; timestamp: number }>();
 const AVAILABILITY_CACHE_TTL = 300_000; // 5 minutes
 const MAX_AVAILABILITY_ENTRIES = 100;
+
+function normalizePhone(value: string | null | undefined): string {
+  return (value ?? '').replace(/\D/g, '');
+}
 
 function getCachedAvailability(dateKey: string): { available: boolean; suggestions?: string[] } | null {
   const entry = availabilityCache.get(dateKey);
@@ -41,6 +45,131 @@ function setCachedAvailability(dateKey: string, result: { available: boolean; su
     const firstKey = availabilityCache.keys().next().value;
     if (firstKey) availabilityCache.delete(firstKey);
   }
+}
+
+function safeJsonParse(value: string): Record<string, unknown> | string {
+  try {
+    const parsed = JSON.parse(value) as unknown;
+    if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) {
+      return parsed as Record<string, unknown>;
+    }
+  } catch {
+    // Fall through to raw string.
+  }
+
+  return value;
+}
+
+function buildAgentToolTrace(
+  toolCallId: string,
+  name: string,
+  input: Record<string, unknown>,
+  rawResult: string,
+): AgentToolExecutionTrace {
+  const parsedResult = safeJsonParse(rawResult);
+  const error =
+    typeof parsedResult === 'object' && parsedResult && 'error' in parsedResult && typeof parsedResult.error === 'string'
+      ? parsedResult.error
+      : null;
+
+  return {
+    tool_call_id: toolCallId,
+    name,
+    status: error ? 'error' : 'success',
+    input,
+    output: parsedResult,
+    error,
+  };
+}
+
+async function persistAgentMessageTrace(params: {
+  companyId: string;
+  conversationId: string;
+  agentId: string | null;
+  assistantMessageId: string | null;
+  status: 'success' | 'error';
+  systemPromptResolved: string;
+  injectedContext: Record<string, string>;
+  requestedToolCalls: Record<string, unknown>[] | null;
+  executedTools: AgentToolExecutionTrace[];
+  errorMessage?: string | null;
+}): Promise<void> {
+  await pool.query(
+    `INSERT INTO agent_message_traces (
+       company_id,
+       conversation_id,
+       agent_id,
+       assistant_message_id,
+       status,
+       system_prompt_resolved,
+       injected_context,
+       requested_tool_calls,
+       executed_tools,
+       error_message
+     )
+     VALUES ($1, $2, $3, $4, $5, $6, $7::jsonb, $8::jsonb, $9::jsonb, $10)`,
+    [
+      params.companyId,
+      params.conversationId,
+      params.agentId,
+      params.assistantMessageId,
+      params.status,
+      params.systemPromptResolved,
+      JSON.stringify(params.injectedContext),
+      params.requestedToolCalls ? JSON.stringify(params.requestedToolCalls) : null,
+      JSON.stringify(params.executedTools),
+      params.errorMessage ?? null,
+    ],
+  );
+}
+
+async function loadRecentBookingsSummary(
+  companyId: string,
+  phoneNumber: string,
+  professionalId?: string | null
+): Promise<string> {
+  const normalizedPhone = normalizePhone(phoneNumber);
+  if (!normalizedPhone) {
+    return 'Sin turnos confirmados previos.';
+  }
+
+  const result = await pool.query<{
+    service_name: string | null;
+    professional_name: string | null;
+    starts_at: string;
+  }>(
+    `SELECT s.name AS service_name,
+            p.name AS professional_name,
+            a.starts_at
+     FROM appointments a
+     LEFT JOIN services s ON s.id = a.service_id
+     LEFT JOIN professionals p ON p.id = a.professional_id
+     WHERE a.company_id = $1
+       AND regexp_replace(a.phone_number, '\\D', '', 'g') = $2
+       AND a.status = 'confirmed'
+       AND ($3::uuid IS NULL OR a.professional_id = $3)
+     ORDER BY a.created_at DESC
+     LIMIT 3`,
+    [companyId, normalizedPhone, professionalId ?? null]
+  );
+
+  if (result.rows.length === 0) {
+    return 'Sin turnos confirmados previos.';
+  }
+
+  const [latest, ...rest] = result.rows;
+  const formatBooking = (booking: { service_name: string | null; professional_name: string | null; starts_at: string }) => {
+    const service = booking.service_name ?? 'servicio sin nombre';
+    const withProfessional = booking.professional_name ? `${service} con ${booking.professional_name}` : service;
+    const when = new Date(booking.starts_at).toLocaleString('es-AR', { timeZone: config.timezone });
+    return `${withProfessional} (${when})`;
+  };
+
+  const parts = [`Ultimo turno confirmado: ${formatBooking(latest)}.`];
+  if (rest.length > 0) {
+    parts.push(`Historial reciente: ${rest.map(formatBooking).join(' | ')}.`);
+  }
+  return parts.join(' ');
 }
 
 export async function handleIncomingMessage(
@@ -67,6 +196,22 @@ async function processMessage(
   instanceName: string,
   _messageText: string
 ) {
+  let traceState: {
+    companyId: string | null;
+    agentId: string | null;
+    systemPromptResolved: string;
+    injectedContext: Record<string, string>;
+    requestedToolCalls: Record<string, unknown>[];
+    executedTools: AgentToolExecutionTrace[];
+  } = {
+    companyId: null,
+    agentId: null,
+    systemPromptResolved: '',
+    injectedContext: {},
+    requestedToolCalls: [],
+    executedTools: [],
+  };
+
   // Overall timeout for the entire processing pipeline
   const abortController = new AbortController();
   const overallTimer = setTimeout(() => abortController.abort(), config.agentTimeoutMs);
@@ -116,10 +261,13 @@ async function processMessage(
     }
 
     const { agent, tools, variables } = agentConfig;
+    traceState.companyId = conversation.company_id;
+    traceState.agentId = agent.id;
+    const variableKeys = new Set(variables.map((variable) => variable.key));
 
-    // Resolve contextoCliente if the prompt references it
+    // Resolve system context based on declared variables, not prompt string heuristics.
     const variableOverrides: Record<string, string> = {};
-    if (agent.system_prompt.includes('{{contextoCliente}}')) {
+    if (variableKeys.has('contextoCliente')) {
       try {
         const clientResult = await pool.query<{
           name: string; client_type: string; branch: string;
@@ -147,16 +295,27 @@ async function processMessage(
       }
     }
 
-    if (agent.system_prompt.includes('{{availableServices}}') || agent.system_prompt.includes('{{availableProfessionals}}')) {
+    try {
+      variableOverrides.recentBookingsSummary = await loadRecentBookingsSummary(
+        conversation.company_id,
+        conversation.phone_number,
+        professionalId,
+      );
+    } catch (err) {
+      logger.error('Error resolving recent bookings summary:', err);
+      variableOverrides.recentBookingsSummary = 'Sin turnos confirmados previos.';
+    }
+
+    if (variableKeys.has('availableServices') || variableKeys.has('availableProfessionals')) {
       try {
         const [servicesResult, professionalsResult] = await Promise.all([
           pool.query<{
             name: string;
             duration_minutes: number;
-            price_label: string;
+            price: number;
             professional_name: string | null;
           }>(
-            `SELECT s.name, s.duration_minutes, s.price_label, p.name AS professional_name
+            `SELECT s.name, s.duration_minutes, s.price, p.name AS professional_name
              FROM services s
              LEFT JOIN professionals p ON p.id = s.professional_id
              WHERE s.company_id = $1 AND s.is_active = true
@@ -179,7 +338,7 @@ async function processMessage(
             ? servicesResult.rows.map((service) => {
                 const details = [
                   `${service.duration_minutes} min`,
-                  service.price_label || null,
+                  service.price >= 0 ? `$${service.price.toLocaleString('es-AR')}` : null,
                   service.professional_name ? `con ${service.professional_name}` : null,
                 ].filter(Boolean);
                 return details.length > 0 ? `${service.name} (${details.join(', ')})` : service.name;
@@ -198,7 +357,7 @@ async function processMessage(
     }
 
     // Resolve horariosDisponibles only if the prompt references it
-    if (agent.system_prompt.includes('{{horariosDisponibles}}')) {
+    if (variableKeys.has('horariosDisponibles')) {
       try {
         let calendarId: string | undefined;
         let targetProfessionalId: string | undefined;
@@ -266,44 +425,11 @@ async function processMessage(
       timezone: config.timezone,
       variableOverrides,
     });
+    traceState.systemPromptResolved = systemPrompt;
+    traceState.injectedContext = { ...variableOverrides };
 
-    const openaiTools: OpenAI.Chat.ChatCompletionTool[] = tools.map((t) => ({
-      type: 'function' as const,
-      function: {
-        name: t.name,
-        description: t.description,
-        parameters: (t.parameters && typeof t.parameters === 'object' && Object.keys(t.parameters).length > 0)
-          ? t.parameters as Record<string, unknown>
-          : { type: 'object', properties: {} },
-      },
-    }));
-
-    // Build messages for OpenAI
-    const openaiMessages: OpenAI.Chat.ChatCompletionMessageParam[] = [
-      { role: 'system', content: systemPrompt },
-    ];
-
-    for (const msg of dbMessages) {
-      if (msg.role === 'user') {
-        openaiMessages.push({ role: 'user', content: msg.content || '' });
-      } else if (msg.role === 'assistant') {
-        if (msg.tool_calls && Array.isArray(msg.tool_calls) && msg.tool_calls.length > 0) {
-          openaiMessages.push({
-            role: 'assistant',
-            content: msg.content || null,
-            tool_calls: deserializeToolCalls(msg.tool_calls),
-          });
-        } else {
-          openaiMessages.push({ role: 'assistant', content: msg.content || '' });
-        }
-      } else if (msg.role === 'tool') {
-        openaiMessages.push({
-          role: 'tool',
-          tool_call_id: msg.tool_call_id || '',
-          content: msg.content || '',
-        });
-      }
-    }
+    const openaiTools = buildOpenAiTools(tools);
+    const openaiMessages = buildOpenAiMessages(systemPrompt, dbMessages);
 
     // Call OpenAI API with tool use loop
     let response = await openai.chat.completions.create({
@@ -329,6 +455,7 @@ async function processMessage(
       }
 
       const toolCalls = choice.message.tool_calls;
+      traceState.requestedToolCalls.push(...(JSON.parse(JSON.stringify(toolCalls)) as Record<string, unknown>[]));
 
       // Save assistant message with tool calls
       await pool.query(
@@ -349,8 +476,8 @@ async function processMessage(
       if (hasCalendarTool) {
         // Sequential execution for calendar tools to avoid race conditions
         for (const tc of toolCalls) {
-          const args = JSON.parse(tc.function.arguments);
-            const result = await withTimeout(
+          const args = JSON.parse(tc.function.arguments) as Record<string, unknown>;
+          const result = await withTimeout(
             executeTool(tc.function.name, args, {
               companyId: conversation.company_id,
               conversationId: conversation.id,
@@ -361,6 +488,7 @@ async function processMessage(
             config.toolTimeoutMs,
             `tool:${tc.function.name}`,
           );
+          traceState.executedTools.push(buildAgentToolTrace(tc.id, tc.function.name, args, result));
           await pool.query(
             `INSERT INTO messages (conversation_id, role, content, tool_call_id)
              VALUES ($1, 'tool', $2, $3)`,
@@ -372,7 +500,7 @@ async function processMessage(
         // Parallel execution for non-calendar tools
         const results = await Promise.all(
           toolCalls.map(async (tc) => {
-            const args = JSON.parse(tc.function.arguments);
+            const args = JSON.parse(tc.function.arguments) as Record<string, unknown>;
             const result = await withTimeout(
               executeTool(tc.function.name, args, {
                 companyId: conversation.company_id,
@@ -389,10 +517,16 @@ async function processMessage(
                VALUES ($1, 'tool', $2, $3)`,
               [conversationId, result, tc.id]
             );
-            return { role: 'tool' as const, tool_call_id: tc.id, content: result };
+            return {
+              role: 'tool' as const,
+              tool_call_id: tc.id,
+              content: result,
+              trace: buildAgentToolTrace(tc.id, tc.function.name, args, result),
+            };
           })
         );
-        toolMessages.push(...results);
+        traceState.executedTools.push(...results.map((result) => result.trace));
+        toolMessages.push(...results.map(({ role, tool_call_id, content }) => ({ role, tool_call_id, content })));
       }
 
       // Continue the conversation
@@ -412,11 +546,28 @@ async function processMessage(
     const responseText = choice.message.content || '';
 
     // Save assistant message to DB
-    await pool.query(
+    const assistantMessageResult = await pool.query<{ id: string }>(
       `INSERT INTO messages (conversation_id, role, content)
-       VALUES ($1, 'assistant', $2)`,
+       VALUES ($1, 'assistant', $2)
+       RETURNING id`,
       [conversationId, responseText]
     );
+
+    try {
+      await persistAgentMessageTrace({
+        companyId: conversation.company_id,
+        conversationId,
+        agentId: agent.id,
+        assistantMessageId: assistantMessageResult.rows[0]?.id ?? null,
+        status: 'success',
+        systemPromptResolved: systemPrompt,
+        injectedContext: { ...variableOverrides },
+        requestedToolCalls: traceState.requestedToolCalls.length > 0 ? traceState.requestedToolCalls : null,
+        executedTools: traceState.executedTools,
+      });
+    } catch (traceErr) {
+      logger.error('Failed to persist agent message trace:', traceErr);
+    }
 
     // Update conversation last_message_at
     await pool.query(
@@ -430,6 +581,25 @@ async function processMessage(
     }
   } catch (err) {
     logger.error('Error handling incoming message:', err);
+
+    if (traceState.companyId && traceState.systemPromptResolved) {
+      try {
+        await persistAgentMessageTrace({
+          companyId: traceState.companyId,
+          conversationId,
+          agentId: traceState.agentId,
+          assistantMessageId: null,
+          status: 'error',
+          systemPromptResolved: traceState.systemPromptResolved,
+          injectedContext: traceState.injectedContext,
+          requestedToolCalls: traceState.requestedToolCalls.length > 0 ? traceState.requestedToolCalls : null,
+          executedTools: traceState.executedTools,
+          errorMessage: err instanceof Error ? err.message : 'Unknown error during agent execution',
+        });
+      } catch (traceErr) {
+        logger.error('Failed to persist error trace for conversation:', traceErr);
+      }
+    }
 
     // If it was a timeout, try to send a fallback message to the user
     if (err instanceof Error && err.message.includes('Timeout')) {

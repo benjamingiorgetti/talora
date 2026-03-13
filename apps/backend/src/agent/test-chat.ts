@@ -3,16 +3,15 @@ import { pool } from '../db/pool';
 import { config } from '../config';
 import { getAgentConfig } from '../cache/agent-cache';
 import { buildSystemPrompt } from './prompt-builder';
+import { executeTool } from './tool-executor';
+import { isResetCommand, RESET_CONFIRMATION_MESSAGE } from '../conversations/reset';
 import { logger } from '../utils/logger';
-import { deserializeToolCalls } from './utils';
-import type { TestMessage } from '@talora/shared';
+import { withTimeout } from '../utils/timeout';
+import { buildOpenAiMessages, buildOpenAiTools } from './openai-runtime';
+import type { TestChatMode, TestChatResponse, TestMessage, TestToolTrace } from '@talora/shared';
 
 const openai = new OpenAI({ apiKey: config.openaiApiKey, maxRetries: 3, timeout: 60_000 });
 
-/**
- * Return mock results for tool calls in test/dry-run mode.
- * No real external calls are made.
- */
 function executeDryRunTool(toolName: string, args: Record<string, unknown>): string {
   switch (toolName) {
     case 'google_calendar_check':
@@ -21,6 +20,8 @@ function executeDryRunTool(toolName: string, args: Record<string, unknown>): str
       return JSON.stringify({ success: true, eventId: 'test-event-123', message: '[TEST] Turno reservado (mock)' });
     case 'google_calendar_cancel':
       return JSON.stringify({ success: true, message: '[TEST] Evento cancelado (mock)' });
+    case 'google_calendar_reprogram':
+      return JSON.stringify({ success: true, message: '[TEST] Evento reprogramado (mock)' });
     case 'webhook':
       return JSON.stringify({ status: 200, message: '[TEST] Webhook enviado (mock)' });
     default:
@@ -28,103 +29,152 @@ function executeDryRunTool(toolName: string, args: Record<string, unknown>): str
   }
 }
 
-/**
- * Handle a test chat message. Uses the same prompt building and OpenAI call
- * as production, but tools run in dry-run mode (mocked) and messages are
- * stored in test_messages instead of messages.
- */
-export async function handleTestMessage(
-  sessionId: string,
-  messageText: string,
-): Promise<{ content: string; tool_calls?: unknown[] }> {
-  const sessionResult = await pool.query<{ company_id: string }>(
-    `SELECT a.company_id
+function safeJsonParse(value: string): Record<string, unknown> | string {
+  try {
+    const parsed = JSON.parse(value) as unknown;
+    if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) {
+      return parsed as Record<string, unknown>;
+    }
+  } catch {
+    // Fall through to raw string.
+  }
+
+  return value;
+}
+
+function buildToolTrace(
+  toolCallId: string,
+  name: string,
+  mode: TestChatMode,
+  input: Record<string, unknown>,
+  rawResult: string
+): TestToolTrace {
+  const parsedResult = safeJsonParse(rawResult);
+  const error =
+    typeof parsedResult === 'object' && parsedResult && 'error' in parsedResult && typeof parsedResult.error === 'string'
+      ? parsedResult.error
+      : null;
+
+  return {
+    tool_call_id: toolCallId,
+    name,
+    mode,
+    status: error ? 'error' : 'success',
+    input,
+    output: parsedResult,
+    error,
+  };
+}
+
+async function resolveTestContext(sessionId: string): Promise<{
+  companyId: string;
+  professionalId: string | null;
+  phoneNumber: string;
+  contactName: string;
+}> {
+  const sessionResult = await pool.query<{
+    company_id: string;
+    professional_id: string | null;
+    phone_number: string;
+    contact_name: string;
+  }>(
+    `SELECT a.company_id,
+            NULL::uuid AS professional_id,
+            '+5491100000000'::text AS phone_number,
+            'Cliente de prueba'::text AS contact_name
      FROM test_sessions ts
      JOIN agents a ON a.id = ts.agent_id
      WHERE ts.id = $1
      LIMIT 1`,
     [sessionId]
   );
-  const companyId = sessionResult.rows[0]?.company_id;
-  if (!companyId) {
+
+  const row = sessionResult.rows[0];
+  if (!row?.company_id) {
     throw new Error('No company configured for test session');
   }
 
-  // Load agent config from cache
-  const agentConfig = await getAgentConfig(companyId);
+  return {
+    companyId: row.company_id,
+    professionalId: row.professional_id,
+    phoneNumber: row.phone_number,
+    contactName: row.contact_name,
+  };
+}
+
+async function resolveDefaultProfessionalId(companyId: string): Promise<string | null> {
+  const result = await pool.query<{ id: string }>(
+    `SELECT id
+     FROM professionals
+     WHERE company_id = $1 AND is_active = true
+     ORDER BY created_at ASC
+     LIMIT 2`,
+    [companyId]
+  );
+
+  return result.rows.length === 1 ? result.rows[0].id : null;
+}
+
+export async function handleTestMessage(
+  sessionId: string,
+  messageText: string,
+  mode: TestChatMode = 'live'
+): Promise<TestChatResponse> {
+  if (isResetCommand(messageText)) {
+    await pool.query('DELETE FROM test_messages WHERE session_id = $1', [sessionId]);
+    return {
+      content: RESET_CONFIRMATION_MESSAGE,
+      executed_tools: [],
+      mode,
+    };
+  }
+
+  const testContext = await resolveTestContext(sessionId);
+  const professionalId = testContext.professionalId ?? await resolveDefaultProfessionalId(testContext.companyId);
+
+  const agentConfig = await getAgentConfig(testContext.companyId);
   if (!agentConfig) {
     throw new Error('No agent configured');
   }
 
   const { agent, tools, variables } = agentConfig;
-
-  // Ensure system_prompt is a string
   const systemPromptRaw = agent.system_prompt || '';
 
-  // Save user message to test_messages
   await pool.query(
     `INSERT INTO test_messages (session_id, role, content)
      VALUES ($1, 'user', $2)`,
-    [sessionId, messageText],
+    [sessionId, messageText]
   );
 
-  // Build system prompt with default variable values (no real conversation context)
   const systemPrompt = buildSystemPrompt({
     systemPrompt: systemPromptRaw,
     customVariables: variables,
-    conversation: { id: 'test-session', contact_name: 'Usuario de prueba', phone_number: '+0000000000' },
+    conversation: { id: 'test-session', contact_name: testContext.contactName, phone_number: testContext.phoneNumber },
     agentId: agent.id,
     timezone: config.timezone,
-    variableOverrides: { contextoCliente: 'Cliente de prueba (modo test)' },
+    variableOverrides: {
+      contextoCliente: 'Cliente de prueba (modo test real)',
+      recentBookingsSummary: 'Sin turnos confirmados previos en modo test.',
+    },
   });
 
-  // Load history from test_messages
   const historyResult = await pool.query<TestMessage>(
     `SELECT * FROM test_messages WHERE session_id = $1
      ORDER BY created_at ASC LIMIT 40`,
-    [sessionId],
+    [sessionId]
   );
 
-  // Build OpenAI messages
-  const openaiMessages: OpenAI.Chat.ChatCompletionMessageParam[] = [
-    { role: 'system', content: systemPrompt },
-  ];
-
-  for (const msg of historyResult.rows) {
-    if (msg.role === 'user') {
-      openaiMessages.push({ role: 'user', content: msg.content || '' });
-    } else if (msg.role === 'assistant') {
-      if (msg.tool_calls && Array.isArray(msg.tool_calls) && msg.tool_calls.length > 0) {
-        openaiMessages.push({
-          role: 'assistant',
-          content: msg.content || null,
-          tool_calls: deserializeToolCalls(msg.tool_calls),
-        });
-      } else {
-        openaiMessages.push({ role: 'assistant', content: msg.content || '' });
-      }
-    } else if (msg.role === 'tool') {
-      openaiMessages.push({
-        role: 'tool',
-        tool_call_id: msg.tool_call_id || '',
-        content: msg.content || '',
-      });
-    }
-  }
-
-  // Build OpenAI tools definition (ensure valid JSON Schema parameters)
-  const openaiTools: OpenAI.Chat.ChatCompletionTool[] = tools.map((t) => ({
-    type: 'function' as const,
-    function: {
-      name: t.name,
-      description: t.description,
-      parameters: (t.parameters && typeof t.parameters === 'object' && Object.keys(t.parameters).length > 0)
-        ? t.parameters as Record<string, unknown>
-        : { type: 'object', properties: {} },
+  const openaiMessages = buildOpenAiMessages(systemPrompt, historyResult.rows, {
+    mapToolContent: (message) => {
+      const rawContent = message.content || '';
+      const parsedContent = safeJsonParse(rawContent);
+      return typeof parsedContent === 'object' && parsedContent && 'output' in parsedContent
+        ? JSON.stringify(parsedContent.output)
+        : rawContent;
     },
-  }));
+  });
+  const openaiTools = buildOpenAiTools(tools);
 
-  // Call OpenAI
   let response = await openai.chat.completions.create({
     model: agent.model || 'gpt-4o-mini',
     max_completion_tokens: 2048,
@@ -132,8 +182,8 @@ export async function handleTestMessage(
     tools: openaiTools.length > 0 ? openaiTools : undefined,
   });
   let choice = response.choices[0];
+  const executedTools: TestToolTrace[] = [];
 
-  // Tool use loop with dry-run execution
   let iterations = 0;
   while (choice.finish_reason === 'tool_calls' && choice.message.tool_calls) {
     iterations++;
@@ -144,28 +194,45 @@ export async function handleTestMessage(
 
     const toolCalls = choice.message.tool_calls;
 
-    // Save assistant message with tool calls
     await pool.query(
       `INSERT INTO test_messages (session_id, role, content, tool_calls)
        VALUES ($1, 'assistant', $2, $3)`,
-      [sessionId, choice.message.content || null, JSON.stringify(toolCalls)],
+      [sessionId, choice.message.content || null, JSON.stringify(toolCalls)]
     );
 
-    // Execute tools in dry-run mode
     const toolMessages: OpenAI.Chat.ChatCompletionToolMessageParam[] = [];
-    for (const tc of toolCalls) {
-      const args = JSON.parse(tc.function.arguments);
-      const result = executeDryRunTool(tc.function.name, args);
+    for (const toolCall of toolCalls) {
+      const args = JSON.parse(toolCall.function.arguments) as Record<string, unknown>;
+      const rawResult =
+        mode === 'simulate'
+          ? executeDryRunTool(toolCall.function.name, args)
+          : await withTimeout(
+              executeTool(toolCall.function.name, args, {
+                companyId: testContext.companyId,
+                conversationId: `test:${sessionId}`,
+                phoneNumber: testContext.phoneNumber,
+                contactName: testContext.contactName,
+                professionalId,
+              }),
+              config.toolTimeoutMs,
+              `test-tool:${toolCall.function.name}`
+            );
+      const trace = buildToolTrace(toolCall.id, toolCall.function.name, mode, args, rawResult);
+      executedTools.push(trace);
 
       await pool.query(
         `INSERT INTO test_messages (session_id, role, content, tool_call_id)
          VALUES ($1, 'tool', $2, $3)`,
-        [sessionId, result, tc.id],
+        [sessionId, JSON.stringify(trace), toolCall.id]
       );
-      toolMessages.push({ role: 'tool', tool_call_id: tc.id, content: result });
+
+      toolMessages.push({
+        role: 'tool',
+        tool_call_id: toolCall.id,
+        content: typeof trace.output === 'string' ? trace.output : JSON.stringify(trace.output),
+      });
     }
 
-    // Continue the conversation
     openaiMessages.push({
       role: 'assistant',
       content: choice.message.content || null,
@@ -182,11 +249,9 @@ export async function handleTestMessage(
     choice = response.choices[0];
   }
 
-  // Extract final text response
   const responseText = choice.message.content || '';
   const finalToolCalls = choice.message.tool_calls;
 
-  // Save assistant response to test_messages
   await pool.query(
     `INSERT INTO test_messages (session_id, role, content, tool_calls)
      VALUES ($1, 'assistant', $2, $3)`,
@@ -194,11 +259,13 @@ export async function handleTestMessage(
       sessionId,
       responseText,
       finalToolCalls ? JSON.stringify(finalToolCalls) : null,
-    ],
+    ]
   );
 
   return {
     content: responseText,
+    executed_tools: executedTools,
+    mode,
     ...(finalToolCalls ? { tool_calls: finalToolCalls } : {}),
   };
 }

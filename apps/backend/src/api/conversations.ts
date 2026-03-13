@@ -1,10 +1,11 @@
 import { Router } from 'express';
 import { pool } from '../db/pool';
 import { logger } from '../utils/logger';
-import { EvolutionClient } from '../evolution/client';
+import { EvolutionApiError, EvolutionClient } from '../evolution/client';
 import { authMiddleware, getRequestCompanyId, getRequestProfessionalId, requireCompanyScope } from './middleware';
 import { validateBody, manualMessageSchema, isValidUuid, parsePositiveInt } from './validation';
-import type { Conversation, Message } from '@talora/shared';
+import type { AgentMessageTrace, Conversation, Message } from '@talora/shared';
+import { archiveStaleConversations } from '../conversations/archive';
 
 export const conversationsRouter = Router();
 const evolution = new EvolutionClient();
@@ -17,7 +18,7 @@ function getScopedProfessionalId(req: Parameters<typeof conversationsRouter.get>
 
 // GET / — list conversations with optional instance_id filter, paginated
 conversationsRouter.get('/', async (req, res) => {
-  const { instance_id, page = '1', limit = '20' } = req.query;
+  const { instance_id, page = '1', limit = '20', state = 'active' } = req.query;
   const companyId = getRequestCompanyId(req)!;
   const professionalId = getScopedProfessionalId(req);
 
@@ -35,11 +36,18 @@ conversationsRouter.get('/', async (req, res) => {
     return;
   }
 
+  if (state !== 'active' && state !== 'archived' && state !== 'all') {
+    res.status(400).json({ error: 'state must be one of active, archived or all' });
+    return;
+  }
+
   const pageNum = Math.max(1, parsedPage);
   const limitNum = Math.min(100, Math.max(1, parsedLimit));
   const offset = (pageNum - 1) * limitNum;
 
   try {
+    await archiveStaleConversations(companyId, professionalId);
+
     // Single query with COUNT(*) OVER() window function to get data + total in one round-trip
     let query = 'SELECT *, COUNT(*) OVER() AS _total FROM conversations WHERE company_id = $1';
     const values: unknown[] = [companyId];
@@ -52,6 +60,12 @@ conversationsRouter.get('/', async (req, res) => {
     if (instance_id) {
       query += ` AND instance_id = $${values.length + 1}`;
       values.push(instance_id);
+    }
+
+    if (state === 'active') {
+      query += ' AND archived_at IS NULL';
+    } else if (state === 'archived') {
+      query += ' AND archived_at IS NOT NULL';
     }
 
     query += ' ORDER BY last_message_at DESC NULLS LAST';
@@ -144,6 +158,47 @@ conversationsRouter.get('/:id/messages', async (req, res) => {
   }
 });
 
+conversationsRouter.get('/:id/traces', async (req, res) => {
+  const { id } = req.params;
+  const companyId = getRequestCompanyId(req)!;
+  const professionalId = getScopedProfessionalId(req);
+
+  if (!isValidUuid(id)) {
+    res.status(400).json({ error: 'Invalid conversation ID format' });
+    return;
+  }
+
+  try {
+    const values: unknown[] = [id, companyId];
+    let scopeQuery = `SELECT id FROM conversations WHERE id = $1 AND company_id = $2`;
+
+    if (professionalId) {
+      values.push(professionalId);
+      scopeQuery += ` AND professional_id = $3`;
+    }
+
+    const scopeResult = await pool.query<{ id: string }>(scopeQuery, values);
+    if (scopeResult.rows.length === 0) {
+      res.status(404).json({ error: 'Conversation not found' });
+      return;
+    }
+
+    const result = await pool.query<AgentMessageTrace>(
+      `SELECT *
+       FROM agent_message_traces
+       WHERE conversation_id = $1
+         AND company_id = $2
+       ORDER BY created_at ASC`,
+      [id, companyId],
+    );
+
+    res.json({ data: result.rows });
+  } catch (err) {
+    logger.error('Error listing conversation traces:', err);
+    res.status(500).json({ error: 'Failed to list conversation traces' });
+  }
+});
+
 conversationsRouter.post('/:id/pause', async (req, res) => {
   try {
     const professionalId = getScopedProfessionalId(req);
@@ -206,8 +261,9 @@ conversationsRouter.post('/:id/messages/manual', validateBody(manualMessageSchem
 
   try {
     const professionalId = getScopedProfessionalId(req);
-    const result = await pool.query<Conversation & { evolution_instance_name: string }>(
+    const result = await pool.query<Conversation & { evolution_instance_name: string; instance_status: string }>(
       `SELECT c.*, wi.evolution_instance_name
+             , wi.status AS instance_status
        FROM conversations c
        JOIN whatsapp_instances wi ON wi.id = c.instance_id
        WHERE c.id = $1 AND c.company_id = $2
@@ -221,6 +277,24 @@ conversationsRouter.post('/:id/messages/manual', validateBody(manualMessageSchem
     }
 
     const conversation = result.rows[0];
+    if (conversation.archived_at) {
+      res.status(409).json({
+        error: 'Failed to send manual message',
+        message: 'La conversacion esta archivada. Espera un mensaje nuevo del cliente para reabrirla.',
+        code: 'CONVERSATION_ARCHIVED',
+      });
+      return;
+    }
+
+    if (conversation.instance_status !== 'connected') {
+      res.status(409).json({
+        error: 'Failed to send manual message',
+        message: 'La instancia de WhatsApp no está conectada. Pedí un QR nuevo o refrescá el estado antes de enviar mensajes manuales.',
+        code: 'INSTANCE_NOT_CONNECTED',
+      });
+      return;
+    }
+
     await evolution.sendText(conversation.evolution_instance_name, conversation.phone_number, content);
     const messageResult = await pool.query<Message>(
       `INSERT INTO messages (conversation_id, role, content)
@@ -235,6 +309,36 @@ conversationsRouter.post('/:id/messages/manual', validateBody(manualMessageSchem
     res.status(201).json({ data: messageResult.rows[0] });
   } catch (err) {
     logger.error('Error sending manual message:', err);
-    res.status(500).json({ error: 'Failed to send manual message' });
+    if (err instanceof EvolutionApiError) {
+      const statusCode = err.statusCode === 404 ? 409 : err.statusCode >= 400 && err.statusCode < 500 ? 400 : 502;
+      res.status(statusCode).json({
+        error: 'Failed to send manual message',
+        message:
+          err.statusCode === 404
+            ? 'La instancia de WhatsApp no existe o perdió su conexión. Volvé a pedir QR y refrescá el estado.'
+            : err.statusCode === 401 || err.statusCode === 403
+              ? 'Evolution rechazó el envío. Revisá las credenciales o la autorización de la instancia.'
+              : 'Evolution no pudo entregar el mensaje manual. Reintentá cuando la instancia esté conectada.',
+        code: 'EVOLUTION_SEND_FAILED',
+        details: err.message,
+      });
+      return;
+    }
+
+    if (err instanceof Error && /fetch failed|AbortError|TimeoutError|ECONNREFUSED|ECONNRESET/i.test(err.message)) {
+      res.status(502).json({
+        error: 'Failed to send manual message',
+        message: 'No se pudo conectar con Evolution para enviar el mensaje manual.',
+        code: 'EVOLUTION_UNAVAILABLE',
+        details: err.message,
+      });
+      return;
+    }
+
+    res.status(500).json({
+      error: 'Failed to send manual message',
+      message: err instanceof Error ? err.message : 'Unexpected error while sending manual message',
+      code: 'MANUAL_SEND_FAILED',
+    });
   }
 });

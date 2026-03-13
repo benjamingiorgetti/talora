@@ -599,32 +599,6 @@ export default function WorkspaceCalendarPage() {
         <div className="space-y-4">
           <Card className="rounded-[28px] border-[#e6e7ec] bg-white shadow-none">
             <CardContent className="p-5 sm:p-6">
-              <WorkspaceSectionHeader
-                eyebrow="Lectura rápida"
-                title="Por qué esta vista escala mejor que un calendario mezclado"
-              />
-              <div className="mt-5 space-y-3">
-                {[
-                  isProfessionalSession
-                    ? "Tu sesión ya nace filtrada: no ves colegas, solo tu agenda."
-                    : "Cada profesional tiene su carril. Menos ruido, menos errores de lectura.",
-                  isProfessionalSession
-                    ? "Tus clientes y tus turnos usan el mismo scope, así el contexto no se mezcla."
-                    : "El modo foco deja usar la misma cuenta de empresa sin abrir multiusuario.",
-                  isProfessionalSession
-                    ? "Google sigue sincronizado, pero la operación diaria se resuelve en Talora."
-                    : "Google sigue sincronizado, pero la operación diaria se resuelve en Talora.",
-                ].map((item) => (
-                  <div key={item} className="rounded-[22px] bg-[hsl(var(--surface-sand))] px-4 py-3 text-sm leading-6 text-slate-600">
-                    {item}
-                  </div>
-                ))}
-              </div>
-            </CardContent>
-          </Card>
-
-          <Card className="rounded-[28px] border-[#e6e7ec] bg-white shadow-none">
-            <CardContent className="p-5 sm:p-6">
               <p className="text-[11px] uppercase tracking-[0.18em] text-slate-400">Profesionales</p>
               <div className="mt-4 space-y-3">
                 {boardProfessionals.length === 0 ? (

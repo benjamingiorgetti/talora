@@ -18,10 +18,7 @@ import {
   LayoutDashboard,
   LogOut,
   MessageSquareMore,
-  Package2,
   PanelLeft,
-  PlugZap,
-  ReceiptText,
   Settings2,
   Shield,
   Sparkles,
@@ -30,7 +27,6 @@ import {
   Wrench,
   BellRing,
   FileStack,
-  Boxes,
   X,
 } from "lucide-react";
 import { toast } from "sonner";
@@ -51,6 +47,13 @@ type NavItem = {
   icon: React.ComponentType<{ className?: string }>;
 };
 
+type SidebarIdentityProps = {
+  session: NonNullable<ReturnType<typeof useAuth>["session"]>;
+  companyLabel: string;
+  shellLabel: string;
+  onExitImpersonation: () => void;
+};
+
 const sharedNav: NavItem[] = [
   { href: "/dashboard", label: "Dashboard", icon: LayoutDashboard },
   { href: "/calendar", label: "Calendario", icon: CalendarDays },
@@ -60,12 +63,8 @@ const sharedNav: NavItem[] = [
 ];
 
 const configNav: NavItem[] = [
-  { href: "/settings/pricing", label: "Listas de precios", icon: ReceiptText },
-  { href: "/settings/logistics", label: "Logística", icon: Boxes },
-  { href: "/settings/catalog", label: "Catálogo", icon: BookOpenText },
-  { href: "/settings/rules", label: "Reglas", icon: Sparkles },
-  { href: "/settings/integrations", label: "Integraciones", icon: PlugZap },
-  { href: "/settings/templates", label: "Plantillas", icon: Package2 },
+  { href: "/settings/services", label: "Servicios", icon: BookOpenText },
+  { href: "/settings/professionals", label: "Profesionales", icon: Sparkles },
 ];
 
 const adminNav: NavItem[] = [
@@ -81,7 +80,7 @@ const professionalNav: NavItem[] = [
   { href: "/clients", label: "Mis clientes", icon: UsersRound },
   { href: "/appointments", label: "Mis turnos", icon: BriefcaseBusiness },
   { href: "/calendar", label: "Mi agenda", icon: CalendarDays },
-  { href: "/settings/integrations", label: "Integraciones", icon: PlugZap },
+  { href: "/settings/professionals", label: "Mi Google", icon: Sparkles },
 ];
 
 function navItemIsActive(pathname: string, href: string) {
@@ -170,6 +169,96 @@ function DropdownMenu({
   );
 }
 
+function BrandLockup({
+  collapsed,
+}: {
+  collapsed: boolean;
+}) {
+  return (
+    <>
+      {collapsed ? (
+        <div className="flex h-14 w-14 shrink-0 items-center justify-center rounded-[20px] border border-[#dfe2ea] bg-white shadow-[0_14px_28px_rgba(15,23,42,0.06)]">
+          <Image
+            src="/talora-icon.png"
+            alt="Talora"
+            width={34}
+            height={34}
+            className="h-8 w-8 object-contain"
+          />
+        </div>
+      ) : (
+        <div className="flex min-h-14 items-center">
+          <Image
+            src="/talora-wordmark.png"
+            alt="Talora"
+            width={148}
+            height={54}
+            className="h-auto w-[136px] object-contain"
+          />
+        </div>
+      )}
+    </>
+  );
+}
+
+function SidebarIdentityCard({
+  session,
+  companyLabel,
+  shellLabel,
+  onExitImpersonation,
+}: SidebarIdentityProps) {
+  const isClientWorkspace = session.role === "admin_empresa";
+
+  return (
+    <div className="mt-6 rounded-[24px] border border-[#e3e5ec] bg-[linear-gradient(180deg,#fcfcfe_0%,#f5f6fa_100%)] p-4">
+      <div className="flex items-center gap-3">
+        <div className="relative flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl border border-[#d8dce6] bg-white text-slate-900">
+          {session.role === "superadmin" ? (
+            <Shield className="h-5 w-5" />
+          ) : session.role === "professional" ? (
+            <UsersRound className="h-5 w-5" />
+          ) : (
+            <Building2 className="h-5 w-5" />
+          )}
+          <div className="absolute -bottom-1 -right-1 flex h-4.5 w-4.5 items-center justify-center rounded-full border border-[#dfe2ea] bg-white shadow-sm">
+            <Image
+              src="/talora-icon.png"
+              alt=""
+              width={10}
+              height={10}
+              className="h-2.5 w-2.5 object-contain"
+              aria-hidden="true"
+            />
+          </div>
+        </div>
+        <div className="min-w-0">
+          {isClientWorkspace ? (
+            <p className="truncate text-base font-semibold text-slate-950">{companyLabel}</p>
+          ) : (
+            <>
+              <p className="truncate text-sm font-semibold text-slate-950">{shellLabel}</p>
+              <p className="truncate text-sm text-slate-500">{companyLabel}</p>
+            </>
+          )}
+        </div>
+      </div>
+
+      {session.isImpersonating && (
+        <Button
+          variant="outline"
+          onClick={() => {
+            onExitImpersonation();
+          }}
+          className="mt-4 h-10 w-full justify-start rounded-2xl border-[#dde1ea] bg-white px-3 text-sm hover:bg-[#f6f7fb]"
+        >
+          <ArrowLeftRight className="mr-2 h-4 w-4" />
+          Volver a Talora
+        </Button>
+      )}
+    </div>
+  );
+}
+
 export function AppShell({ children }: AppShellProps) {
   const pathname = usePathname();
   const router = useRouter();
@@ -253,6 +342,12 @@ export function AppShell({ children }: AppShellProps) {
       : session.role === "professional"
         ? session.fullName ?? session.companyName ?? "Profesional"
         : session.companyName ?? "Workspace";
+  const topbarEyebrow =
+    session.role === "superadmin"
+      ? shellLabel
+      : session.role === "professional"
+        ? session.fullName ?? shellLabel
+        : companyLabel;
 
   const handleSelectCompany = (companyId: string) => {
     setSwitcherOpen(false);
@@ -274,19 +369,7 @@ export function AppShell({ children }: AppShellProps) {
           >
             <div className="flex items-center justify-between gap-3">
               <Link href={resolveDefaultRoute(session, activeCompanyId)} className="flex min-w-0 items-center gap-3">
-                <div className="flex h-12 w-12 items-center justify-center rounded-[18px] border border-[#dfe2ea] bg-white shadow-[0_12px_24px_rgba(15,23,42,0.05)]">
-                  <Image
-                    src="/talora-logo-transparent.png"
-                    alt="Talora"
-                    width={30}
-                    height={30}
-                    className="rounded-md object-contain grayscale contrast-125"
-                  />
-                </div>
-                <div className="min-w-0">
-                  <p className="font-display truncate text-[1.4rem] leading-none text-slate-950">Talora</p>
-                  <p className="truncate text-sm text-slate-500">{shellLabel}</p>
-                </div>
+                <BrandLockup collapsed={false} />
               </Link>
               <Button
                 variant="ghost"
@@ -299,26 +382,16 @@ export function AppShell({ children }: AppShellProps) {
               </Button>
             </div>
 
-            <div className="mt-6 rounded-[24px] border border-[#e3e5ec] bg-[linear-gradient(180deg,#fcfcfe_0%,#f5f6fa_100%)] p-4">
-              <p className="text-sm font-semibold text-slate-950">
-                {companyLabel}
-              </p>
-              <p className="mt-1 text-sm text-slate-500">{session.email ?? "ops@talora"}</p>
-              {session.isImpersonating && (
-                <Button
-                  variant="outline"
-                  onClick={() => {
-                    void exitImpersonation().catch((error) => {
-                      toast.error(error instanceof Error ? error.message : "No se pudo restaurar la sesión.");
-                    });
-                  }}
-                  className="mt-4 h-10 w-full justify-start rounded-2xl border-[#dde1ea] bg-white px-3 text-sm hover:bg-[#f6f7fb]"
-                >
-                  <ArrowLeftRight className="mr-2 h-4 w-4" />
-                  Volver a Talora
-                </Button>
-              )}
-            </div>
+            <SidebarIdentityCard
+              session={session}
+              companyLabel={companyLabel}
+              shellLabel={shellLabel}
+              onExitImpersonation={() => {
+                void exitImpersonation().catch((error) => {
+                  toast.error(error instanceof Error ? error.message : "No se pudo restaurar la sesión.");
+                });
+              }}
+            />
 
             <nav className="mt-6 space-y-1.5" aria-label="Navegación móvil">
               {workspaceNav.map((item) => (
@@ -329,7 +402,7 @@ export function AppShell({ children }: AppShellProps) {
             <div className="mt-6 space-y-4 overflow-y-auto pr-1">
               {session.role !== "professional" && (
                 <div className="space-y-1.5">
-                  <p className="px-1 text-[11px] font-medium uppercase tracking-[0.16em] text-slate-400">Más</p>
+                  <p className="px-1 text-[11px] font-medium uppercase tracking-[0.16em] text-slate-400">Configurar</p>
                   {configNav.map((item) => (
                     <NavLink key={item.href} item={item} pathname={pathname} collapsed={false} />
                   ))}
@@ -362,7 +435,7 @@ export function AppShell({ children }: AppShellProps) {
       <div className="mx-auto flex min-h-dvh w-full max-w-[1680px] gap-4 px-3 py-3 lg:px-6 lg:py-4">
         <aside
           className={cn(
-            "hidden shrink-0 flex-col rounded-[30px] border border-[#e2e4ec] bg-[linear-gradient(180deg,#ffffff_0%,#f7f8fb_100%)] p-4 shadow-[0_24px_64px_rgba(15,23,42,0.06)] lg:flex",
+            "sticky top-4 hidden h-[calc(100dvh-2rem)] shrink-0 flex-col overflow-hidden rounded-[30px] border border-[#e2e4ec] bg-[linear-gradient(180deg,#ffffff_0%,#f7f8fb_100%)] p-4 shadow-[0_24px_64px_rgba(15,23,42,0.06)] lg:flex",
             sidebarCollapsed ? "w-[92px]" : "w-[260px]"
           )}
         >
@@ -371,27 +444,7 @@ export function AppShell({ children }: AppShellProps) {
               href={resolveDefaultRoute(session, activeCompanyId)}
               className={cn("flex items-center", sidebarCollapsed ? "justify-center" : "gap-3")}
             >
-              <div className="flex h-14 w-14 items-center justify-center rounded-[20px] border border-[#dfe2ea] bg-white shadow-[0_14px_28px_rgba(15,23,42,0.06)]">
-                <Image
-                  src="/talora-logo-transparent.png"
-                  alt="Talora"
-                  width={34}
-                  height={34}
-                  className="rounded-md object-contain grayscale contrast-125"
-                />
-              </div>
-              {!sidebarCollapsed && (
-                <div>
-                  <p className="font-display text-[1.45rem] leading-none text-slate-950">Talora</p>
-                  <p className="text-sm text-slate-500">
-                    {session.role === "superadmin"
-                      ? "Control operativo"
-                      : session.role === "professional"
-                        ? "Workspace personal"
-                        : "Workspace cliente"}
-                  </p>
-                </div>
-              )}
+              <BrandLockup collapsed={sidebarCollapsed} />
             </Link>
 
             {!sidebarCollapsed && (
@@ -407,50 +460,40 @@ export function AppShell({ children }: AppShellProps) {
             )}
           </div>
 
-          {!sidebarCollapsed && (
-            <div className="mt-6 rounded-[24px] border border-[#e3e5ec] bg-[linear-gradient(180deg,#fcfcfe_0%,#f5f6fa_100%)] p-4">
-              <div className="flex items-center gap-3">
-                <div className="flex h-11 w-11 items-center justify-center rounded-2xl border border-[#d8dce6] bg-white text-slate-900">
-                  {session.role === "superadmin" ? (
-                    <Shield className="h-5 w-5" />
-                  ) : session.role === "professional" ? (
-                    <UsersRound className="h-5 w-5" />
-                  ) : (
-                    <BriefcaseBusiness className="h-5 w-5" />
-                  )}
-                </div>
-                <div className="min-w-0">
-                  <p className="truncate text-sm font-semibold text-slate-950">{shellLabel}</p>
-                  <p className="truncate text-sm text-slate-500">
-                    {companyLabel}
-                  </p>
-                </div>
-              </div>
-
-              {session.isImpersonating && (
-                <Button
-                  variant="outline"
-                  onClick={() => {
-                    void exitImpersonation().catch((error) => {
-                      toast.error(error instanceof Error ? error.message : "No se pudo restaurar la sesión.");
-                    });
-                  }}
-                  className="mt-4 h-10 w-full justify-start rounded-2xl border-[#dde1ea] bg-white px-3 text-sm hover:bg-[#f6f7fb]"
-                >
-                  <ArrowLeftRight className="mr-2 h-4 w-4" />
-                  Volver a Talora
-                </Button>
-              )}
-            </div>
+          {sidebarCollapsed && (
+            <Button
+              variant="ghost"
+              size="icon"
+              aria-label="Expandir sidebar"
+              onClick={() => setSidebarCollapsed(false)}
+              className="mt-4 h-11 w-11 self-center rounded-2xl border border-[#e3e6ee] bg-white text-slate-500 shadow-sm hover:bg-[#f6f7fb] hover:text-slate-900"
+            >
+              <PanelLeft className="h-4 w-4" />
+            </Button>
           )}
 
-          <nav className="mt-6 space-y-1.5" aria-label="Navegación principal">
-            {workspaceNav.map((item) => (
-              <NavLink key={item.href} item={item} pathname={pathname} collapsed={sidebarCollapsed} />
-            ))}
-          </nav>
+          {!sidebarCollapsed && (
+            <SidebarIdentityCard
+              session={session}
+              companyLabel={companyLabel}
+              shellLabel={shellLabel}
+              onExitImpersonation={() => {
+                void exitImpersonation().catch((error) => {
+                  toast.error(error instanceof Error ? error.message : "No se pudo restaurar la sesión.");
+                });
+              }}
+            />
+          )}
 
-          <div className={cn("mt-auto space-y-2 pt-5", sidebarCollapsed && "flex flex-col items-center")}>
+          <div className={cn("mt-6 flex-1 overflow-y-auto", sidebarCollapsed ? "pr-0" : "pr-1")}>
+            <nav className="space-y-1.5" aria-label="Navegación principal">
+              {workspaceNav.map((item) => (
+                <NavLink key={item.href} item={item} pathname={pathname} collapsed={sidebarCollapsed} />
+              ))}
+            </nav>
+          </div>
+
+          <div className={cn("border-t border-[#e4e7ef] pt-4", sidebarCollapsed && "flex flex-col items-center")}>
             <Button
               variant="outline"
               onClick={logout}
@@ -463,21 +506,10 @@ export function AppShell({ children }: AppShellProps) {
               <LogOut className={cn("h-4 w-4", !sidebarCollapsed && "mr-2")} />
               {!sidebarCollapsed && "Salir"}
             </Button>
-            {sidebarCollapsed && (
-              <Button
-                variant="ghost"
-                size="icon"
-                aria-label="Expandir sidebar"
-                onClick={() => setSidebarCollapsed(false)}
-                className="h-11 w-11 rounded-2xl border border-transparent text-slate-500 hover:border-[#e3e6ee] hover:bg-white hover:text-slate-900"
-              >
-                <PanelLeft className="h-4 w-4" />
-              </Button>
-            )}
           </div>
         </aside>
 
-        <div className="flex min-w-0 flex-1 flex-col rounded-[28px] border border-[#e2e4ec] bg-[linear-gradient(180deg,#ffffff_0%,#fafbfe_100%)] shadow-[0_24px_80px_rgba(15,23,42,0.07)] sm:rounded-[32px]">
+        <div className="flex min-h-0 min-w-0 flex-1 flex-col rounded-[28px] border border-[#e2e4ec] bg-[linear-gradient(180deg,#ffffff_0%,#fafbfe_100%)] shadow-[0_24px_80px_rgba(15,23,42,0.07)] sm:rounded-[32px]">
           <header className="sticky top-0 z-20 rounded-t-[28px] border-b border-[#e6e7ee] bg-white/92 px-4 py-3.5 backdrop-blur sm:rounded-t-[32px] md:px-5 lg:px-8">
             <div className="flex flex-wrap items-center justify-between gap-4">
               <div className="flex min-w-0 items-center gap-3">
@@ -491,7 +523,7 @@ export function AppShell({ children }: AppShellProps) {
                   <PanelLeft className="h-4 w-4" />
                 </Button>
                 <div className="min-w-0">
-                  <p className="text-xs font-medium uppercase tracking-[0.18em] text-slate-400">{shellLabel}</p>
+                  <p className="text-xs font-medium uppercase tracking-[0.18em] text-slate-400">{topbarEyebrow}</p>
                   <h1 className="font-display truncate text-[1.8rem] leading-none text-slate-950 sm:text-[2rem] lg:text-[2.15rem]">{topbarTitle}</h1>
                 </div>
               </div>
@@ -536,7 +568,7 @@ export function AppShell({ children }: AppShellProps) {
                       className="h-11 rounded-2xl border-[#dde1ea] bg-white px-4 shadow-none hover:bg-[#f6f7fb]"
                     >
                       <Wrench className="mr-2 h-4 w-4" />
-                      Más
+                      Configurar
                       <ChevronDown className="ml-2 h-4 w-4" />
                     </Button>
                     {configOpen && (
@@ -583,7 +615,7 @@ export function AppShell({ children }: AppShellProps) {
             </div>
           </header>
 
-          <main className="flex-1 px-3 py-3 sm:px-4 sm:py-4 md:px-6 md:py-6 lg:px-8 lg:py-7">{children}</main>
+          <main className="flex min-h-0 flex-1 flex-col px-3 py-3 sm:px-4 sm:py-4 md:px-6 md:py-6 lg:px-8 lg:py-7">{children}</main>
         </div>
       </div>
     </div>

@@ -1,12 +1,5 @@
-"use client";
-
-import { CalendarTab } from "@/components/agent/calendar-tab";
-import { RequireActiveCompany } from "@/components/role-guards";
+import { redirect } from "next/navigation";
 
 export default function IntegrationsSettingsPage() {
-  return (
-    <RequireActiveCompany>
-      <CalendarTab />
-    </RequireActiveCompany>
-  );
+  redirect("/settings/professionals");
 }

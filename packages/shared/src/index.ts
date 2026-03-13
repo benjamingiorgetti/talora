@@ -80,6 +80,8 @@ export interface PromptSection {
 }
 
 // --- Tools ---
+export type AgentToolSource = 'core' | 'custom';
+
 export interface AgentTool {
   id: string;
   agent_id: string;
@@ -87,6 +89,7 @@ export interface AgentTool {
   description: string;
   parameters: Record<string, unknown>;
   implementation: string;
+  source?: AgentToolSource;
   is_active: boolean;
   created_at: string;
   updated_at?: string;
@@ -115,8 +118,9 @@ export interface Service {
   company_id: string;
   professional_id?: string | null;
   name: string;
+  aliases: string[];
   duration_minutes: number;
-  price_label: string;
+  price: number;
   description: string;
   is_active: boolean;
   created_at: string;
@@ -124,16 +128,21 @@ export interface Service {
 }
 
 // --- Conversations ---
+export type ConversationArchiveReason = 'manual_reset' | 'inactive_48h';
+
 export interface Conversation {
   id: string;
   company_id: string;
   instance_id: string;
   professional_id?: string | null;
+  professional_binding_suppressed: boolean;
   phone_number: string;
   contact_name: string | null;
   bot_paused: boolean;
   last_message_at: string | null;
   memory_reset_at: string | null;
+  archived_at: string | null;
+  archive_reason: ConversationArchiveReason | null;
   created_at: string;
   updated_at?: string;
 }
@@ -146,6 +155,30 @@ export interface Message {
   content: string | null;
   tool_calls: Record<string, unknown>[] | null;
   tool_call_id: string | null;
+  created_at: string;
+}
+
+export interface AgentToolExecutionTrace {
+  tool_call_id: string;
+  name: string;
+  status: 'success' | 'error';
+  input: Record<string, unknown>;
+  output: Record<string, unknown> | string | null;
+  error?: string | null;
+}
+
+export interface AgentMessageTrace {
+  id: string;
+  company_id: string;
+  conversation_id: string;
+  agent_id: string | null;
+  assistant_message_id: string | null;
+  status: 'success' | 'error';
+  system_prompt_resolved: string;
+  injected_context: Record<string, string>;
+  requested_tool_calls: Record<string, unknown>[] | null;
+  executed_tools: AgentToolExecutionTrace[];
+  error_message: string | null;
   created_at: string;
 }
 
@@ -226,6 +259,25 @@ export interface TestMessage {
   created_at: string;
 }
 
+export type TestChatMode = 'live' | 'simulate';
+
+export interface TestToolTrace {
+  tool_call_id: string;
+  name: string;
+  mode: TestChatMode;
+  status: 'success' | 'error';
+  input: Record<string, unknown>;
+  output: Record<string, unknown> | string | null;
+  error?: string | null;
+}
+
+export interface TestChatResponse {
+  content: string;
+  tool_calls?: unknown[];
+  executed_tools: TestToolTrace[];
+  mode: TestChatMode;
+}
+
 // --- Clients ---
 export interface Client {
   id: string;
@@ -264,5 +316,5 @@ export interface ApiResponse<T> {
 export type WsEvent =
   | { type: 'instance:status'; payload: { id: string; status: WhatsAppInstance['status']; qr_code: string | null; phone_number: string | null; company_id?: string } }
   | { type: 'alert:new'; payload: Alert }
-  | { type: 'conversation:updated'; payload: Pick<Conversation, 'id' | 'company_id' | 'instance_id' | 'professional_id' | 'last_message_at' | 'bot_paused'> }
+  | { type: 'conversation:updated'; payload: Pick<Conversation, 'id' | 'company_id' | 'instance_id' | 'professional_id' | 'last_message_at' | 'bot_paused' | 'archived_at' | 'archive_reason'> }
   | { type: 'message:new'; payload: Message & { company_id?: string } };

@@ -59,7 +59,7 @@ export function CalendarTab() {
 
     const url = new URL(`${API_URL}/auth/google`);
     url.searchParams.set("token", token);
-    url.searchParams.set("return_to", "/settings/integrations");
+    url.searchParams.set("return_to", "/settings/professionals");
     window.location.href = url.toString();
   };
 
@@ -142,38 +142,6 @@ export function CalendarTab() {
         )}
       </div>
 
-      {/* Info cards */}
-      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-        {[
-          {
-            title: "Disponibilidad",
-            description: "El bot consulta slots libres en tiempo real antes de confirmar una cita",
-          },
-          {
-            title: "Agendamiento",
-            description: "Crea eventos directamente en tu calendario cuando un cliente confirma",
-          },
-          {
-            title: "Recordatorios",
-            description: "Los clientes reciben confirmacion automatica por WhatsApp",
-          },
-        ].map((feature) => (
-          <Card
-            key={feature.title}
-            className="rounded-lg border border-border"
-          >
-            <CardContent className="p-4">
-              <div className="flex items-center gap-2 mb-2">
-                <div className="h-7 w-7 rounded-md bg-primary/10 flex items-center justify-center">
-                  <Calendar className="h-3.5 w-3.5 text-primary" aria-hidden="true" />
-                </div>
-                <p className="text-sm font-semibold">{feature.title}</p>
-              </div>
-              <p className="text-xs text-muted-foreground leading-relaxed">{feature.description}</p>
-            </CardContent>
-          </Card>
-        ))}
-      </div>
     </div>
   );
 }

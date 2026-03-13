@@ -12,6 +12,33 @@ type ToolExecutionContext = {
   professionalId?: string | null;
 };
 
+type ServiceOption = {
+  name: string;
+  durationMinutes: number;
+  description: string;
+};
+
+type SchedulingIssue = {
+  error: string;
+  needsServiceSelection?: boolean;
+  serviceOptions?: ServiceOption[];
+  requestedService?: string | null;
+  needsProfessionalSelection?: boolean;
+  professionalOptions?: string[];
+  requestedProfessional?: string | null;
+};
+
+type ServiceResolution =
+  | { kind: 'resolved'; service: Service }
+  | { kind: 'missing'; issue: SchedulingIssue }
+  | { kind: 'ambiguous'; issue: SchedulingIssue };
+
+type ProfessionalResolution =
+  | { kind: 'resolved'; professional: Professional }
+  | { kind: 'missing'; issue: SchedulingIssue }
+  | { kind: 'ambiguous'; issue: SchedulingIssue }
+  | { kind: 'none' };
+
 function asString(value: unknown): string | null {
   return typeof value === 'string' && value.trim() ? value.trim() : null;
 }
@@ -25,8 +52,37 @@ function asNumber(value: unknown): number | null {
   return null;
 }
 
+function hasSchedulingHints(toolInput: Record<string, unknown>): boolean {
+  return Boolean(
+    asString(toolInput.professionalId) ??
+      asString(toolInput.professional_id) ??
+      asString(toolInput.serviceId) ??
+      asString(toolInput.service_id) ??
+      asString(toolInput.calendarId) ??
+      asString(toolInput.calendar_id)
+  );
+}
+
+function normalizeLabel(value: string): string {
+  return value
+    .toLowerCase()
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .replace(/[^a-z0-9]+/g, ' ')
+    .trim()
+    .replace(/\s+/g, ' ');
+}
+
+function tokenize(value: string): string[] {
+  return normalizeLabel(value).split(' ').filter(Boolean);
+}
+
 function normalizePhone(value: string | undefined): string {
   return (value ?? '').replace(/\D/g, '');
+}
+
+function isUuid(value: string): boolean {
+  return /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(value);
 }
 
 function getAppointmentDurationMinutes(appointment: Appointment): number {
@@ -37,6 +93,9 @@ function getAppointmentDurationMinutes(appointment: Appointment): number {
 }
 
 async function getProfessional(companyId: string, professionalId: string): Promise<Professional | null> {
+  if (!isUuid(professionalId)) {
+    return null;
+  }
   const result = await pool.query<Professional>(
     'SELECT * FROM professionals WHERE id = $1 AND company_id = $2 AND is_active = true LIMIT 1',
     [professionalId, companyId]
@@ -44,37 +103,324 @@ async function getProfessional(companyId: string, professionalId: string): Promi
   return result.rows[0] ?? null;
 }
 
+async function listActiveProfessionals(companyId: string): Promise<Professional[]> {
+  const result = await pool.query<Professional>(
+    `SELECT *
+     FROM professionals
+     WHERE company_id = $1
+       AND is_active = true
+     ORDER BY name ASC`,
+    [companyId]
+  );
+  return result.rows;
+}
+
 async function getService(companyId: string, serviceId: string): Promise<Service | null> {
   const result = await pool.query<Service>(
-    'SELECT * FROM services WHERE id = $1 AND company_id = $2 AND is_active = true LIMIT 1',
+    `SELECT id, company_id, professional_id, name,
+            COALESCE(aliases, ARRAY[]::text[]) AS aliases,
+            duration_minutes, price, description, is_active, created_at, updated_at
+     FROM services
+     WHERE id = $1 AND company_id = $2 AND is_active = true
+     LIMIT 1`,
     [serviceId, companyId]
   );
   return result.rows[0] ?? null;
+}
+
+async function listScopedServices(companyId: string, professionalId?: string | null): Promise<Service[]> {
+  const result = await pool.query<Service>(
+    `SELECT id, company_id, professional_id, name,
+            COALESCE(aliases, ARRAY[]::text[]) AS aliases,
+            duration_minutes, price, description, is_active, created_at, updated_at
+     FROM services
+     WHERE company_id = $1
+       AND is_active = true
+       AND ($2::uuid IS NULL OR professional_id IS NULL OR professional_id = $2)
+     ORDER BY name ASC`,
+    [companyId, professionalId ?? null]
+  );
+  return result.rows;
+}
+
+function toServiceOption(service: Service): ServiceOption {
+  return {
+    name: service.name,
+    durationMinutes: service.duration_minutes,
+    description: service.description,
+  };
+}
+
+function scoreServiceMatch(query: string, service: Service): number {
+  const normalizedQuery = normalizeLabel(query);
+  if (!normalizedQuery) return 0;
+
+  const queryTokens = tokenize(normalizedQuery);
+  const variants = [service.name, ...(service.aliases ?? [])]
+    .map((variant) => normalizeLabel(variant))
+    .filter(Boolean);
+
+  let bestScore = 0;
+  for (const variant of variants) {
+    if (variant === normalizedQuery) {
+      bestScore = Math.max(bestScore, 400);
+      continue;
+    }
+
+    const variantTokens = tokenize(variant);
+    const overlap = queryTokens.filter((token) => variantTokens.includes(token)).length;
+    const allQueryTokensPresent = queryTokens.length > 0 && queryTokens.every((token) => variantTokens.includes(token));
+    const allVariantTokensPresent = variantTokens.length > 0 && variantTokens.every((token) => queryTokens.includes(token));
+
+    if (allQueryTokensPresent && allVariantTokensPresent) {
+      bestScore = Math.max(bestScore, 320);
+      continue;
+    }
+
+    if (variant.startsWith(normalizedQuery) || variant.includes(` ${normalizedQuery}`)) {
+      bestScore = Math.max(bestScore, 260);
+      continue;
+    }
+
+    if (allQueryTokensPresent) {
+      bestScore = Math.max(bestScore, 220 + overlap);
+      continue;
+    }
+
+    if (overlap > 0) {
+      bestScore = Math.max(bestScore, 80 + overlap * 10);
+    }
+  }
+
+  return bestScore;
+}
+
+async function resolveServiceSelection(
+  companyId: string,
+  toolInput: Record<string, unknown>,
+  professionalId?: string | null
+): Promise<ServiceResolution> {
+  const serviceId =
+    asString(toolInput.serviceId) ??
+    asString(toolInput.service_id) ??
+    null;
+  if (serviceId) {
+    const service = await getService(companyId, serviceId);
+    if (service && (!professionalId || !service.professional_id || service.professional_id === professionalId)) {
+      return { kind: 'resolved', service };
+    }
+  }
+
+  const serviceQuery =
+    asString(toolInput.serviceName) ??
+    asString(toolInput.service_name) ??
+    asString(toolInput.serviceHint) ??
+    asString(toolInput.service_hint) ??
+    asString(toolInput.service) ??
+    null;
+
+  const scopedServices = await listScopedServices(companyId, professionalId);
+  if (scopedServices.length === 0) {
+    return {
+      kind: 'missing',
+      issue: {
+        error: 'No hay servicios activos cargados para este profesional.',
+        needsServiceSelection: true,
+        serviceOptions: [],
+        requestedService: serviceQuery,
+      },
+    };
+  }
+
+  if (!serviceQuery) {
+    if (scopedServices.length === 1) {
+      return { kind: 'resolved', service: scopedServices[0] };
+    }
+
+    return {
+      kind: 'missing',
+      issue: {
+        error: 'Necesito saber que servicio quiere reservar el cliente.',
+        needsServiceSelection: true,
+        serviceOptions: scopedServices.slice(0, 4).map(toServiceOption),
+        requestedService: null,
+      },
+    };
+  }
+
+  const matches = scopedServices
+    .map((service) => ({ service, score: scoreServiceMatch(serviceQuery, service) }))
+    .filter((candidate) => candidate.score >= 180)
+    .sort((left, right) => right.score - left.score || left.service.name.localeCompare(right.service.name));
+
+  if (matches.length === 0) {
+    return {
+      kind: 'missing',
+      issue: {
+        error: `No encontre un servicio que coincida con "${serviceQuery}".`,
+        needsServiceSelection: true,
+        serviceOptions: scopedServices.slice(0, 4).map(toServiceOption),
+        requestedService: serviceQuery,
+      },
+    };
+  }
+
+  const topScore = matches[0].score;
+  const topMatches = matches.filter((candidate) => candidate.score === topScore);
+  if (topMatches.length > 1) {
+    return {
+      kind: 'ambiguous',
+      issue: {
+        error: `Hay varios servicios posibles para "${serviceQuery}".`,
+        needsServiceSelection: true,
+        serviceOptions: topMatches.slice(0, 4).map((candidate) => toServiceOption(candidate.service)),
+        requestedService: serviceQuery,
+      },
+    };
+  }
+
+  return { kind: 'resolved', service: matches[0].service };
+}
+
+function scoreProfessionalMatch(query: string, professional: Professional): number {
+  const normalizedQuery = normalizeLabel(query);
+  if (!normalizedQuery) return 0;
+
+  const normalizedName = normalizeLabel(professional.name);
+  if (!normalizedName) return 0;
+  if (normalizedName === normalizedQuery) return 400;
+
+  const queryTokens = tokenize(normalizedQuery);
+  const nameTokens = tokenize(normalizedName);
+  const overlap = queryTokens.filter((token) => nameTokens.includes(token)).length;
+  const allQueryTokensPresent = queryTokens.length > 0 && queryTokens.every((token) => nameTokens.includes(token));
+  const allNameTokensPresent = nameTokens.length > 0 && nameTokens.every((token) => queryTokens.includes(token));
+
+  if (allQueryTokensPresent && allNameTokensPresent) return 320;
+  if (normalizedName.startsWith(normalizedQuery) || normalizedName.includes(` ${normalizedQuery}`)) return 260;
+  if (allQueryTokensPresent) return 220 + overlap;
+  if (overlap > 0) return 80 + overlap * 10;
+  return 0;
+}
+
+async function resolveProfessionalSelection(
+  companyId: string,
+  toolInput: Record<string, unknown>,
+  contextProfessionalId?: string | null
+): Promise<ProfessionalResolution> {
+  if (contextProfessionalId) {
+    const professional = await getProfessional(companyId, contextProfessionalId);
+    if (professional) {
+      return { kind: 'resolved', professional };
+    }
+  }
+
+  const inputProfessionalId =
+    asString(toolInput.professionalId) ??
+    asString(toolInput.professional_id) ??
+    null;
+  const professionalName =
+    asString(toolInput.professionalName) ??
+    asString(toolInput.professional_name) ??
+    asString(toolInput.professionalHint) ??
+    asString(toolInput.professional_hint) ??
+    null;
+
+  if (inputProfessionalId && isUuid(inputProfessionalId)) {
+    const professional = await getProfessional(companyId, inputProfessionalId);
+    if (professional) {
+      return { kind: 'resolved', professional };
+    }
+  }
+
+  const professionalQuery = professionalName ?? (inputProfessionalId && !isUuid(inputProfessionalId) ? inputProfessionalId : null);
+  if (!professionalQuery) {
+    return { kind: 'none' };
+  }
+
+  const professionals = await listActiveProfessionals(companyId);
+  if (professionals.length === 0) {
+    return {
+      kind: 'missing',
+      issue: {
+        error: 'No hay profesionales activos disponibles en este momento.',
+        needsProfessionalSelection: true,
+        professionalOptions: [],
+        requestedProfessional: professionalQuery,
+      },
+    };
+  }
+
+  const matches = professionals
+    .map((professional) => ({ professional, score: scoreProfessionalMatch(professionalQuery, professional) }))
+    .filter((candidate) => candidate.score >= 180)
+    .sort((left, right) => right.score - left.score || left.professional.name.localeCompare(right.professional.name));
+
+  if (matches.length === 0) {
+    return {
+      kind: 'missing',
+      issue: {
+        error: `No encontre un profesional que coincida con "${professionalQuery}".`,
+        needsProfessionalSelection: true,
+        professionalOptions: professionals.slice(0, 4).map((professional) => professional.name),
+        requestedProfessional: professionalQuery,
+      },
+    };
+  }
+
+  const topScore = matches[0].score;
+  const topMatches = matches.filter((candidate) => candidate.score === topScore);
+  if (topMatches.length > 1) {
+    return {
+      kind: 'ambiguous',
+      issue: {
+        error: `Hay varios profesionales posibles para "${professionalQuery}".`,
+        needsProfessionalSelection: true,
+        professionalOptions: topMatches.slice(0, 4).map((candidate) => candidate.professional.name),
+        requestedProfessional: professionalQuery,
+      },
+    };
+  }
+
+  return { kind: 'resolved', professional: matches[0].professional };
 }
 
 async function resolveSchedulingContext(
   companyId: string,
   toolInput: Record<string, unknown>,
   contextProfessionalId?: string | null
-): Promise<{ professional: Professional; service: Service | null; durationMinutes: number; calendarId: string }> {
-  const inputProfessionalId =
-    asString(toolInput.professionalId) ??
-    asString(toolInput.professional_id) ??
-    null;
-  // Priority: conversation's professional > tool input > service's professional
-  const effectiveProfessionalId = contextProfessionalId ?? inputProfessionalId;
-  const serviceId =
-    asString(toolInput.serviceId) ??
-    asString(toolInput.service_id) ??
-    null;
+): Promise<{ professional: Professional; service: Service | null; durationMinutes: number; calendarId: string; issue?: SchedulingIssue }> {
   const calendarIdOverride =
     asString(toolInput.calendarId) ??
     asString(toolInput.calendar_id) ??
     null;
 
-  const service = serviceId ? await getService(companyId, serviceId) : null;
-  let professional: Professional | null = effectiveProfessionalId ? await getProfessional(companyId, effectiveProfessionalId) : null;
+  const professionalResolution = await resolveProfessionalSelection(companyId, toolInput, contextProfessionalId);
+  if (professionalResolution.kind === 'missing' || professionalResolution.kind === 'ambiguous') {
+    return {
+      professional: null as never,
+      service: null,
+      durationMinutes: 0,
+      calendarId: '',
+      issue: professionalResolution.issue,
+    };
+  }
 
+  const resolvedProfessional = professionalResolution.kind === 'resolved' ? professionalResolution.professional : null;
+
+  const serviceResolution = await resolveServiceSelection(companyId, toolInput, resolvedProfessional?.id ?? null);
+  if (serviceResolution.kind !== 'resolved') {
+    return {
+      professional: null as never,
+      service: null,
+      durationMinutes: 0,
+      calendarId: '',
+      issue: serviceResolution.issue,
+    };
+  }
+
+  const service = serviceResolution.service;
+  let professional: Professional | null = resolvedProfessional;
   if (!professional && service?.professional_id) {
     professional = await getProfessional(companyId, service.professional_id);
   }
@@ -200,12 +546,15 @@ export async function executeTool(
         }
 
         const scheduling = await resolveSchedulingContext(context.companyId, toolInput, context.professionalId);
+        if (scheduling.issue) {
+          return JSON.stringify(scheduling.issue);
+        }
         const result = await checkSlot(date, scheduling.durationMinutes, scheduling.calendarId, scheduling.professional.id);
         return JSON.stringify(result);
       }
 
       case 'google_calendar_book': {
-        if (context.companyId && !context.professionalId) {
+        if (context.companyId && !context.professionalId && !hasSchedulingHints(toolInput)) {
           return JSON.stringify({
             error: 'No hay profesional asignado a esta conversación. No se pueden gestionar turnos automáticamente. Contactar al administrador para asignar un profesional.',
           });
@@ -230,6 +579,9 @@ export async function executeTool(
         }
 
         const scheduling = await resolveSchedulingContext(context.companyId, toolInput, context.professionalId);
+        if (scheduling.issue) {
+          return JSON.stringify(scheduling.issue);
+        }
         const title = scheduling.service ? `${name} - ${scheduling.service.name}` : name;
         const fullDescription = [
           scheduling.service?.description,
@@ -290,7 +642,7 @@ export async function executeTool(
       }
 
       case 'google_calendar_reprogram': {
-        if (context.companyId && !context.professionalId) {
+        if (context.companyId && !context.professionalId && !hasSchedulingHints(toolInput)) {
           return JSON.stringify({
             error: 'No hay profesional asignado a esta conversación. No se pueden gestionar turnos automáticamente. Contactar al administrador para asignar un profesional.',
           });
@@ -329,6 +681,9 @@ export async function executeTool(
           serviceId,
           durationMinutes: getAppointmentDurationMinutes(appointment),
         }, context.professionalId);
+        if (scheduling.issue) {
+          return JSON.stringify(scheduling.issue);
+        }
         const nextNotes = asString(toolInput.notes) ?? appointment.notes;
         const nextTitle = scheduling.service ? `${appointment.client_name} - ${scheduling.service.name}` : appointment.title;
 
@@ -385,7 +740,7 @@ export async function executeTool(
       }
 
       case 'google_calendar_cancel': {
-        if (context.companyId && !context.professionalId) {
+        if (context.companyId && !context.professionalId && !hasSchedulingHints(toolInput)) {
           return JSON.stringify({
             error: 'No hay profesional asignado a esta conversación. No se pueden gestionar turnos automáticamente. Contactar al administrador para asignar un profesional.',
           });
