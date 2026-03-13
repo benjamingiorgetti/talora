@@ -142,3 +142,11 @@ Setup y rutas nuevas importantes:
 - Route-specific white screens can also come from invalid nested interactive HTML such as `button > button`; check the rendered structure before chasing fetch logic.
 - Do not mark work as `Done` in `todos.md` unless it has real validation or objective evidence.
 - For this repo, "implemented" and "vendible" are different states. Prefer proving real flows over adding more surfaces.
+
+## gstack
+
+Use the `/browse` skill from gstack for all web browsing. Never use `mcp__claude-in-chrome__*` tools.
+
+Available skills: `/plan-ceo-review`, `/plan-eng-review`, `/review`, `/ship`, `/browse`, `/qa`, `/setup-browser-cookies`, `/retro`.
+
+If gstack skills aren't working, run `cd .claude/skills/gstack && ./setup` to build the binary and register skills.
