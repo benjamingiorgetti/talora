@@ -496,7 +496,8 @@ async function upsertClient(
 
 async function resolveAppointmentByReference(
   companyId: string,
-  toolInput: Record<string, unknown>
+  toolInput: Record<string, unknown>,
+  professionalId: string | null = null
 ): Promise<Appointment | null> {
   const appointmentId =
     asString(toolInput.appointmentId) ??
@@ -508,18 +509,26 @@ async function resolveAppointmentByReference(
     null;
 
   if (appointmentId) {
-    const result = await pool.query<Appointment>(
-      'SELECT * FROM appointments WHERE id = $1 AND company_id = $2 LIMIT 1',
-      [appointmentId, companyId]
-    );
+    const values: unknown[] = [appointmentId, companyId];
+    let query = 'SELECT * FROM appointments WHERE id = $1 AND company_id = $2';
+    if (professionalId) {
+      values.push(professionalId);
+      query += ' AND professional_id = $3';
+    }
+    query += ' LIMIT 1';
+    const result = await pool.query<Appointment>(query, values);
     return result.rows[0] ?? null;
   }
 
   if (eventId) {
-    const result = await pool.query<Appointment>(
-      'SELECT * FROM appointments WHERE google_event_id = $1 AND company_id = $2 ORDER BY created_at DESC LIMIT 1',
-      [eventId, companyId]
-    );
+    const values: unknown[] = [eventId, companyId];
+    let query = 'SELECT * FROM appointments WHERE google_event_id = $1 AND company_id = $2';
+    if (professionalId) {
+      values.push(professionalId);
+      query += ' AND professional_id = $3';
+    }
+    query += ' ORDER BY created_at DESC LIMIT 1';
+    const result = await pool.query<Appointment>(query, values);
     return result.rows[0] ?? null;
   }
 
@@ -554,7 +563,7 @@ export async function executeTool(
       }
 
       case 'google_calendar_book': {
-        if (context.companyId && !context.professionalId && !hasSchedulingHints(toolInput)) {
+        if (context.companyId && !context.professionalId) {
           return JSON.stringify({
             error: 'No hay profesional asignado a esta conversación. No se pueden gestionar turnos automáticamente. Contactar al administrador para asignar un profesional.',
           });
@@ -642,7 +651,7 @@ export async function executeTool(
       }
 
       case 'google_calendar_reprogram': {
-        if (context.companyId && !context.professionalId && !hasSchedulingHints(toolInput)) {
+        if (context.companyId && !context.professionalId) {
           return JSON.stringify({
             error: 'No hay profesional asignado a esta conversación. No se pueden gestionar turnos automáticamente. Contactar al administrador para asignar un profesional.',
           });
@@ -652,7 +661,7 @@ export async function executeTool(
           return JSON.stringify({ error: 'Company context required for reprogramming' });
         }
 
-        const appointment = await resolveAppointmentByReference(context.companyId, toolInput);
+        const appointment = await resolveAppointmentByReference(context.companyId, toolInput, context.professionalId);
         if (!appointment) {
           return JSON.stringify({ error: 'Appointment not found' });
         }
@@ -740,7 +749,7 @@ export async function executeTool(
       }
 
       case 'google_calendar_cancel': {
-        if (context.companyId && !context.professionalId && !hasSchedulingHints(toolInput)) {
+        if (context.companyId && !context.professionalId) {
           return JSON.stringify({
             error: 'No hay profesional asignado a esta conversación. No se pueden gestionar turnos automáticamente. Contactar al administrador para asignar un profesional.',
           });
@@ -754,7 +763,7 @@ export async function executeTool(
           return JSON.stringify(result);
         }
 
-        const appointment = await resolveAppointmentByReference(context.companyId, toolInput);
+        const appointment = await resolveAppointmentByReference(context.companyId, toolInput, context.professionalId);
         if (!appointment) {
           return JSON.stringify({ error: 'Appointment not found' });
         }
