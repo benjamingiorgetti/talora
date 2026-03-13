@@ -45,6 +45,7 @@ type GoogleCalendarsPayload = {
     background_color: string | null;
   }>;
   professionals: GoogleCalendarProfessionalStatus[];
+  connected_calendar_count: number;
 };
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:3001";
@@ -88,11 +89,15 @@ export function ProfessionalsSettingsPage() {
 
   const stats = useMemo(() => {
     const rows = googleCalendars?.professionals ?? [];
+    const isConfigured = googleCalendars?.configured ?? false;
+    const dbConnected = rows.filter((professional) => professional.is_connected).length;
     return {
       total: rows.length,
-      connected: rows.filter((professional) => professional.is_connected).length,
-      pending: rows.filter((professional) => !professional.is_connected).length,
-      calendarsVisible: googleCalendars?.calendars.length ?? 0,
+      connected: isConfigured ? dbConnected : 0,
+      pending: isConfigured ? rows.length - dbConnected : rows.length,
+      calendarsVisible: isConfigured
+        ? (googleCalendars?.calendars.length || googleCalendars?.connected_calendar_count || 0)
+        : 0,
     };
   }, [googleCalendars]);
 
@@ -166,9 +171,12 @@ export function ProfessionalsSettingsPage() {
                 <AlertTriangle className="h-5 w-5" />
               </div>
               <div>
-                <p className="text-sm font-semibold text-slate-950">Falta configurar OAuth en el backend</p>
+                <p className="text-sm font-semibold text-slate-950">Google OAuth no configurado</p>
                 <p className="mt-2 max-w-2xl text-sm leading-6 text-slate-600">
-                  Esta pantalla está lista, pero el servidor todavía necesita `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET` y `GOOGLE_REDIRECT_URI` para poder conectar cuentas reales.
+                  El servidor necesita <code className="rounded bg-[#f0e4d0] px-1 py-0.5 text-xs">GOOGLE_CLIENT_ID</code>, <code className="rounded bg-[#f0e4d0] px-1 py-0.5 text-xs">GOOGLE_CLIENT_SECRET</code> y <code className="rounded bg-[#f0e4d0] px-1 py-0.5 text-xs">GOOGLE_REDIRECT_URI</code> en el archivo <code className="rounded bg-[#f0e4d0] px-1 py-0.5 text-xs">.env</code> del backend.
+                  {(googleCalendars.professionals ?? []).some((p) => p.is_connected)
+                    ? " Las conexiones existentes en la base de datos no funcionarán hasta que se configuren estas credenciales."
+                    : ""}
                 </p>
               </div>
             </div>
@@ -185,7 +193,9 @@ export function ProfessionalsSettingsPage() {
         <div className="grid gap-4 xl:grid-cols-2">
           {activeProfessionals.map((professional) => {
             const connection = connectionMap.get(professional.id);
-            const isConnected = Boolean(connection?.is_connected);
+            const hasDbConnection = Boolean(connection?.is_connected);
+            const isConnected = hasDbConnection && googleCalendars.configured;
+            const isStale = hasDbConnection && !googleCalendars.configured;
             const isBusy = disconnectingId === professional.id;
 
             return (
@@ -195,15 +205,21 @@ export function ProfessionalsSettingsPage() {
                     <div>
                       <div className="flex flex-wrap items-center gap-2">
                         <p className="text-xl font-semibold tracking-[-0.03em] text-slate-950">{professional.name}</p>
-                        <Badge className={isConnected ? "rounded-full border-[#d6e5d0] bg-[#f4fbf0] px-3 py-1 text-[#365240]" : "rounded-full border-[#efd7d7] bg-[#fff5f5] px-3 py-1 text-[#8a4f4f]"}>
-                          {isConnected ? "Conectado" : "Pendiente"}
+                        <Badge className={
+                          isConnected
+                            ? "rounded-full border-[#d6e5d0] bg-[#f4fbf0] px-3 py-1 text-[#365240]"
+                            : isStale
+                              ? "rounded-full border-[#f0ddba] bg-[#fff9ef] px-3 py-1 text-[#8d6525]"
+                              : "rounded-full border-[#efd7d7] bg-[#fff5f5] px-3 py-1 text-[#8a4f4f]"
+                        }>
+                          {isConnected ? "Conectado" : isStale ? "Inactivo" : "Pendiente"}
                         </Badge>
                       </div>
                       <p className="mt-2 text-sm text-slate-500">{professional.specialty || "Sin especialidad visible"}</p>
                     </div>
 
                     <div className="flex flex-wrap gap-2">
-                      {isConnected ? (
+                      {isConnected || isStale ? (
                         <Button
                           variant="outline"
                           onClick={() => void handleDisconnect(professional.id)}
@@ -213,12 +229,12 @@ export function ProfessionalsSettingsPage() {
                           {isBusy ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
                           Desconectar Google
                         </Button>
-                      ) : (
+                      ) : googleCalendars.configured ? (
                         <Button onClick={() => handleConnect(professional.id)} className="h-10 rounded-2xl px-3">
                           <Link2 className="mr-2 h-4 w-4" />
                           Conectar Google
                         </Button>
-                      )}
+                      ) : null}
                     </div>
                   </div>
 
@@ -230,7 +246,8 @@ export function ProfessionalsSettingsPage() {
                     <div className="rounded-[22px] border border-[#e6ebf3] bg-[#f7f9fd] px-4 py-4">
                       <p className="text-[11px] uppercase tracking-[0.18em] text-slate-400">Cuenta conectada</p>
                       <p className="mt-2 text-sm font-medium text-slate-900 break-all">
-                        {connection?.google_account_email ?? "Todavía no hay cuenta vinculada"}
+                        {connection?.google_account_email
+                          ?? (hasDbConnection ? "(email no registrado)" : "Todavía no hay cuenta vinculada")}
                       </p>
                     </div>
                   </div>
