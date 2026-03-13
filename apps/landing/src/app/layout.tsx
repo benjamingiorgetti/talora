@@ -15,7 +15,7 @@ const fraunces = Fraunces({
 });
 
 export const metadata: Metadata = {
-  title: "Talora - Turnos por WhatsApp con IA",
+  title: "Talora",
   description:
     "Automatiza la gestion de turnos de tu negocio con un agente de WhatsApp inteligente. Conecta Google Calendar, configura servicios y deja que tus clientes agenden solos.",
   openGraph: {
