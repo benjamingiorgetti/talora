@@ -13,6 +13,7 @@ import { LoadingSpinner } from "@/components/ui/loading-spinner";
 import { useAuth } from "@/lib/auth";
 import { cn } from "@/lib/utils";
 import { WorkspaceEmptyState, WorkspaceMetricCard, WorkspaceSectionHeader } from "@/components/workspace/chrome";
+import { WorkspaceErrorState } from "@/components/workspace/error-state";
 
 type WorkspaceAppointment = Appointment & {
   professional_name?: string | null;
@@ -42,12 +43,37 @@ function formatSlot(value: string) {
 export default function WorkspaceDashboardPage() {
   const pathname = usePathname();
   const router = useRouter();
-  const { activeCompanyId } = useAuth();
-  const { data: metrics } = useSWR(companyScopedKey("/dashboard/metrics", activeCompanyId), companyScopedFetcher<DashboardMetrics>);
-  const { data: company } = useSWR(companyScopedKey("/companies/current", activeCompanyId), companyScopedFetcher<Company>);
-  const { data: appointments } = useSWR(companyScopedKey("/appointments", activeCompanyId), companyScopedFetcher<WorkspaceAppointment[]>);
-  const { data: conversations } = useSWR(companyScopedKey("/conversations?page=1&limit=8", activeCompanyId), companyScopedFetcher<Conversation[]>);
-  const { data: instances } = useSWR(companyScopedKey("/instances", activeCompanyId), companyScopedFetcher<WhatsAppInstance[]>);
+  const { activeCompanyId, session } = useAuth();
+  const isProfessional = session?.role === "professional";
+  const professionalId = session?.professionalId ?? null;
+
+  const appointmentsPath = isProfessional && professionalId
+    ? `/appointments?professional_id=${professionalId}`
+    : "/appointments";
+  const conversationsPath = isProfessional && professionalId
+    ? `/conversations?page=1&limit=8&state=active&professional_id=${professionalId}`
+    : "/conversations?page=1&limit=8";
+
+  const { data: metrics, error: metricsError, mutate: mutateMetrics } = useSWR(
+    companyScopedKey("/dashboard/metrics", activeCompanyId),
+    companyScopedFetcher<DashboardMetrics>
+  );
+  const { data: company } = useSWR(
+    companyScopedKey("/companies/current", activeCompanyId),
+    companyScopedFetcher<Company>
+  );
+  const { data: appointments, error: appointmentsError, mutate: mutateAppointments } = useSWR(
+    companyScopedKey(appointmentsPath, activeCompanyId),
+    companyScopedFetcher<WorkspaceAppointment[]>
+  );
+  const { data: conversations } = useSWR(
+    companyScopedKey(conversationsPath, activeCompanyId),
+    companyScopedFetcher<Conversation[]>
+  );
+  const { data: instances } = useSWR(
+    isProfessional ? null : companyScopedKey("/instances", activeCompanyId),
+    companyScopedFetcher<WhatsAppInstance[]>
+  );
   const today = useMemo(() => new Date(), []);
 
   const upcomingAppointments = useMemo(() => {
@@ -79,15 +105,24 @@ export default function WorkspaceDashboardPage() {
     }
   }, [pathname, router]);
 
-  const isLoading = !metrics && !appointments;
+  const hasError = metricsError || appointmentsError;
+  if (hasError) {
+    return (
+      <WorkspaceErrorState
+        className="min-h-[50vh]"
+        onRetry={() => { void mutateMetrics(); void mutateAppointments(); }}
+      />
+    );
+  }
 
+  const isLoading = !metrics && !appointments;
   if (isLoading) {
     return <LoadingSpinner className="min-h-[70vh]" />;
   }
 
   const dashboardMetrics = [
     {
-      label: "Turnos de hoy",
+      label: isProfessional ? "Mis turnos de hoy" : "Turnos de hoy",
       value: formatMetric(todayAppointments.length),
       tone: "lilac" as const,
       icon: CalendarDays,
@@ -118,44 +153,46 @@ export default function WorkspaceDashboardPage() {
     action: string;
     icon: typeof CalendarCheck2;
     tone: "sky" | "sand" | "mint";
-  }> = [
-    !company?.calendar_connected
-      ? {
-          key: "calendar",
-          label: "Agenda",
-          title: "Google Calendar pendiente",
-          note: "La disponibilidad todavia no es confiable para operar con agenda automatica.",
-          href: "/calendar",
-          action: "Revisar agenda",
-          icon: CalendarCheck2,
-          tone: "sand" as const,
-        }
-      : null,
-    connectedInstances.length === 0
-      ? {
-          key: "whatsapp",
-          label: "WhatsApp",
-          title: "WhatsApp sin conexion",
-          note: "Todavia no hay una instancia conectada para atender mensajes reales.",
-          href: "/whatsapp",
-          action: "Abrir WhatsApp",
-          icon: MessageSquareText,
-          tone: "sand" as const,
-        }
-      : null,
-    pausedConversations.length > 0
-      ? {
-          key: "review",
-          label: "Seguimiento",
-          title: `${pausedConversations.length} conversacion(es) en revision`,
-          note: "Hay conversaciones pausadas esperando intervencion humana.",
-          href: "/whatsapp",
-          action: "Revisar casos",
-          icon: Clock3,
-          tone: "sky" as const,
-        }
-      : null,
-  ].filter((item): item is NonNullable<typeof item> => item !== null);
+  }> = isProfessional
+    ? []
+    : [
+        !company?.calendar_connected
+          ? {
+              key: "calendar",
+              label: "Agenda",
+              title: "Google Calendar pendiente",
+              note: "La disponibilidad todavia no es confiable para operar con agenda automatica.",
+              href: "/settings/professionals",
+              action: "Configurar agenda",
+              icon: CalendarCheck2,
+              tone: "sand" as const,
+            }
+          : null,
+        connectedInstances.length === 0
+          ? {
+              key: "whatsapp",
+              label: "WhatsApp",
+              title: "WhatsApp sin conexion",
+              note: "Todavia no hay una instancia conectada para atender mensajes reales.",
+              href: "/whatsapp",
+              action: "Abrir WhatsApp",
+              icon: MessageSquareText,
+              tone: "sand" as const,
+            }
+          : null,
+        pausedConversations.length > 0
+          ? {
+              key: "review",
+              label: "Seguimiento",
+              title: `${pausedConversations.length} conversacion(es) en revision`,
+              note: "Hay conversaciones pausadas esperando intervencion humana.",
+              href: "/whatsapp",
+              action: "Revisar casos",
+              icon: Clock3,
+              tone: "sky" as const,
+            }
+          : null,
+      ].filter((item): item is NonNullable<typeof item> => item !== null);
 
   return (
     <div className="mx-auto max-w-[1080px] space-y-6">
@@ -220,7 +257,7 @@ export default function WorkspaceDashboardPage() {
         <CardContent className="p-5 sm:p-6 lg:p-7">
           <WorkspaceSectionHeader
             eyebrow="Agenda"
-            title="Proximos turnos"
+            title={isProfessional ? "Mis proximos turnos" : "Proximos turnos"}
             description={
               upcomingAppointments.length > 0
                 ? `${todayAppointments.length} hoy · ${upcomingAppointments.length} visibles desde ahora.`
@@ -269,8 +306,12 @@ export default function WorkspaceDashboardPage() {
             ) : (
               <WorkspaceEmptyState
                 className="px-4 py-10"
-                title="Sin turnos proximos."
-                description="Cuando entren reservas, este panel va a mostrar lo siguiente que viene."
+                title={isProfessional ? "No tenes turnos proximos." : "Sin turnos proximos."}
+                description={
+                  isProfessional
+                    ? "Cuando el bot o tu admin agenden turnos para vos, van a aparecer aca."
+                    : "Cuando entren reservas, este panel va a mostrar lo siguiente que viene."
+                }
               />
             )}
           </div>

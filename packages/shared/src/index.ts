@@ -313,8 +313,21 @@ export interface ApiResponse<T> {
 }
 
 // --- WebSocket Events ---
+export type AppointmentWsPayload = {
+  id: string;
+  company_id: string;
+  professional_id: string | null;
+  client_name: string;
+  starts_at: string;
+  professional_name?: string | null;
+  service_name?: string | null;
+};
+
 export type WsEvent =
   | { type: 'instance:status'; payload: { id: string; status: WhatsAppInstance['status']; qr_code: string | null; phone_number: string | null; company_id?: string } }
   | { type: 'alert:new'; payload: Alert }
   | { type: 'conversation:updated'; payload: Pick<Conversation, 'id' | 'company_id' | 'instance_id' | 'professional_id' | 'last_message_at' | 'bot_paused' | 'archived_at' | 'archive_reason'> }
-  | { type: 'message:new'; payload: Message & { company_id?: string } };
+  | { type: 'message:new'; payload: Message & { company_id?: string } }
+  | { type: 'appointment:created'; payload: AppointmentWsPayload }
+  | { type: 'appointment:rescheduled'; payload: AppointmentWsPayload }
+  | { type: 'appointment:cancelled'; payload: AppointmentWsPayload };

@@ -18,6 +18,7 @@ import { LoadingSpinner } from "@/components/ui/loading-spinner";
 import { companyScopedFetcher, companyScopedKey } from "@/lib/api";
 import { useAuth } from "@/lib/auth";
 import { WorkspaceMetricCard, WorkspaceSectionHeader } from "@/components/workspace/chrome";
+import { WorkspaceErrorState } from "@/components/workspace/error-state";
 
 type AppointmentItem = Appointment & {
   professional_name?: string | null;
@@ -130,12 +131,12 @@ export default function WorkspaceCalendarPage() {
     return end;
   }, [weekStart]);
 
-  const { data: professionals } = useSWR(
+  const { data: professionals, error: professionalsError } = useSWR(
     companyScopedKey("/professionals", activeCompanyId),
     companyScopedFetcher<Professional[]>
   );
 
-  const { data: appointments } = useSWR<AppointmentItem[]>(
+  const { data: appointments, error: appointmentsError, mutate: mutateAppointments } = useSWR<AppointmentItem[]>(
     companyScopedKey(
       `/appointments?from=${encodeURIComponent(weekStart.toISOString())}&to=${encodeURIComponent(weekEnd.toISOString())}`,
       activeCompanyId
@@ -273,6 +274,10 @@ export default function WorkspaceCalendarPage() {
       setSelectedProfessionalId("all");
     }
   }, [activeProfessionals, selectedProfessionalId, sessionProfessionalId]);
+
+  if (professionalsError || appointmentsError) {
+    return <WorkspaceErrorState className="min-h-[50vh]" onRetry={() => { void mutateAppointments(); }} />;
+  }
 
   if (!professionals && !appointments) {
     return <LoadingSpinner className="min-h-[70vh]" />;

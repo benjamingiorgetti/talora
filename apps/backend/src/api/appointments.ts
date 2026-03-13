@@ -4,9 +4,26 @@ import { logger } from '../utils/logger';
 import { authMiddleware, getRequestCompanyId, getRequestProfessionalId, requireCompanyScope } from './middleware';
 import { bookSlot, checkSlot, deleteEvent, updateEvent } from '../calendar/operations';
 import { validateBody, createAppointmentSchema, reprogramAppointmentSchema } from './validation';
-import type { Appointment, Client, Professional, Service } from '@talora/shared';
+import type { Appointment, AppointmentWsPayload, Client, Professional, Service, WsEvent } from '@talora/shared';
+import { broadcast } from '../ws/server';
 
 export const appointmentsRouter = Router();
+
+function buildAppointmentWsPayload(
+  appointment: Appointment,
+  professionalName?: string | null,
+  serviceName?: string | null
+): AppointmentWsPayload {
+  return {
+    id: appointment.id,
+    company_id: appointment.company_id,
+    professional_id: appointment.professional_id,
+    client_name: appointment.client_name,
+    starts_at: appointment.starts_at,
+    professional_name: professionalName ?? null,
+    service_name: serviceName ?? null,
+  };
+}
 
 appointmentsRouter.use(authMiddleware, requireCompanyScope);
 
@@ -231,7 +248,15 @@ async function reprogramAppointment(
     ]
   );
 
-  return { status: 200 as const, body: { data: updated.rows[0] } };
+  const rescheduled = updated.rows[0];
+  if (rescheduled) {
+    broadcast({
+      type: 'appointment:rescheduled',
+      payload: buildAppointmentWsPayload(rescheduled, professional.name, service?.name),
+    });
+  }
+
+  return { status: 200 as const, body: { data: rescheduled } };
 }
 
 async function cancelAppointment(req: Parameters<typeof authMiddleware>[0], companyId: string, appointmentId: string) {
@@ -260,7 +285,15 @@ async function cancelAppointment(req: Parameters<typeof authMiddleware>[0], comp
     [appointmentId, companyId]
   );
 
-  return { status: 200 as const, body: { data: updated.rows[0] } };
+  const cancelled = updated.rows[0];
+  if (cancelled) {
+    broadcast({
+      type: 'appointment:cancelled',
+      payload: buildAppointmentWsPayload(cancelled, professional?.name),
+    });
+  }
+
+  return { status: 200 as const, body: { data: cancelled } };
 }
 
 appointmentsRouter.get('/', async (req, res) => {
@@ -421,7 +454,15 @@ appointmentsRouter.post('/', validateBody(createAppointmentSchema), async (req, 
       ]
     );
 
-    res.status(201).json({ data: result.rows[0] });
+    const created = result.rows[0];
+    res.status(201).json({ data: created });
+
+    if (created) {
+      broadcast({
+        type: 'appointment:created',
+        payload: buildAppointmentWsPayload(created, professional.name, service?.name),
+      });
+    }
   } catch (err) {
     logger.error('Error creating appointment:', err);
     res.status(500).json({ error: 'Failed to create appointment' });

@@ -2,10 +2,10 @@
 
 import Image from "next/image";
 import Link from "next/link";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { usePathname, useRouter } from "next/navigation";
-import useSWR from "swr";
-import type { Company } from "@talora/shared";
+import useSWR, { useSWRConfig } from "swr";
+import type { Company, WsEvent } from "@talora/shared";
 import {
   ArrowLeftRight,
   BookOpenText,
@@ -36,6 +36,7 @@ import { pickPreferredCompanyId } from "@/lib/company";
 import { Button } from "@/components/ui/button";
 import { CompanySwitcherDialog } from "@/components/company-switcher-dialog";
 import { cn } from "@/lib/utils";
+import { useWebSocket } from "@/hooks/useWebSocket";
 
 interface AppShellProps {
   children: React.ReactNode;
@@ -259,10 +260,17 @@ function SidebarIdentityCard({
   );
 }
 
+function formatAppointmentTime(startsAt: string) {
+  return new Date(startsAt).toLocaleTimeString("es-AR", { hour: "2-digit", minute: "2-digit" });
+}
+
 export function AppShell({ children }: AppShellProps) {
   const pathname = usePathname();
   const router = useRouter();
   const { activeCompanyId, exitImpersonation, logout, session, setActiveCompanyId } = useAuth();
+  const { mutate: globalMutate } = useSWRConfig();
+  const { lastEvent } = useWebSocket();
+  const lastEventRef = useRef<WsEvent | null>(null);
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const [mobileNavOpen, setMobileNavOpen] = useState(false);
   const [configOpen, setConfigOpen] = useState(false);
@@ -272,6 +280,46 @@ export function AppShell({ children }: AppShellProps) {
     session?.role === "superadmin" ? "/companies" : null,
     fetcher
   );
+
+  // Global WebSocket listener: show toasts for appointment events and revalidate SWR caches
+  useEffect(() => {
+    if (!lastEvent || lastEvent === lastEventRef.current) return;
+    lastEventRef.current = lastEvent;
+
+    const isAppointmentEvent =
+      lastEvent.type === "appointment:created" ||
+      lastEvent.type === "appointment:rescheduled" ||
+      lastEvent.type === "appointment:cancelled";
+
+    if (isAppointmentEvent) {
+      const payload = lastEvent.payload;
+      const time = formatAppointmentTime(payload.starts_at);
+      const professional = payload.professional_name ?? "Profesional";
+
+      if (lastEvent.type === "appointment:created") {
+        toast.success(`Nuevo turno: ${payload.client_name} a las ${time} con ${professional}`);
+      } else if (lastEvent.type === "appointment:rescheduled") {
+        toast.info(`Turno reprogramado: ${payload.client_name} a las ${time} con ${professional}`);
+      } else {
+        toast.info(`Turno cancelado: ${payload.client_name} con ${professional}`);
+      }
+
+      // Revalidate appointment-related caches across all pages
+      void globalMutate((key) => {
+        if (!key) return false;
+        const keyStr = Array.isArray(key) ? key[0] : String(key);
+        return keyStr.includes("/appointments") || keyStr.includes("/dashboard/metrics");
+      });
+    }
+
+    if (lastEvent.type === "message:new" || lastEvent.type === "conversation:updated") {
+      void globalMutate((key) => {
+        if (!key) return false;
+        const keyStr = Array.isArray(key) ? key[0] : String(key);
+        return keyStr.includes("/conversations");
+      });
+    }
+  }, [lastEvent, globalMutate]);
 
   useEffect(() => {
     setConfigOpen(false);

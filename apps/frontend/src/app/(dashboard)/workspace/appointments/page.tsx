@@ -18,6 +18,7 @@ import { useAuth } from "@/lib/auth";
 import { LoadingSpinner } from "@/components/ui/loading-spinner";
 import { cn } from "@/lib/utils";
 import { WorkspaceEmptyState, WorkspaceMetricCard } from "@/components/workspace/chrome";
+import { WorkspaceErrorState } from "@/components/workspace/error-state";
 
 type AppointmentRow = Appointment & {
   professional_name?: string | null;
@@ -64,9 +65,16 @@ function isToday(value: string) {
 export default function WorkspaceAppointmentsPage() {
   const pathname = usePathname();
   const router = useRouter();
-  const { activeCompanyId } = useAuth();
-  const { data: appointments, mutate } = useSWR(
-    companyScopedKey("/appointments", activeCompanyId),
+  const { activeCompanyId, session } = useAuth();
+  const isProfessional = session?.role === "professional";
+  const professionalId = session?.professionalId ?? null;
+
+  const appointmentsPath = isProfessional && professionalId
+    ? `/appointments?professional_id=${professionalId}`
+    : "/appointments";
+
+  const { data: appointments, error: appointmentsError, mutate } = useSWR(
+    companyScopedKey(appointmentsPath, activeCompanyId),
     companyScopedFetcher<AppointmentRow[]>
   );
   const { data: professionals } = useSWR(
@@ -112,6 +120,10 @@ export default function WorkspaceAppointmentsPage() {
       router.replace("/appointments");
     }
   }, [pathname, router]);
+
+  if (appointmentsError) {
+    return <WorkspaceErrorState className="min-h-[50vh]" onRetry={() => { void mutate(); }} />;
+  }
 
   if (!appointments && !professionals) {
     return <LoadingSpinner className="min-h-[70vh]" />;
@@ -384,18 +396,21 @@ export default function WorkspaceAppointmentsPage() {
                   <TableRow className="hover:bg-transparent">
                     <TableCell colSpan={5} className="px-5 py-14 sm:px-6 sm:py-16">
                       <WorkspaceEmptyState
-                        title="Todavía no hay turnos cargados."
-                        description="Creá el primer turno manual o esperá a que la operación empiece a llenar esta vista."
+                        title={isProfessional ? "No tenes turnos asignados todavia." : "Todavia no hay turnos cargados."}
+                        description={
+                          isProfessional
+                            ? "Cuando el bot o tu admin agenden turnos para vos, van a aparecer aca."
+                            : "Crea el primer turno manual o espera a que la operacion empiece a llenar esta vista."
+                        }
+                        action={
+                          !isProfessional ? (
+                            <Button onClick={openCreatePanel} className="h-10 rounded-2xl px-4">
+                              <Plus className="mr-2 h-4 w-4" />
+                              Crear turno
+                            </Button>
+                          ) : undefined
+                        }
                       />
-                      <div className="mt-4 text-center">
-                        <Button
-                          onClick={openCreatePanel}
-                          className="h-10 rounded-2xl px-4"
-                        >
-                          <Plus className="mr-2 h-4 w-4" />
-                          Crear turno
-                        </Button>
-                      </div>
                     </TableCell>
                   </TableRow>
                 )}
