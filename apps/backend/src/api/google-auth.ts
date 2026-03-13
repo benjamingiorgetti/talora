@@ -233,6 +233,21 @@ googleAuthRouter.get('/google/calendars', authMiddleware, async (req, res) => {
         )
       : null;
 
+    let connectedCalendarCount = 0;
+    if (companyId && schema.hasRefreshToken) {
+      const countResult = await pool.query<{ count: string }>(
+        `SELECT COUNT(DISTINCT gcc.calendar_id)::text AS count
+         FROM google_calendar_connections gcc
+         JOIN professionals p ON p.id = gcc.professional_id
+         WHERE gcc.company_id = $1
+           AND gcc.is_active = true
+           AND p.is_active = true
+           AND gcc.refresh_token IS NOT NULL`,
+        [companyId]
+      );
+      connectedCalendarCount = Number(countResult.rows[0]?.count ?? 0);
+    }
+
     res.json({
       data: {
         configured,
@@ -240,6 +255,7 @@ googleAuthRouter.get('/google/calendars', authMiddleware, async (req, res) => {
         professional_id: professionalId ?? null,
         calendars,
         professionals: professionals?.rows ?? [],
+        connected_calendar_count: connectedCalendarCount,
       },
     });
   } catch (err) {
