@@ -6,7 +6,8 @@
     "dev": "bun --watch src/index.ts",
     "start": "bun src/index.ts",
     "migrate": "bun src/db/migrate.ts",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "test": "DATABASE_URL=postgresql://test:test@localhost/test JWT_SECRET=test-secret ADMIN_EMAIL=test@test.com ADMIN_PASSWORD=test EVOLUTION_API_URL=http://localhost:8080 EVOLUTION_API_KEY=test-key bun test"
   },
   "dependencies": {
     "@talora/shared": "workspace:*",
