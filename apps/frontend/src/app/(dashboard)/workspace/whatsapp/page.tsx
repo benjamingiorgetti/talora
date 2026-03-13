@@ -13,6 +13,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { cn } from "@/lib/utils";
 import { WorkspaceEmptyState } from "@/components/workspace/chrome";
+import { WorkspaceErrorState } from "@/components/workspace/error-state";
 import { useWebSocket } from "@/hooks/useWebSocket";
 
 type ConversationView = "active" | "archived";
@@ -38,7 +39,9 @@ export default function WorkspaceWhatsAppPage() {
   const pathname = usePathname();
   const router = useRouter();
   const { mutate: globalMutate } = useSWRConfig();
-  const { activeCompanyId } = useAuth();
+  const { activeCompanyId, session } = useAuth();
+  const isProfessional = session?.role === "professional";
+  const professionalId = session?.professionalId ?? null;
   const { lastEvent } = useWebSocket();
   const [view, setView] = useState<ConversationView>("active");
   const [search, setSearch] = useState("");
@@ -47,10 +50,11 @@ export default function WorkspaceWhatsAppPage() {
   const [sending, setSending] = useState(false);
   const [toggling, setToggling] = useState(false);
 
-  const activeConversationsKey = companyScopedKey("/conversations?page=1&limit=25&state=active", activeCompanyId);
-  const archivedConversationsKey = companyScopedKey("/conversations?page=1&limit=25&state=archived", activeCompanyId);
+  const professionalSuffix = isProfessional && professionalId ? `&professional_id=${professionalId}` : "";
+  const activeConversationsKey = companyScopedKey(`/conversations?page=1&limit=25&state=active${professionalSuffix}`, activeCompanyId);
+  const archivedConversationsKey = companyScopedKey(`/conversations?page=1&limit=25&state=archived${professionalSuffix}`, activeCompanyId);
 
-  const { data: activeConversations, mutate: mutateActiveConversations } = useSWR(
+  const { data: activeConversations, error: activeError, mutate: mutateActiveConversations } = useSWR(
     activeConversationsKey,
     companyScopedFetcher<Conversation[]>
   );
@@ -187,6 +191,10 @@ export default function WorkspaceWhatsAppPage() {
     }
   };
 
+  if (activeError) {
+    return <WorkspaceErrorState className="min-h-[50vh]" onRetry={() => { void mutateActiveConversations(); }} />;
+  }
+
   return (
     <div className="flex min-h-0 flex-1 flex-col">
       <Card className="overflow-hidden rounded-[28px] border-[#e6e7ec] bg-white shadow-none sm:rounded-[32px] lg:flex-1 lg:min-h-0">
@@ -291,7 +299,9 @@ export default function WorkspaceWhatsAppPage() {
                     title={view === "active" ? "No hay conversaciones activas." : "No hay conversaciones archivadas."}
                     description={
                       view === "active"
-                        ? "Cuando entren mensajes nuevos, van a aparecer aca."
+                        ? isProfessional
+                          ? "Las conversaciones con tus clientes aparecen aca cuando el bot las reciba."
+                          : "Cuando entren mensajes nuevos, van a aparecer aca."
                         : "Los resets y los chats sin actividad de 48 horas aparecen aca."
                     }
                     className="px-4 py-10"

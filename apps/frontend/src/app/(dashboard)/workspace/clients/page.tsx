@@ -10,13 +10,24 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { useAuth } from "@/lib/auth";
 import { WorkspaceEmptyState } from "@/components/workspace/chrome";
+import { WorkspaceErrorState } from "@/components/workspace/error-state";
 
 export default function WorkspaceClientsPage() {
   const pathname = usePathname();
   const router = useRouter();
-  const { activeCompanyId } = useAuth();
+  const { activeCompanyId, session } = useAuth();
+  const isProfessional = session?.role === "professional";
+  const professionalId = session?.professionalId ?? null;
   const [search, setSearch] = useState("");
-  const { data: clients } = useSWR(companyScopedKey("/clients", activeCompanyId), companyScopedFetcher<Client[]>);
+
+  const clientsPath = isProfessional && professionalId
+    ? `/clients?professional_id=${professionalId}`
+    : "/clients";
+
+  const { data: clients, error: clientsError, mutate } = useSWR(
+    companyScopedKey(clientsPath, activeCompanyId),
+    companyScopedFetcher<Client[]>
+  );
 
   useEffect(() => {
     setSearch("");
@@ -38,6 +49,10 @@ export default function WorkspaceClientsPage() {
       router.replace("/clients");
     }
   }, [pathname, router]);
+
+  if (clientsError) {
+    return <WorkspaceErrorState className="min-h-[50vh]" onRetry={() => { void mutate(); }} />;
+  }
 
   return (
     <div className="space-y-5 lg:space-y-6">
@@ -93,7 +108,7 @@ export default function WorkspaceClientsPage() {
 
               <div className="mt-5 grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
                 <div className="rounded-[22px] border border-[#e2e4ec] bg-[linear-gradient(180deg,#ffffff_0%,#f7f8fc_100%)] px-4 py-4">
-                  <p className="text-xs uppercase tracking-[0.16em] text-slate-400">Próximo turno</p>
+                  <p className="text-xs uppercase tracking-[0.16em] text-slate-400">Proximo turno</p>
                   <p className="mt-2 text-sm font-semibold text-slate-950">
                     {client.next_appointment_at
                       ? new Date(client.next_appointment_at).toLocaleString("es-AR", { day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" })
@@ -102,7 +117,7 @@ export default function WorkspaceClientsPage() {
                 </div>
                 <div className="rounded-[22px] border border-[#e2e4ec] bg-[linear-gradient(180deg,#ffffff_0%,#f7f8fc_100%)] px-4 py-4">
                   <p className="text-xs uppercase tracking-[0.16em] text-slate-400">Historial</p>
-                  <p className="mt-2 text-sm font-semibold text-slate-950">{client.recent_appointments?.length ?? 0} últimos visibles</p>
+                  <p className="mt-2 text-sm font-semibold text-slate-950">{client.recent_appointments?.length ?? 0} ultimos visibles</p>
                 </div>
                 <div className="rounded-[22px] border border-[#e2e4ec] bg-[linear-gradient(180deg,#ffffff_0%,#f7f8fc_100%)] px-4 py-4">
                   <p className="text-xs uppercase tracking-[0.16em] text-slate-400">Canal</p>
@@ -116,8 +131,12 @@ export default function WorkspaceClientsPage() {
 
       {displayClients.length === 0 && (
         <WorkspaceEmptyState
-          title="No hay clientes para mostrar."
-          description="Cuando entren conversaciones y turnos reales, esta vista va a empezar a construir contexto útil para el equipo."
+          title={isProfessional ? "No tenes clientes asignados todavia." : "No hay clientes para mostrar."}
+          description={
+            isProfessional
+              ? "Cuando el bot reciba mensajes de tus clientes, van a aparecer aca."
+              : "Cuando entren conversaciones y turnos reales, esta vista va a empezar a construir contexto util para el equipo."
+          }
           className="mx-auto max-w-2xl"
         />
       )}
