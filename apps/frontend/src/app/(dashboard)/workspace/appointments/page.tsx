@@ -82,6 +82,11 @@ export default function WorkspaceAppointmentsPage() {
   const [form, setForm] = useState(emptyForm);
   const [submitting, setSubmitting] = useState(false);
 
+  const closePanel = () => {
+    setPanelMode(null);
+    setForm(emptyForm);
+  };
+
   useEffect(() => {
     closePanel();
   }, [activeCompanyId]);
@@ -127,11 +132,6 @@ export default function WorkspaceAppointmentsPage() {
       notes: appointment.notes ?? "",
     });
     setPanelMode({ type: "reschedule", appointment });
-  };
-
-  const closePanel = () => {
-    setPanelMode(null);
-    setForm(emptyForm);
   };
 
   const handleSubmit = async () => {
