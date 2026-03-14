@@ -10,6 +10,8 @@ import { companyScopedFetcher, companyScopedKey } from "@/lib/api";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { LoadingSpinner } from "@/components/ui/loading-spinner";
+import { PageEntrance } from "@/components/ui/page-entrance";
+import { AnimatedList, AnimatedItem } from "@/components/ui/animated-list";
 import { useAuth } from "@/lib/auth";
 import { cn } from "@/lib/utils";
 import { WorkspaceEmptyState, WorkspaceMetricCard, WorkspaceSectionHeader } from "@/components/workspace/chrome";
@@ -195,19 +197,20 @@ export default function WorkspaceDashboardPage() {
       ].filter((item): item is NonNullable<typeof item> => item !== null);
 
   return (
-    <div className="mx-auto max-w-[1080px] space-y-6">
-      <section className="grid gap-3 sm:gap-4 md:grid-cols-3">
+    <PageEntrance className="mx-auto max-w-[1080px] space-y-6">
+      <AnimatedList className="grid gap-3 sm:gap-4 md:grid-cols-3">
         {dashboardMetrics.map((metric) => (
-          <WorkspaceMetricCard
-            key={metric.label}
-            label={metric.label}
-            value={metric.value}
-            caption={metric.caption}
-            icon={metric.icon}
-            tone={metric.tone}
-          />
+          <AnimatedItem key={metric.label}>
+            <WorkspaceMetricCard
+              label={metric.label}
+              value={metric.value}
+              caption={metric.caption}
+              icon={metric.icon}
+              tone={metric.tone}
+            />
+          </AnimatedItem>
         ))}
-      </section>
+      </AnimatedList>
 
       {operationalAlerts.length > 0 ? (
         <Card className="rounded-[28px] border-[#e6e7ec] bg-white shadow-none sm:rounded-[30px]">
@@ -317,6 +320,6 @@ export default function WorkspaceDashboardPage() {
           </div>
         </CardContent>
       </Card>
-    </div>
+    </PageEntrance>
   );
 }

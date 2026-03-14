@@ -4,8 +4,10 @@ import Image from "next/image";
 import Link from "next/link";
 import { useEffect, useRef, useState } from "react";
 import { usePathname, useRouter } from "next/navigation";
+import { AnimatePresence, motion } from "framer-motion";
 import useSWR, { useSWRConfig } from "swr";
 import type { Company, WsEvent } from "@talora/shared";
+import { fadeIn, slideInLeft } from "@/lib/motion";
 import {
   ArrowLeftRight,
   BookOpenText,
@@ -406,15 +408,25 @@ export function AppShell({ children }: AppShellProps) {
 
   return (
     <div className="min-h-dvh bg-[linear-gradient(180deg,#f8f9fc_0%,#f1f3f8_100%)] text-foreground">
-      {mobileNavOpen && (
-        <div
-          className="fixed inset-0 z-50 bg-slate-950/28 backdrop-blur-[2px] lg:hidden"
-          onClick={() => setMobileNavOpen(false)}
-        >
-          <aside
-            className="flex h-full w-[min(88vw,340px)] flex-col border-r border-[#e2e4ec] bg-[linear-gradient(180deg,#ffffff_0%,#f7f8fb_100%)] px-4 py-4 shadow-[0_24px_80px_rgba(15,23,42,0.14)]"
-            onClick={(event) => event.stopPropagation()}
+      <AnimatePresence>
+        {mobileNavOpen && (
+          <motion.div
+            key="mobile-nav-backdrop"
+            variants={fadeIn}
+            initial="hidden"
+            animate="visible"
+            exit="exit"
+            className="fixed inset-0 z-50 bg-slate-950/28 backdrop-blur-[2px] lg:hidden"
+            onClick={() => setMobileNavOpen(false)}
           >
+            <motion.aside
+              variants={slideInLeft}
+              initial="hidden"
+              animate="visible"
+              exit="exit"
+              className="flex h-full w-[min(88vw,340px)] flex-col border-r border-[#e2e4ec] bg-[linear-gradient(180deg,#ffffff_0%,#f7f8fb_100%)] px-4 py-4 shadow-[0_24px_80px_rgba(15,23,42,0.14)]"
+              onClick={(event) => event.stopPropagation()}
+            >
             <div className="flex items-center justify-between gap-3">
               <Link href={resolveDefaultRoute(session, activeCompanyId)} className="flex min-w-0 items-center gap-3">
                 <BrandLockup collapsed={false} />
@@ -476,9 +488,10 @@ export function AppShell({ children }: AppShellProps) {
                 Salir
               </Button>
             </div>
-          </aside>
-        </div>
-      )}
+            </motion.aside>
+          </motion.div>
+        )}
+      </AnimatePresence>
 
       <div className="mx-auto flex min-h-dvh w-full max-w-[1680px] gap-4 px-3 py-3 lg:px-6 lg:py-4">
         <aside
@@ -656,7 +669,7 @@ export function AppShell({ children }: AppShellProps) {
                 )}
 
                 <div className="hidden h-11 items-center gap-3 rounded-full border border-[#dde1ea] bg-white px-4 text-sm text-slate-600 sm:flex">
-                  <div className="h-2.5 w-2.5 rounded-full bg-slate-400" />
+                  <div className="h-2.5 w-2.5 rounded-full bg-slate-400 animate-status-pulse" />
                   <span className="hidden sm:inline">{session.email ?? "ops@talora"}</span>
                 </div>
               </div>

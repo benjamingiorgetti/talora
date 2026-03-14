@@ -8,6 +8,8 @@ import { NotebookPen, PhoneCall, Search, UserRound } from "lucide-react";
 import { companyScopedFetcher, companyScopedKey } from "@/lib/api";
 import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
+import { PageEntrance } from "@/components/ui/page-entrance";
+import { AnimatedList, AnimatedItem } from "@/components/ui/animated-list";
 import { useAuth } from "@/lib/auth";
 import { WorkspaceEmptyState } from "@/components/workspace/chrome";
 import { WorkspaceErrorState } from "@/components/workspace/error-state";
@@ -55,7 +57,7 @@ export default function WorkspaceClientsPage() {
   }
 
   return (
-    <div className="space-y-5 lg:space-y-6">
+    <PageEntrance className="space-y-5 lg:space-y-6">
       <div className="flex flex-wrap justify-end gap-3">
         <div className="relative w-full min-w-0 sm:w-[320px]">
           <Search className="pointer-events-none absolute left-4 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
@@ -68,9 +70,10 @@ export default function WorkspaceClientsPage() {
         </div>
       </div>
 
-      <div className="grid gap-4 lg:grid-cols-2">
+      <AnimatedList className="grid gap-4 lg:grid-cols-2">
         {displayClients.map((client, index) => (
-          <Card key={client.id} className="interactive-soft rounded-[24px] border-[#e6e7ec] bg-white shadow-none sm:rounded-[28px]">
+          <AnimatedItem key={client.id}>
+            <Card className="interactive-soft rounded-[24px] border-[#e6e7ec] bg-white shadow-none sm:rounded-[28px]">
             <CardContent className="p-5 sm:p-6">
               <div className="flex items-start gap-4">
                 <div
@@ -125,9 +128,10 @@ export default function WorkspaceClientsPage() {
                 </div>
               </div>
             </CardContent>
-          </Card>
+            </Card>
+          </AnimatedItem>
         ))}
-      </div>
+      </AnimatedList>
 
       {displayClients.length === 0 && (
         <WorkspaceEmptyState
@@ -140,6 +144,6 @@ export default function WorkspaceClientsPage() {
           className="mx-auto max-w-2xl"
         />
       )}
-    </div>
+    </PageEntrance>
   );
 }
