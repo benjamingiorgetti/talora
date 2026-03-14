@@ -213,6 +213,7 @@ export async function handleTestMessage(
                 phoneNumber: testContext.phoneNumber,
                 contactName: testContext.contactName,
                 professionalId,
+                isTestContext: true,
               }),
               config.toolTimeoutMs,
               `test-tool:${toolCall.function.name}`

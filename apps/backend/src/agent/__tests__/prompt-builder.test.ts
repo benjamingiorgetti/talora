@@ -32,8 +32,6 @@ const {
   getSystemVariableValues,
   buildSystemPrompt,
   getResolvedPreview,
-  SECURITY_PREAMBLE,
-  SECURITY_SUFFIX,
 } = await import('../prompt-builder');
 
 // ──────────────────────────────────────────────────────────
@@ -147,22 +145,6 @@ describe('getSystemVariableValues', () => {
 // ──────────────────────────────────────────────────────────
 
 describe('buildSystemPrompt', () => {
-  it('should always start with the opening text of SECURITY_PREAMBLE', () => {
-    const result = buildSystemPrompt(makeBaseCtx());
-
-    // buildSystemPrompt resolves {{variables}} inside SECURITY_PREAMBLE itself
-    // (e.g. {{recentBookingsSummary}}), so the raw constant won't match verbatim.
-    // We verify the invariant portion that precedes any placeholder.
-    const preamblePrefix = SECURITY_PREAMBLE.split('{{')[0];
-    expect(result.startsWith(preamblePrefix)).toBe(true);
-  });
-
-  it('should always end with SECURITY_SUFFIX', () => {
-    const result = buildSystemPrompt(makeBaseCtx());
-
-    expect(result.endsWith(SECURITY_SUFFIX)).toBe(true);
-  });
-
   it('should replace {{variable}} with a custom variable default value', () => {
     const customVar = makeCustomVariable({ key: 'miVariable', default_value: 'valorDefecto' });
     const ctx = makeBaseCtx({
@@ -217,16 +199,12 @@ describe('buildSystemPrompt', () => {
     expect(result).not.toContain('{{safe}}');
   });
 
-  it('should produce only preamble + suffix when systemPrompt is empty', () => {
+  it('should return empty string when systemPrompt is empty', () => {
     const ctx = makeBaseCtx({ systemPrompt: '' });
 
     const result = buildSystemPrompt(ctx);
 
-    // The only non-preamble/suffix content would come from systemPrompt.
-    // With an empty prompt the full string equals preamble + suffix
-    // (after variable substitution of any placeholders inside the preamble itself).
-    expect(result.startsWith(SECURITY_PREAMBLE.split('{{')[0])).toBe(true);
-    expect(result.endsWith(SECURITY_SUFFIX)).toBe(true);
+    expect(result).toBe('');
   });
 
   it('should apply variableOverrides over system and custom variable values', () => {
