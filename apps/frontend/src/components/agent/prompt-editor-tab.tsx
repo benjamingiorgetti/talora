@@ -12,7 +12,7 @@ import { Button } from "@/components/ui/button";
 import { FileText, Eye, EyeOff } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { AnimatePresence, motion } from "framer-motion";
-import { Panel, PanelGroup, PanelResizeHandle } from "react-resizable-panels";
+import { Panel, Group as PanelGroup, Separator as PanelResizeHandle } from "react-resizable-panels";
 
 function highlightVariables(text: string) {
   // Split text around {{variable}} patterns
@@ -97,7 +97,7 @@ export function PromptEditorTab() {
       </div>
 
       {/* Main layout */}
-      <PanelGroup direction="horizontal" autoSaveId="prompt-editor" className="flex-1">
+      <PanelGroup orientation="horizontal" id="prompt-editor" className="flex-1">
         <Panel defaultSize={60} minSize={30}>
           <AnimatePresence mode="wait">
             {showResolved ? (
