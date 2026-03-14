@@ -12,6 +12,14 @@ import { useAuth } from "@/lib/auth";
 import { RequireAdminAccess } from "@/components/role-guards";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger,
+} from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -146,6 +154,7 @@ export default function SuperadminCompaniesPage() {
   const [serviceEdits, setServiceEdits] = useState<Record<string, ServiceEditDraft>>({});
   const [instanceQr, setInstanceQr] = useState<Record<string, string | null>>({});
   const [activeTab, setActiveTab] = useState("general");
+  const [createDialogOpen, setCreateDialogOpen] = useState(false);
 
   useEffect(() => {
     if (activeCompanyId && activeCompanyId !== selectedCompanyId) {
@@ -190,18 +199,6 @@ export default function SuperadminCompaniesPage() {
     companyScope ? `/auth/google/calendars?${companyScope}` : null,
     fetcher
   );
-
-  const totals = useMemo(() => {
-    return (companies ?? []).reduce(
-      (acc, company) => {
-        acc.professionals += company.professional_count ?? 0;
-        acc.services += company.service_count ?? 0;
-        acc.ready += company.setup_ready ? 1 : 0;
-        return acc;
-      },
-      { professionals: 0, services: 0, ready: 0 }
-    );
-  }, [companies]);
 
   const refreshSelectedWorkspace = useCallback(async () => {
     await Promise.all([
@@ -311,6 +308,7 @@ export default function SuperadminCompaniesPage() {
       setSelectedCompanyId(response.data.company.id);
       setActiveCompanyId(response.data.company.id);
       setCompanyForm(emptyCompany);
+      setCreateDialogOpen(false);
       setActiveTab("whatsapp");
       toast.success("Empresa creada. Conecta WhatsApp para empezar.");
     } catch (error) {
@@ -567,58 +565,29 @@ export default function SuperadminCompaniesPage() {
 
   return (
     <div className="space-y-6">
-      {/* Top: summary + create form */}
-      <section className="grid gap-4 xl:grid-cols-[1.2fr_0.8fr]">
-        <Card className="rounded-[30px] border-[#e9dfd2] bg-white shadow-none">
-          <CardContent className="p-5 sm:p-6">
-            <div className="flex flex-wrap items-end justify-between gap-3">
-              <div>
-                <p className="text-[11px] uppercase tracking-[0.22em] text-slate-400">Cuentas</p>
-                <h2 className="mt-2 text-2xl font-semibold tracking-[-0.04em] text-slate-950">Empresas activas</h2>
-              </div>
-              <span className="rounded-full border border-[#eadfce] bg-[#fcfaf6] px-3 py-1.5 text-xs font-semibold text-slate-600">
-                {companies?.length ?? 0} seleccionables
-              </span>
-            </div>
-
-            <div className="mt-5 grid gap-4 md:grid-cols-4">
-              {[
-                { label: "Empresas", value: companies?.length ?? 0 },
-                { label: "Listas", value: totals.ready },
-                { label: "Profesionales", value: totals.professionals },
-                { label: "Servicios", value: totals.services },
-              ].map((item) => (
-                <Card key={item.label} className="rounded-[24px] border-[#eadfce] bg-white shadow-none">
-                  <CardContent className="p-5">
-                    <p className="text-xs uppercase tracking-[0.18em] text-slate-400">{item.label}</p>
-                    <p className="mt-3 text-3xl font-semibold tracking-[-0.05em] text-slate-950">{item.value}</p>
-                  </CardContent>
-                </Card>
-              ))}
-            </div>
-          </CardContent>
-        </Card>
-
-        <Card className="rounded-[30px] border-[#e9dfd2] bg-white shadow-none">
-          <CardContent className="p-7">
-            <div className="flex items-center gap-3">
-              <div className="flex h-12 w-12 items-center justify-center rounded-[20px] bg-[#17352d] text-white">
-                <Plus className="h-5 w-5" />
-              </div>
-              <div>
-                <h3 className="text-xl font-semibold tracking-[-0.03em] text-slate-950">Crear nueva empresa</h3>
-              </div>
-            </div>
-
-            <div className="mt-6 grid gap-4">
+      {/* Top: create button */}
+      <div className="flex justify-end">
+        <Dialog open={createDialogOpen} onOpenChange={setCreateDialogOpen}>
+          <DialogTrigger asChild>
+            <Button className="h-11 rounded-2xl bg-[#17352d] px-5 hover:bg-[#21453a]">
+              <Plus className="mr-2 h-4 w-4" />
+              Crear empresa
+            </Button>
+          </DialogTrigger>
+          <DialogContent className="rounded-[28px] sm:max-w-[480px]">
+            <DialogHeader>
+              <DialogTitle>Crear nueva empresa</DialogTitle>
+              <DialogDescription>Completa los datos basicos para la nueva cuenta.</DialogDescription>
+            </DialogHeader>
+            <div className="grid gap-4 py-2">
               <div className="space-y-2">
                 <Label>Empresa</Label>
-                <Input value={companyForm.name} onChange={(event) => setCompanyForm((current) => ({ ...current, name: event.target.value }))} className="h-11 rounded-2xl border-[#eadfcd]" placeholder="Clinica Armonia Dental" />
+                <Input value={companyForm.name} onChange={(event) => setCompanyForm((current) => ({ ...current, name: event.target.value }))} className="h-11 rounded-2xl border-[#dde1ea]" placeholder="Clinica Armonia Dental" />
               </div>
               <div className="space-y-2">
                 <Label>Rubro</Label>
                 <Select value={companyForm.industry} onValueChange={(value) => setCompanyForm((current) => ({ ...current, industry: value }))}>
-                  <SelectTrigger className="h-11 rounded-2xl border-[#eadfcd]">
+                  <SelectTrigger className="h-11 rounded-2xl border-[#dde1ea]">
                     <SelectValue placeholder="Selecciona un vertical" />
                   </SelectTrigger>
                   <SelectContent>
@@ -632,31 +601,30 @@ export default function SuperadminCompaniesPage() {
               </div>
               <div className="space-y-2">
                 <Label>WhatsApp principal</Label>
-                <Input value={companyForm.whatsapp} onChange={(event) => setCompanyForm((current) => ({ ...current, whatsapp: event.target.value }))} className="h-11 rounded-2xl border-[#eadfcd]" placeholder="+54 9 11..." />
+                <Input value={companyForm.whatsapp} onChange={(event) => setCompanyForm((current) => ({ ...current, whatsapp: event.target.value }))} className="h-11 rounded-2xl border-[#dde1ea]" placeholder="+54 9 11..." />
               </div>
               <div className="grid gap-4 md:grid-cols-2">
                 <div className="space-y-2">
                   <Label>Admin nombre</Label>
-                  <Input value={companyForm.adminFullName} onChange={(event) => setCompanyForm((current) => ({ ...current, adminFullName: event.target.value }))} className="h-11 rounded-2xl border-[#eadfcd]" placeholder="Juliana Perez" />
+                  <Input value={companyForm.adminFullName} onChange={(event) => setCompanyForm((current) => ({ ...current, adminFullName: event.target.value }))} className="h-11 rounded-2xl border-[#dde1ea]" placeholder="Juliana Perez" />
                 </div>
                 <div className="space-y-2">
                   <Label>Admin email</Label>
-                  <Input value={companyForm.adminEmail} onChange={(event) => setCompanyForm((current) => ({ ...current, adminEmail: event.target.value }))} className="h-11 rounded-2xl border-[#eadfcd]" placeholder="equipo@clinica.com" />
+                  <Input value={companyForm.adminEmail} onChange={(event) => setCompanyForm((current) => ({ ...current, adminEmail: event.target.value }))} className="h-11 rounded-2xl border-[#dde1ea]" placeholder="equipo@clinica.com" />
                 </div>
               </div>
               <div className="space-y-2">
                 <Label>Password temporal</Label>
-                <Input type="password" value={companyForm.adminPassword} onChange={(event) => setCompanyForm((current) => ({ ...current, adminPassword: event.target.value }))} className="h-11 rounded-2xl border-[#eadfcd]" placeholder="••••••••" />
+                <Input type="password" value={companyForm.adminPassword} onChange={(event) => setCompanyForm((current) => ({ ...current, adminPassword: event.target.value }))} className="h-11 rounded-2xl border-[#dde1ea]" placeholder="••••••••" />
               </div>
-
-              <Button disabled={creatingCompany} onClick={handleCreateCompany} className="mt-2 h-11 rounded-2xl bg-[#17352d] hover:bg-[#21453a]">
+              <Button disabled={creatingCompany} onClick={() => void handleCreateCompany()} className="mt-2 h-11 rounded-2xl bg-[#17352d] hover:bg-[#21453a]">
                 <Plus className="mr-2 h-4 w-4" />
                 {creatingCompany ? "Creando..." : "Crear empresa"}
               </Button>
             </div>
-          </CardContent>
-        </Card>
-      </section>
+          </DialogContent>
+        </Dialog>
+      </div>
 
       {/* Company list + detail panel */}
       {(companies?.length ?? 0) === 0 ? (
@@ -673,6 +641,10 @@ export default function SuperadminCompaniesPage() {
               <p className="mt-4 max-w-lg text-pretty text-sm leading-7 text-slate-500">
                 Completa los datos basicos y despues segui con WhatsApp, equipo y servicios.
               </p>
+              <Button onClick={() => setCreateDialogOpen(true)} className="mt-6 h-11 rounded-2xl bg-[#17352d] px-5 hover:bg-[#21453a]">
+                <Plus className="mr-2 h-4 w-4" />
+                Crear empresa
+              </Button>
             </div>
           </CardContent>
         </Card>

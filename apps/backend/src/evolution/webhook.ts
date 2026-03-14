@@ -249,6 +249,16 @@ export async function handleMessagesUpsert(body: EvolutionWebhookBody) {
 
   const instance = instanceResult.rows[0];
 
+  // Check if bot is enabled for this company
+  const companyResult = await pool.query<{ bot_enabled: boolean }>(
+    'SELECT bot_enabled FROM companies WHERE id = $1',
+    [instance.company_id]
+  );
+  if (companyResult.rows[0]?.bot_enabled === false) {
+    logger.info(`Bot disabled for company ${instance.company_id}, ignoring message from ${phone}`);
+    return;
+  }
+
   // Update known instances cache
   knownInstances.add(instanceName);
 
