@@ -51,6 +51,15 @@ export const slideFromRight: Variants = {
   },
 };
 
+export const slideFromRightSpring: Variants = {
+  hidden: { opacity: 0, x: 48 },
+  visible: {
+    opacity: 1,
+    x: 0,
+    transition: { type: "spring", bounce: 0.3, duration: 0.7 },
+  },
+};
+
 export const float = {
   y: [-6, 6],
   transition: {
