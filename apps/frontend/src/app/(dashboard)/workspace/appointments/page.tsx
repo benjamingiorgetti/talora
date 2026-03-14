@@ -196,7 +196,7 @@ export default function WorkspaceAppointmentsPage() {
 
   return (
     <>
-      <div className="space-y-5 lg:space-y-6">
+      <div className="min-h-0 flex-1 overflow-y-auto space-y-5 lg:space-y-6">
         <div className="flex flex-wrap justify-end gap-3">
           <Button
             variant="outline"

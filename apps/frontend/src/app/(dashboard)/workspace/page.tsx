@@ -195,7 +195,7 @@ export default function WorkspaceDashboardPage() {
       ].filter((item): item is NonNullable<typeof item> => item !== null);
 
   return (
-    <div className="mx-auto max-w-[1080px] space-y-6">
+    <div className="mx-auto min-h-0 flex-1 overflow-y-auto max-w-[1080px] space-y-6">
       <section className="grid gap-3 sm:gap-4 md:grid-cols-3">
         {dashboardMetrics.map((metric) => (
           <WorkspaceMetricCard
