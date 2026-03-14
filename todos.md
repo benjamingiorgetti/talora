@@ -118,6 +118,11 @@ _(vacío — nada en progreso activo)_
   - Contexto: cortado del PR de favicon/SEO por scope. Cada archivo es 10-15 líneas. Más valioso cuando existan más páginas públicas (landing, pricing).
   - Archivos: `apps/frontend/src/app/sitemap.ts`, `apps/frontend/src/app/manifest.ts`, `apps/frontend/src/components/seo/json-ld.tsx` + importar en layout.tsx.
 
+- [ ] `SEO-1 · Agregar sitemap.ts, manifest.ts y JSON-LD structured data`
+  - Resultado esperado: sitemap.xml lista URLs públicas para Google, manifest.json habilita PWA install, JSON-LD muestra rich results en search.
+  - Contexto: cortado del PR de favicon/SEO por scope. Cada archivo es 10-15 líneas. Más valioso cuando existan más páginas públicas (landing, pricing).
+  - Archivos: `apps/frontend/src/app/sitemap.ts`, `apps/frontend/src/app/manifest.ts`, `apps/frontend/src/components/seo/json-ld.tsx` + importar en layout.tsx.
+
 ## Reglas de uso
 - `Done` solo se usa para trabajo validado con evidencia objetiva o prueba real.
 - Si algo está implementado pero no probado end-to-end, va a `Built / Unvalidated`.
