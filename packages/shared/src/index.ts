@@ -346,5 +346,4 @@ export type WsEvent =
   | { type: 'appointment:created'; payload: AppointmentWsPayload }
   | { type: 'appointment:confirmed'; payload: AppointmentWsPayload }
   | { type: 'appointment:rescheduled'; payload: AppointmentWsPayload }
-  | { type: 'appointment:cancelled'; payload: AppointmentWsPayload }
-  | { type: 'appointment:confirmed'; payload: AppointmentWsPayload };
+  | { type: 'appointment:cancelled'; payload: AppointmentWsPayload };
