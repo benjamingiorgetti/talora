@@ -147,6 +147,7 @@ Setup y rutas nuevas importantes:
 - Route-specific white screens can also come from invalid nested interactive HTML such as `button > button`; check the rendered structure before chasing fetch logic.
 - Do not mark work as `Done` in `todos.md` unless it has real validation or objective evidence.
 - For this repo, "implemented" and "vendible" are different states. Prefer proving real flows over adding more surfaces.
+- Convention: in React components, declare all functions BEFORE any `useEffect` that references them, and BEFORE any early return. `const fn = () => {...}` after an early `if (!x) return` causes a Temporal Dead Zone crash if a `useEffect` above the return references `fn`. Audited 2025-03: 0 violations found, but enforce going forward.
 
 ## gstack
 
