@@ -678,6 +678,9 @@ END $$;
 
 CREATE INDEX IF NOT EXISTS idx_conversations_active_by_company
   ON conversations(company_id, archived_at, last_message_at DESC);
+
+CREATE UNIQUE INDEX IF NOT EXISTS idx_agents_unique_company
+  ON agents(company_id);
 `;
 
 async function run() {
