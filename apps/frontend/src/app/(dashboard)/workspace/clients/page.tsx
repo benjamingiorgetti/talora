@@ -104,7 +104,7 @@ export default function WorkspaceClientsPage() {
   }
 
   return (
-    <PageEntrance className="space-y-5 lg:space-y-6">
+    <PageEntrance className="min-h-0 flex-1 overflow-y-auto space-y-5 lg:space-y-6">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <Dialog open={createOpen} onOpenChange={setCreateOpen}>
           <DialogTrigger asChild>
@@ -181,6 +181,7 @@ export default function WorkspaceClientsPage() {
             </DialogFooter>
           </DialogContent>
         </Dialog>
+
 
         <div className="relative w-full min-w-0 sm:w-[320px]">
           <Search className="pointer-events-none absolute left-4 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />

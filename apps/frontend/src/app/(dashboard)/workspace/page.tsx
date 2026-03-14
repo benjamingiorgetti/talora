@@ -251,7 +251,7 @@ export default function WorkspaceDashboardPage() {
       : "bg-red-400";
 
   return (
-    <PageEntrance className="mx-auto max-w-[1080px] space-y-6">
+    <PageEntrance className="mx-auto min-h-0 flex-1 overflow-y-auto max-w-[1080px] space-y-6">
       {!isProfessional && (
         <div className="flex items-center gap-2 text-sm text-slate-500">
           <span className={cn("h-2 w-2 rounded-full", botDotColor)} />
