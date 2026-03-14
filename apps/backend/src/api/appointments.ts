@@ -525,23 +525,26 @@ appointmentsRouter.post('/:id/confirm', async (req, res) => {
     const updated = await pool.query<Appointment>(
       `UPDATE appointments
        SET status = 'confirmed', updated_at = NOW()
-       WHERE id = $1 AND company_id = $2
+       WHERE id = $1 AND company_id = $2 AND status = 'draft'
        RETURNING *`,
       [appointmentId, companyId]
     );
 
     const confirmed = updated.rows[0];
-    if (confirmed) {
-      const professional = confirmed.professional_id
-        ? await getProfessional(companyId, confirmed.professional_id)
-        : null;
-      const service = await getService(companyId, confirmed.service_id);
-
-      broadcast({
-        type: 'appointment:created',
-        payload: buildAppointmentWsPayload(confirmed, professional?.name, service?.name),
-      });
+    if (!confirmed) {
+      res.status(409).json({ error: 'El turno ya fue modificado por otra operación' });
+      return;
     }
+
+    const professional = confirmed.professional_id
+      ? await getProfessional(companyId, confirmed.professional_id)
+      : null;
+    const service = await getService(companyId, confirmed.service_id);
+
+    broadcast({
+      type: 'appointment:confirmed',
+      payload: buildAppointmentWsPayload(confirmed, professional?.name, service?.name),
+    });
 
     res.json({ data: confirmed });
   } catch (err) {
