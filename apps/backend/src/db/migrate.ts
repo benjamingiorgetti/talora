@@ -689,6 +689,12 @@ WHERE a.company_id = b.company_id
 CREATE UNIQUE INDEX IF NOT EXISTS idx_agents_unique_company
   ON agents(company_id);
 
+DO $$ BEGIN
+  ALTER TABLE appointments DROP CONSTRAINT IF EXISTS chk_appointment_status;
+  ALTER TABLE appointments ADD CONSTRAINT chk_appointment_status
+    CHECK (status IN ('confirmed', 'cancelled', 'rescheduled', 'draft'));
+END $$;
+
 -- Company settings table
 CREATE TABLE IF NOT EXISTS company_settings (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),

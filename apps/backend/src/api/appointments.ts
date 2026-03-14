@@ -505,6 +505,54 @@ appointmentsRouter.put('/:id', validateBody(reprogramAppointmentSchema), async (
   }
 });
 
+appointmentsRouter.post('/:id/confirm', async (req, res) => {
+  const companyId = getRequestCompanyId(req)!;
+  const appointmentId = req.params.id as string;
+
+  try {
+    const professionalId = getRequestProfessionalId(req);
+    const appointment = await loadAppointmentWithScope(companyId, appointmentId, professionalId);
+    if (!appointment) {
+      res.status(404).json({ error: 'Appointment not found' });
+      return;
+    }
+
+    if (appointment.status !== 'draft') {
+      res.status(400).json({ error: 'Solo se pueden confirmar turnos en estado borrador' });
+      return;
+    }
+
+    const updated = await pool.query<Appointment>(
+      `UPDATE appointments
+       SET status = 'confirmed', updated_at = NOW()
+       WHERE id = $1 AND company_id = $2 AND status = 'draft'
+       RETURNING *`,
+      [appointmentId, companyId]
+    );
+
+    const confirmed = updated.rows[0];
+    if (!confirmed) {
+      res.status(409).json({ error: 'El turno ya fue modificado por otra operación' });
+      return;
+    }
+
+    const professional = confirmed.professional_id
+      ? await getProfessional(companyId, confirmed.professional_id)
+      : null;
+    const service = await getService(companyId, confirmed.service_id);
+
+    broadcast({
+      type: 'appointment:confirmed',
+      payload: buildAppointmentWsPayload(confirmed, professional?.name, service?.name),
+    });
+
+    res.json({ data: confirmed });
+  } catch (err) {
+    logger.error('Error confirming appointment:', err);
+    res.status(500).json({ error: 'Failed to confirm appointment' });
+  }
+});
+
 appointmentsRouter.post('/:id/cancel', async (req, res) => {
   const companyId = getRequestCompanyId(req)!;
   try {

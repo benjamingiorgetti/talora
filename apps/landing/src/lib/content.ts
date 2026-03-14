@@ -5,7 +5,7 @@ export const nav = {
     { label: "FAQ", href: "#faq" },
   ],
   cta: "Agenda una reunion",
-  ctaHref: "https://calendly.com/giorgettibenjamin/30min",
+  ctaHref: "https://calendly.com/giorgettibenjamin/30min?utm_source=talora&utm_medium=landing&utm_campaign=nav",
   descriptor: "Turnos automaticos por WhatsApp",
 };
 
@@ -20,7 +20,7 @@ export const hero = {
   ctaPrimary: "Ver como funciona",
   ctaPrimaryHref: "#como-funciona",
   ctaSecondary: "Agenda una reunion",
-  ctaSecondaryHref: "https://calendly.com/giorgettibenjamin/30min",
+  ctaSecondaryHref: "https://calendly.com/giorgettibenjamin/30min?utm_source=talora&utm_medium=landing&utm_campaign=hero",
 };
 
 export const metrics = {
@@ -153,7 +153,7 @@ export const waitlist = {
   subtitle:
     "Estamos abriendo acceso de a poco. Agenda una reunion y te mostramos como funciona.",
   cta: "Quiero probar Talora",
-  ctaHref: "https://calendly.com/giorgettibenjamin/30min",
+  ctaHref: "https://calendly.com/giorgettibenjamin/30min?utm_source=talora&utm_medium=landing&utm_campaign=waitlist",
   trust: ["Sin compromiso", "Setup en 5 minutos", "Soporte incluido"],
   counter: "+30 negocios ya se anotaron",
 };
@@ -163,7 +163,7 @@ export const finalCta = {
   subheadline:
     "Conecta WhatsApp, configura tus servicios y deja que la IA haga el resto.",
   cta: "Agenda una reunion",
-  ctaHref: "https://calendly.com/giorgettibenjamin/30min",
+  ctaHref: "https://calendly.com/giorgettibenjamin/30min?utm_source=talora&utm_medium=landing&utm_campaign=final-cta",
   trust: ["Setup en 5 minutos", "Soporte incluido", "Funciona con tu WhatsApp actual"],
 };
 
@@ -180,8 +180,8 @@ export const footer = {
     {
       title: "Empresa",
       links: [
-        { label: "Sobre nosotros", href: "#" },
-        { label: "Contacto", href: "#" },
+        { label: "Sobre nosotros", href: "#beneficios" },
+        { label: "Contacto", href: "mailto:benjamin@talora.vip" },
       ],
     },
     {

@@ -219,7 +219,7 @@ export interface Appointment {
   google_event_id: string | null;
   starts_at: string;
   ends_at: string;
-  status: 'confirmed' | 'cancelled' | 'rescheduled';
+  status: 'confirmed' | 'cancelled' | 'rescheduled' | 'draft';
   source: 'bot' | 'manual' | 'google_calendar';
   title: string;
   notes: string;
@@ -239,6 +239,7 @@ export interface DashboardMetrics {
   automation_rate: number;
   confirmation_rate: number;
   estimated_time_saved_minutes: number;
+  last_bot_activity_at: string | null;
 }
 
 // --- Test Sessions ---
