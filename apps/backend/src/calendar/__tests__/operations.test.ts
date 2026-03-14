@@ -1,10 +1,9 @@
 import { describe, it, expect, beforeEach, mock } from 'bun:test';
 
 // ---------------------------------------------------------------------------
-// Mock factories — must be declared before mock.module calls so closures work
+// Mock factories — declared before mock.module calls so closures capture them
 // ---------------------------------------------------------------------------
 
-// Mutable references so individual tests can override behaviour via mockImplementation
 const mockFreebusyQuery = mock(() =>
   Promise.resolve({
     data: { calendars: { primary: { busy: [] } } },
@@ -35,9 +34,18 @@ const mockCalendar = {
   },
 };
 
-// Mock getCalendarClient to return the mock calendar without hitting googleapis or DB.
-// Path is relative to THIS test file (src/calendar/__tests__/) → ../client resolves
-// to src/calendar/client, which is what operations.ts imports as './client'.
+// ---------------------------------------------------------------------------
+// mock.module registrations
+// All paths below are relative to this test file location:
+//   src/calendar/__tests__/operations.test.ts
+//
+//   ../client            resolves to src/calendar/client.ts
+//   ../../config         resolves to src/config.ts
+//   ../../utils/logger   resolves to src/utils/logger.ts
+//
+// Bun matches by absolute resolved path, intercepting imports from operations.ts.
+// ---------------------------------------------------------------------------
+
 mock.module('../client', () => ({
   getCalendarClient: mock(() => Promise.resolve(mockCalendar)),
 }));
@@ -45,14 +53,11 @@ mock.module('../client', () => ({
 mock.module('../../config', () => ({
   config: {
     googleCalendarId: 'primary',
-    // Other fields referenced at module level — provide safe defaults
     nodeEnv: 'test',
     timezone: 'UTC',
   },
 }));
 
-// Silence logger output in tests.
-// Path relative to this test file → ../../utils/logger resolves to src/utils/logger.
 mock.module('../../utils/logger', () => ({
   logger: {
     info: mock(() => {}),
@@ -63,7 +68,7 @@ mock.module('../../utils/logger', () => ({
 }));
 
 // ---------------------------------------------------------------------------
-// Dynamic import — must happen AFTER mock.module registrations
+// Dynamic import after mock.module calls — ensures mocks are in place
 // ---------------------------------------------------------------------------
 const {
   checkSlot,
@@ -78,15 +83,9 @@ const {
 // Helpers
 // ---------------------------------------------------------------------------
 
-/** Fixed ISO date used across all tests — deterministic, no Date.now() */
+// Fixed deterministic date — no Date.now() or Math.random()
 const FIXED_DATE = '2025-06-15T10:00:00.000Z';
 const DURATION = 60; // minutes
-
-// The module exports a Map for bookingLocks but it is not exported.
-// We reset mock call counts in beforeEach so assertions start clean.
-// Lock state is effectively reset because each successful bookSlot call
-// removes its own key; only a mid-flight failure would leave a stale key,
-// which does not apply here.
 
 beforeEach(() => {
   mockFreebusyQuery.mockReset();
@@ -95,7 +94,7 @@ beforeEach(() => {
   mockEventsPatch.mockReset();
   mockEventsList.mockReset();
 
-  // Restore default (happy-path) implementations after each reset
+  // Restore default happy-path implementations after each reset
   mockFreebusyQuery.mockImplementation(() =>
     Promise.resolve({
       data: { calendars: { primary: { busy: [] } } },
@@ -119,8 +118,6 @@ beforeEach(() => {
 
 describe('checkSlot', () => {
   it('should return { available: true } when freebusy returns an empty busy array', async () => {
-    // Default mock already returns empty busy — no override needed
-
     const result = await checkSlot(FIXED_DATE, DURATION);
 
     expect(result.available).toBe(true);
@@ -128,38 +125,24 @@ describe('checkSlot', () => {
   });
 
   it('should return { available: false, suggestions } when freebusy returns a busy period', async () => {
-    // First call: the requested slot is busy
-    // Second call: the wider range (for suggestions) has no conflicts → 3 candidate slots found
     const busyStart = new Date(FIXED_DATE);
     const busyEnd = new Date(busyStart.getTime() + DURATION * 60 * 1000);
+    const busyPeriod = [
+      { start: busyStart.toISOString(), end: busyEnd.toISOString() },
+    ];
 
+    // First call: slot range check — busy
+    // Second call: extended range for suggestions — same busy slot so algorithm
+    // can identify free gaps around it
     mockFreebusyQuery
       .mockImplementationOnce(() =>
         Promise.resolve({
-          data: {
-            calendars: {
-              primary: {
-                busy: [
-                  { start: busyStart.toISOString(), end: busyEnd.toISOString() },
-                ],
-              },
-            },
-          },
+          data: { calendars: { primary: { busy: busyPeriod } } },
         })
       )
-      // Second call for suggestions — return the same busy slot so the
-      // algorithm can find free gaps around it
       .mockImplementationOnce(() =>
         Promise.resolve({
-          data: {
-            calendars: {
-              primary: {
-                busy: [
-                  { start: busyStart.toISOString(), end: busyEnd.toISOString() },
-                ],
-              },
-            },
-          },
+          data: { calendars: { primary: { busy: busyPeriod } } },
         })
       );
 
@@ -167,18 +150,15 @@ describe('checkSlot', () => {
 
     expect(result.available).toBe(false);
     expect(Array.isArray(result.suggestions)).toBe(true);
-    // The algorithm searches ±hours around the slot and returns up to 3 suggestions
     expect((result.suggestions ?? []).length).toBeGreaterThan(0);
     expect((result.suggestions ?? []).length).toBeLessThanOrEqual(3);
   });
 
-  it('should return { available: false } with error info when Google API throws', async () => {
+  it('should propagate Google API errors without swallowing them', async () => {
     mockFreebusyQuery.mockImplementation(() =>
       Promise.reject(new Error('Google API unavailable'))
     );
 
-    // checkSlot propagates the error; callers should handle it.
-    // We assert the rejection surfaces (not silently swallowed).
     await expect(checkSlot(FIXED_DATE, DURATION)).rejects.toThrow(
       'Google API unavailable'
     );
@@ -191,7 +171,6 @@ describe('checkSlot', () => {
 
 describe('bookSlot', () => {
   it('should create event and return { success: true, eventId } when slot is available', async () => {
-    // Default mocks: freebusy empty → available, insert returns id
     const result = await bookSlot(
       'Test Booking',
       FIXED_DATE,
@@ -211,7 +190,6 @@ describe('bookSlot', () => {
       { start: busyStart.toISOString(), end: busyEnd.toISOString() },
     ];
 
-    // Both freebusy calls (slot check + suggestion search) return the slot as busy
     mockFreebusyQuery.mockImplementation(() =>
       Promise.resolve({
         data: { calendars: { primary: { busy: busyPeriod } } },
@@ -228,25 +206,22 @@ describe('bookSlot', () => {
     expect(result.success).toBe(false);
     expect(result.error).toBe('Slot not available');
     expect(Array.isArray(result.suggestions)).toBe(true);
-    // No event should be created when the slot is unavailable
     expect(mockEventsInsert).not.toHaveBeenCalled();
   });
 
   it('should serialize concurrent bookings on the same slot via the in-memory lock', async () => {
     // Both calls race for the same slot key.
-    // The lock ensures they execute sequentially — we verify both complete
-    // successfully without throwing and that the calendar was called twice.
+    // The lock ensures sequential execution — verify both complete without throwing.
     const results = await Promise.all([
       bookSlot('Concurrent A', FIXED_DATE, DURATION, 'first'),
       bookSlot('Concurrent B', FIXED_DATE, DURATION, 'second'),
     ]);
 
-    // Both calls resolve (no unhandled rejection)
     expect(results).toHaveLength(2);
     for (const r of results) {
       expect(typeof r.success).toBe('boolean');
     }
-    // insert was called at most twice (once per successful booking)
+    // At most two insert calls (one per successful booking attempt)
     expect(mockEventsInsert.mock.calls.length).toBeLessThanOrEqual(2);
   });
 });
@@ -285,7 +260,7 @@ describe('createEvent', () => {
     expect(payload.requestBody.end.dateTime).toBe(expectedEnd);
   });
 
-  it('should pass the correct calendarId to events.insert', async () => {
+  it('should pass the correct custom calendarId to events.insert', async () => {
     const customCalendarId = 'cal-xyz-123';
     mockEventsInsert.mockImplementation(() =>
       Promise.resolve({ data: { id: 'evt-custom-1' } })
@@ -315,7 +290,6 @@ describe('createEvent', () => {
 
 describe('deleteEvent', () => {
   it('should return { success: true } when the event exists and is deleted', async () => {
-    // Default mock resolves successfully
     const result = await deleteEvent('evt-to-delete');
 
     expect(result.success).toBe(true);
@@ -333,7 +307,7 @@ describe('deleteEvent', () => {
     expect(result.error).toBeUndefined();
   });
 
-  it('should return { success: false, error } when the API returns 403 (permission denied)', async () => {
+  it('should return { success: false, error } when the API returns permission denied (403)', async () => {
     const forbiddenError = Object.assign(new Error('Forbidden'), { code: 403 });
     mockEventsDelete.mockImplementation(() => Promise.reject(forbiddenError));
 
@@ -358,7 +332,7 @@ describe('updateEvent', () => {
     expect(mockEventsPatch).toHaveBeenCalledTimes(1);
   });
 
-  it('should return { success: false } when events.patch throws (event not found)', async () => {
+  it('should return { success: false, error } when events.patch throws', async () => {
     mockEventsPatch.mockImplementation(() =>
       Promise.reject(Object.assign(new Error('Not Found'), { code: 404 }))
     );
@@ -376,7 +350,6 @@ describe('updateEvent', () => {
 
 describe('listEvents', () => {
   it('should return an empty array when the calendar has no events', async () => {
-    // Default mock returns empty items
     const result = await listEvents(FIXED_DATE, '2025-06-15T18:00:00.000Z');
 
     expect(Array.isArray(result)).toBe(true);
@@ -419,7 +392,7 @@ describe('listEvents', () => {
       Promise.resolve({
         data: {
           items: [
-            // Valid event
+            // Valid event — must be included
             {
               id: 'evt-valid',
               summary: 'Valid',
@@ -427,16 +400,16 @@ describe('listEvents', () => {
               start: { dateTime: '2025-06-15T10:00:00.000Z' },
               end: { dateTime: '2025-06-15T11:00:00.000Z' },
             },
-            // Missing id — should be filtered out
+            // Missing id — must be filtered out
             {
               summary: 'No ID',
               start: { dateTime: '2025-06-15T12:00:00.000Z' },
               end: { dateTime: '2025-06-15T13:00:00.000Z' },
             },
-            // Missing dateTime on start — should be filtered out
+            // All-day event (date instead of dateTime) — must be filtered out
             {
               id: 'evt-no-dt',
-              summary: 'No DateTime',
+              summary: 'All Day',
               start: { date: '2025-06-15' },
               end: { date: '2025-06-15' },
             },

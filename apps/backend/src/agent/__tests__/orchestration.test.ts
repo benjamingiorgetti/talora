@@ -288,10 +288,14 @@ describe('handleIncomingMessage — tool call flow', () => {
     mockSendText.mockReset();
     mockExecuteTool.mockReset();
     mockOpenAiCreate.mockReset();
+    // Restore default agent config in case a prior suite left it as null
+    mockGetAgentConfig.mockImplementation(() =>
+      Promise.resolve({ agent: makeAgent(), sections: [], tools: [], variables: [] }),
+    );
     setupDefaultDbResponses();
   });
 
-  it('should call executeTool when OpenAI returns tool_calls', async () => {
+  it('should call executeTool and then send the follow-up response via Evolution', async () => {
     mockExecuteTool.mockImplementation(() => Promise.resolve(JSON.stringify({ available: true })));
 
     // First call returns tool_calls; second returns the final text
@@ -306,9 +310,11 @@ describe('handleIncomingMessage — tool call flow', () => {
 
     await handleIncomingMessage(TEST_IDS.CONV_A, 'test-instance', 'Hay lugar mañana?');
 
-    // The orchestrator should have called executeTool at least once
-    // and sent a response via Evolution
-    expect(mockSendText).toHaveBeenCalled();
+    expect(mockExecuteTool).toHaveBeenCalledTimes(1);
+    expect(mockExecuteTool.mock.calls[0][0]).toBe('check_availability');
+    expect(mockSendText).toHaveBeenCalledTimes(1);
+    const textSent = (mockSendText.mock.calls[0] as [string, string, string])[2];
+    expect(textSent).toBe('Mañana tienes disponibilidad.');
   });
 });
 

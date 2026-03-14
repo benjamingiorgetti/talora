@@ -190,6 +190,11 @@ To mock `./client` imported by `src/calendar/operations.ts`, from a test at
 Bun resolves both paths to the same absolute path and intercepts the import — no matter
 which file issues the import.
 
+WARNING: The IDE linter/formatter in this project incorrectly rewrites mock.module paths
+(e.g., `../client` -> `./client`, `../../config` -> `../config`). These rewrites break
+the tests. After writing a test file, always run `bun test` to verify the paths are correct
+and restore them if the linter has mangled them.
+
 ## Calendar Operations Tests
 
 - `src/calendar/__tests__/operations.test.ts` — 16 tests
