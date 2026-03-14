@@ -329,29 +329,101 @@ Tests (~8 cases):
 
 ---
 
-## Requisitos previos por fase
-
-| Fase | Prerequisito | Acción |
-|------|-------------|--------|
-| 1 | Funciones puras exportadas de tool-executor.ts | Exportar `normalizeLabel`, `tokenize`, `scoreServiceMatch`, `scoreProfessionalMatch` |
-| 1 | Nada más | — |
-| 2 | Nada | Mock patterns ya establecidos en fase 1 |
-| 3 | Nada | Mocks más complejos (OpenAI SDK) |
-| 4 | Test app helper | Crear `apps/backend/src/test-utils/create-test-app.ts` |
-| 5 | Nada | — |
-
 ## Entregable por fase
 
-| Fase | Archivos nuevos | Tests aprox | Output |
-|------|----------------|-------------|--------|
-| 1 | 5 archivos | ~72 cases | Fundación sólida, pure unit tests |
-| 2 | 3 archivos | ~33 cases | WhatsApp + cache cubiertos |
-| 3 | 2 archivos | ~24 cases | Core AI loop + Calendar cubiertos |
-| 4 | 2 archivos + 1 helper | ~20 cases | Route handlers + tenant isolation |
-| 5 | 1 archivo | ~8 cases | WebSocket cubierto |
+| Fase | Archivos nuevos/modificados | Tests aprox | Output |
+|------|----------------------------|-------------|--------|
+| 0 | 3 source files modificados + 4 test helpers + CI config | 0 | Código testeable, infra de tests, CI |
+| 1 | 5 archivos de test | ~72 cases | Fundación sólida, pure unit tests |
+| 2 | 3 archivos de test | ~33 cases | WhatsApp + cache cubiertos |
+| 3 | 2 archivos de test | ~24 cases | Core AI loop + Calendar cubiertos |
+| 4 | 2 archivos de test + 1 helper | ~20 cases | Route handlers + tenant isolation |
+| 5 | 1 archivo de test | ~8 cases | WebSocket cubierto |
 
-**Total: 13 archivos nuevos, ~157 test cases, 0 dependencias nuevas**
+**Total: 13 archivos de test, 4 test helpers, 3 refactors de testabilidad, CI workflow, ~157 test cases, 0 dependencias nuevas**
+
+---
+
+## Fase 0 — Preparación (antes de escribir tests)
+
+### Step 0A: Refactors de testabilidad
+
+Varios módulos tienen lógica crítica atrapada en funciones internas. Sin extraerlas, los tests son indirectos y frágiles. Cambios mínimos, sin alterar comportamiento:
+
+**`agent/tool-executor.ts`** — Exportar funciones puras:
+- `normalizeLabel`, `tokenize`, `scoreServiceMatch`, `scoreProfessionalMatch`
+- `resolveServiceSelection`, `resolveProfessionalSelection`
+- `resolveAppointmentByReference`, `upsertClient`
+
+**`evolution/webhook.ts`** — Extraer lógica del router a funciones exportables:
+- `isWebhookAuthorized(req)` → ya existe como función interna, solo agregar export
+- `normalizePhone(raw)` → idem
+- `handleMessagesUpsert(body)`, `handleConnectionUpdate(body)`, `handleQrCodeUpdate(body)` → idem
+
+**`agent/index.ts`** — Exportar helpers puros:
+- `safeJsonParse`, `getCachedAvailability`, `setCachedAvailability`, `buildAgentToolTrace`
+
+**Criterio:** solo se exportan funciones que no cambian su firma ni su comportamiento. El refactor es puramente de visibilidad.
+
+### Step 0B: Test helpers compartidos (`apps/backend/src/__test-utils__/`)
+
+Crear helpers reutilizables para evitar duplicación masiva de mocks:
+
+**`mock-pool.ts`:**
+```typescript
+// Re-exporta el patrón de setupQueryMock que ya existe en tool-executor.test.ts
+export function createMockPool() { ... }
+export function setupQueryMock(mockQuery, responses: Array<[string, unknown[]]>) { ... }
+```
+
+**`mock-logger.ts`:**
+```typescript
+export function createMockLogger() {
+  return { error: mock(), warn: mock(), info: mock(), debug: mock() };
+}
+```
+
+**`mock-request.ts`:**
+```typescript
+export function createMockReq(overrides?: Partial<Request>) { ... }
+export function createMockRes() { ... } // con status().json() chainable
+export function createMockNext() { ... }
+```
+
+**`factories.ts`:**
+```typescript
+export function makeCompany(overrides?) { ... }
+export function makeProfessional(overrides?) { ... }
+export function makeAppointment(overrides?) { ... }
+export function makeService(overrides?) { ... }
+export function makeConversation(overrides?) { ... }
+export function makeMessage(overrides?) { ... }
+```
+
+Cada factory devuelve un objeto con defaults sensatos (UUIDs determinísticos, timestamps fijos) y permite override de cualquier campo.
+
+### Step 0C: Coverage reporting y script de CI
+
+**`package.json` (backend)** — Agregar script de coverage:
+```json
+{
+  "scripts": {
+    "test": "... bun test",
+    "test:coverage": "... bun test --coverage"
+  }
+}
+```
+
+**`.github/workflows/test.yml`** (o agregar step al workflow existente):
+```yaml
+- name: Run tests
+  run: cd apps/backend && bun test
+```
+
+Esto asegura que los tests se corren automáticamente en cada push/PR. Sin esto, los tests existen pero nadie los corre.
+
+---
 
 ## Orden de ejecución
 
-Cada step es un commit independiente. Las fases son secuenciales (cada fase puede depender de patterns establecidos en la anterior). Dentro de cada fase, los steps son independientes y pueden ejecutarse en paralelo.
+Fase 0 se ejecuta primero (es prerequisito de todo lo demás). Después, cada fase es secuencial. Dentro de cada fase, los steps son independientes y pueden ejecutarse en paralelo. Cada step es un commit independiente.
