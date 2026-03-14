@@ -221,6 +221,19 @@ and restore them if the linter has mangled them.
   `(config as Record<string, unknown>).webhookSecret = 'val'` then restore.
 - `withTimeout` mock: `mock(<T>(p: Promise<T>) => p)` — just passes through the promise.
 
+## WebSocket Server Tests (ws/server.ts)
+
+- `src/ws/__tests__/server.test.ts` — 10 tests
+- Mocks: `../../db/pool`, `../../auth/session`, `../../utils/logger`
+- Uses a **real HTTP server** on `port 0` (OS-assigned) via `createServer()` + `setupWebSocket()`.
+- **`setupWebSocket` is a singleton** — it mutates module-level `wss`. Call it only once in `beforeAll`; the `wss` ref persists across all tests in the file.
+- Native `WebSocket` client (global in Bun) used for connections; `ws.onopen` resolves connection promise.
+- `collectMessages(ws, waitMs)` helper: registers `onmessage`, returns collected events after `waitMs` ms.
+- `delay(50-80ms)` required between `broadcast()` call and assertion — WS frames are async.
+- **Auth rejection test**: server sends raw `HTTP/1.1 401` before WS handshake, which triggers `onerror` or `onclose` (not `onopen`). Both are valid signals for rejection.
+- **Broadcast filtering mutation test**: removing the `payloadCompanyId !== socket.companyId` guard causes 3 tests to fail correctly (company isolation + professional company filter).
+- Accumulated sockets tracked in `openSockets[]` array and closed in `afterAll` to avoid leaked handles.
+
 ## Links to Detail Files
 
 - `patterns.md` — patrones de mocking y test architecture (TODO: expandir)
