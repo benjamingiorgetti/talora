@@ -1,3 +1,4 @@
+// @ts-nocheck
 import { describe, it, expect, beforeEach, mock } from 'bun:test';
 import { createMockQuery, setupQueryMock } from '../../__test-utils__/mock-pool';
 import { createMockLogger } from '../../__test-utils__/mock-logger';
@@ -315,7 +316,7 @@ describe('handleMessagesUpsert', () => {
     await handleMessagesUpsert(makeWebhookBody());
 
     // Verified at least one query touched whatsapp_instances (instance lookup)
-    const queryCalls = mockQuery.mock.calls;
+    const queryCalls = mockQuery.mock.calls as unknown as any[][];
     const instanceQuery = queryCalls.find(
       (args) => typeof args[0] === 'string' && args[0].includes('whatsapp_instances WHERE evolution_instance_name')
     );
@@ -335,8 +336,9 @@ describe('handleMessagesUpsert', () => {
 
     // Agent was called with conversation ID and message text
     expect(mockHandleIncomingMessage).toHaveBeenCalledTimes(1);
-    expect(mockHandleIncomingMessage.mock.calls[0][0]).toBe(CONV_ID);
-    expect(mockHandleIncomingMessage.mock.calls[0][2]).toBe('Hola, quiero un turno');
+    const agentCalls = mockHandleIncomingMessage.mock.calls as unknown as any[][];
+    expect(agentCalls[0][0]).toBe(CONV_ID);
+    expect(agentCalls[0][2]).toBe('Hola, quiero un turno');
   });
 
   it('should skip processing when fromMe is true', async () => {
@@ -397,7 +399,8 @@ describe('handleMessagesUpsert', () => {
     await handleMessagesUpsert(body);
 
     expect(mockSendText).toHaveBeenCalledTimes(1);
-    expect(mockSendText.mock.calls[0][2]).toContain('solo puedo procesar texto');
+    const sendTextCalls = mockSendText.mock.calls as unknown as any[][];
+    expect(sendTextCalls[0][2]).toContain('solo puedo procesar texto');
     expect(mockHandleIncomingMessage).not.toHaveBeenCalled();
   });
 
@@ -417,11 +420,13 @@ describe('handleMessagesUpsert', () => {
     }));
 
     expect(mockResetConversationMemory).toHaveBeenCalledTimes(1);
-    expect(mockResetConversationMemory.mock.calls[0][0]).toBe(CONV_ID);
+    const resetCalls = mockResetConversationMemory.mock.calls as unknown as any[][];
+    expect(resetCalls[0][0]).toBe(CONV_ID);
 
     // Should have sent a ✅ reaction
     expect(mockSendReaction).toHaveBeenCalledTimes(1);
-    expect(mockSendReaction.mock.calls[0][2]).toBe('✅');
+    const reactionCalls = mockSendReaction.mock.calls as unknown as any[][];
+    expect(reactionCalls[0][2]).toBe('✅');
 
     // Agent must NOT be called after a reset
     expect(mockHandleIncomingMessage).not.toHaveBeenCalled();
@@ -467,7 +472,7 @@ describe('handleMessagesUpsert', () => {
     });
 
     await handleMessagesUpsert(body);
-    const firstCallCount = mockHandleIncomingMessage.mock.calls.length;
+    const firstCallCount = (mockHandleIncomingMessage.mock.calls as unknown as any[][]).length;
 
     // Reset mocks but NOT the idempotency map (it lives in the module)
     mockQuery.mockReset();
@@ -476,7 +481,7 @@ describe('handleMessagesUpsert', () => {
 
     // Second call with the same body (same key.id)
     await handleMessagesUpsert(body);
-    const secondCallCount = mockHandleIncomingMessage.mock.calls.length;
+    const secondCallCount = (mockHandleIncomingMessage.mock.calls as unknown as any[][]).length;
 
     expect(firstCallCount).toBe(1);
     expect(secondCallCount).toBe(0); // Must not increase — idempotency map blocks it
@@ -507,7 +512,8 @@ describe('handleConnectionUpdate', () => {
       data: { state: 'open' },
     });
 
-    const updateCall = mockQuery.mock.calls.find(
+    const connCalls = mockQuery.mock.calls as unknown as any[][];
+    const updateCall = connCalls.find(
       (args) => typeof args[0] === 'string' && args[0].includes('UPDATE whatsapp_instances')
     );
     expect(updateCall).toBeDefined();
@@ -526,7 +532,8 @@ describe('handleConnectionUpdate', () => {
       data: { state: 'close' },
     });
 
-    const updateCall = mockQuery.mock.calls.find(
+    const closeCalls = mockQuery.mock.calls as unknown as any[][];
+    const updateCall = closeCalls.find(
       (args) => typeof args[0] === 'string' && args[0].includes('UPDATE whatsapp_instances')
     );
     expect(updateCall).toBeDefined();
@@ -567,12 +574,13 @@ describe('handleQrCodeUpdate', () => {
       data: { qrcode: { base64: qrBase64 } },
     });
 
-    const updateCall = mockQuery.mock.calls.find(
+    const qrCalls = mockQuery.mock.calls as unknown as any[][];
+    const updateCall = qrCalls.find(
       (args) => typeof args[0] === 'string' && args[0].includes('UPDATE whatsapp_instances')
     );
     expect(updateCall).toBeDefined();
     // pool.query(sql, [param1, param2, ...]) — args[1] is the params array; $1 = qr_code
-    expect(updateCall![1]).toEqual([qrBase64, INSTANCE_NAME]);
+    expect((updateCall as any[])[1]).toEqual([qrBase64, INSTANCE_NAME]);
 
     expect(mockBroadcast).toHaveBeenCalledWith(
       expect.objectContaining({

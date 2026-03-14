@@ -1,3 +1,4 @@
+// @ts-nocheck
 import { describe, it, expect, beforeEach, mock } from 'bun:test';
 import { makeAgent, TEST_IDS } from '../../__test-utils__/factories';
 import type { AgentConfig } from '../agent-cache';

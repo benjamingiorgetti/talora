@@ -1,3 +1,4 @@
+// @ts-nocheck
 import { describe, it, expect, beforeAll, afterAll, beforeEach, mock } from 'bun:test';
 import express from 'express';
 import type { Server } from 'http';

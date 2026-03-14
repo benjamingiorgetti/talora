@@ -41,6 +41,11 @@ const { EvolutionClient, EvolutionApiError } = await import('../client');
 // Helpers
 // ---------------------------------------------------------------------------
 
+/** Create a mock fetch that includes the `preconnect` property Bun's `typeof fetch` requires. */
+function mockFetch(fn: (...args: any[]) => Promise<any>) {
+  return Object.assign(mock(fn) as unknown as typeof globalThis.fetch, { preconnect: () => {} });
+}
+
 /** Build a minimal Response-like object that satisfies what the client needs. */
 function makeResponse(status: number, body: unknown): Response {
   const bodyText = typeof body === 'string' ? body : JSON.stringify(body);
@@ -95,10 +100,10 @@ describe('EvolutionClient', () => {
       const expectedResponse = { key: { id: 'msg-abc-123' } };
       let capturedRequest: { url: string; init: RequestInit } | null = null;
 
-      globalThis.fetch = mock(async (url: string | URL | Request, init?: RequestInit) => {
+      globalThis.fetch = mockFetch(async (url: string | URL | Request, init?: RequestInit) => {
         capturedRequest = { url: String(url), init: init ?? {} };
         return makeResponse(200, expectedResponse);
-      }) as typeof globalThis.fetch;
+      });
 
       const result = await client.sendText('my-instance', '+5491112345678', 'Hola mundo');
 
@@ -130,7 +135,7 @@ describe('EvolutionClient', () => {
         { name: 'inst-2', connectionStatus: 'close' },
       ];
 
-      globalThis.fetch = mock(async () => makeResponse(200, instances)) as typeof globalThis.fetch;
+      globalThis.fetch = mockFetch(async () => makeResponse(200, instances));
 
       const result = await client.fetchInstances();
 
@@ -152,10 +157,10 @@ describe('EvolutionClient', () => {
       };
       let capturedBody: Record<string, unknown> | null = null;
 
-      globalThis.fetch = mock(async (_url: string | URL | Request, init?: RequestInit) => {
+      globalThis.fetch = mockFetch(async (_url: string | URL | Request, init?: RequestInit) => {
         capturedBody = JSON.parse(init?.body as string);
         return makeResponse(200, apiResponse);
-      }) as typeof globalThis.fetch;
+      });
 
       const result = await client.createInstance('new-inst', 'https://myapp.com/webhook/new-inst');
 
@@ -182,7 +187,7 @@ describe('EvolutionClient', () => {
   // -------------------------------------------------------------------------
   describe('ping', () => {
     it('should resolve without throwing when the API returns 200', async () => {
-      globalThis.fetch = mock(async () => makeResponse(200, [])) as typeof globalThis.fetch;
+      globalThis.fetch = mockFetch(async () => makeResponse(200, []));
 
       // If ping throws, the test will fail automatically.
       await expect(client.ping()).resolves.toBeUndefined();
@@ -194,18 +199,18 @@ describe('EvolutionClient', () => {
   // -------------------------------------------------------------------------
   describe('getInstanceStatus', () => {
     it('should normalise v2 response shape { instance: { state } } to { state }', async () => {
-      globalThis.fetch = mock(async () =>
+      globalThis.fetch = mockFetch(async () =>
         makeResponse(200, { instance: { instanceName: 'x', state: 'open' } })
-      ) as typeof globalThis.fetch;
+      );
 
       const result = await client.getInstanceStatus('x');
       expect(result).toEqual({ state: 'open' });
     });
 
     it('should fall back to top-level state when instance wrapper is absent', async () => {
-      globalThis.fetch = mock(async () =>
+      globalThis.fetch = mockFetch(async () =>
         makeResponse(200, { state: 'close' })
-      ) as typeof globalThis.fetch;
+      );
 
       const result = await client.getInstanceStatus('x');
       expect(result).toEqual({ state: 'close' });
@@ -219,13 +224,13 @@ describe('EvolutionClient', () => {
     it('should retry once on fetch TypeError (network failure) and succeed on second attempt', async () => {
       let callCount = 0;
 
-      globalThis.fetch = mock(async () => {
+      globalThis.fetch = mockFetch(async () => {
         callCount += 1;
         if (callCount === 1) {
           throw new TypeError('fetch failed');
         }
         return makeResponse(200, []);
-      }) as typeof globalThis.fetch;
+      });
 
       await client.fetchInstances();
 
@@ -235,12 +240,12 @@ describe('EvolutionClient', () => {
     it('should retry once on ECONNREFUSED and throw after MAX_ATTEMPTS exhausted', async () => {
       let callCount = 0;
 
-      globalThis.fetch = mock(async () => {
+      globalThis.fetch = mockFetch(async () => {
         callCount += 1;
         const err = new Error('connect ECONNREFUSED 127.0.0.1:8080');
         err.message = 'connect ECONNREFUSED 127.0.0.1:8080';
         throw err;
-      }) as typeof globalThis.fetch;
+      });
 
       await expect(client.fetchInstances()).rejects.toThrow('ECONNREFUSED');
       expect(callCount).toBe(2); // 1 initial + 1 retry = MAX_ATTEMPTS
@@ -249,12 +254,12 @@ describe('EvolutionClient', () => {
     it('should retry once on AbortError (timeout) and throw after MAX_ATTEMPTS exhausted', async () => {
       let callCount = 0;
 
-      globalThis.fetch = mock(async () => {
+      globalThis.fetch = mockFetch(async () => {
         callCount += 1;
         const err = new Error('The operation was aborted');
         err.name = 'AbortError';
         throw err;
-      }) as typeof globalThis.fetch;
+      });
 
       await expect(client.fetchInstances()).rejects.toMatchObject({ name: 'AbortError' });
       expect(callCount).toBe(2);
@@ -263,10 +268,10 @@ describe('EvolutionClient', () => {
     it('should retry once on 5xx error and throw EvolutionApiError after MAX_ATTEMPTS exhausted', async () => {
       let callCount = 0;
 
-      globalThis.fetch = mock(async () => {
+      globalThis.fetch = mockFetch(async () => {
         callCount += 1;
         return makeResponse(503, 'Service Unavailable');
-      }) as typeof globalThis.fetch;
+      });
 
       const error = await client.fetchInstances().catch((e: unknown) => e);
 
@@ -278,10 +283,10 @@ describe('EvolutionClient', () => {
     it('should NOT retry on 4xx error — throws immediately after first attempt', async () => {
       let callCount = 0;
 
-      globalThis.fetch = mock(async () => {
+      globalThis.fetch = mockFetch(async () => {
         callCount += 1;
         return makeResponse(404, 'Not Found');
-      }) as typeof globalThis.fetch;
+      });
 
       const error = await client.fetchInstances().catch((e: unknown) => e);
 
@@ -296,9 +301,9 @@ describe('EvolutionClient', () => {
   // -------------------------------------------------------------------------
   describe('EvolutionApiError', () => {
     it('should carry correct statusCode and endpoint when a 4xx is received', async () => {
-      globalThis.fetch = mock(async () =>
+      globalThis.fetch = mockFetch(async () =>
         makeResponse(401, 'Unauthorized')
-      ) as typeof globalThis.fetch;
+      );
 
       const error = await client.sendText('inst', '+549111', 'hi').catch((e: unknown) => e);
 
@@ -312,9 +317,9 @@ describe('EvolutionClient', () => {
 
     it('should carry correct statusCode and endpoint when a 5xx is received', async () => {
       // Make every attempt fail so we get to the final throw.
-      globalThis.fetch = mock(async () =>
+      globalThis.fetch = mockFetch(async () =>
         makeResponse(500, 'Internal Server Error')
-      ) as typeof globalThis.fetch;
+      );
 
       const error = await client.ping().catch((e: unknown) => e);
 
@@ -334,10 +339,10 @@ describe('EvolutionClient', () => {
       // returns a clean URL, but let us verify the exact URL for a known path.
       let capturedUrl = '';
 
-      globalThis.fetch = mock(async (url: string | URL | Request) => {
+      globalThis.fetch = mockFetch(async (url: string | URL | Request) => {
         capturedUrl = String(url);
         return makeResponse(200, { base64: 'qr==' });
-      }) as typeof globalThis.fetch;
+      });
 
       await client.connectInstance('my-inst');
 
@@ -349,10 +354,10 @@ describe('EvolutionClient', () => {
     it('should always include apikey header on every request', async () => {
       const capturedHeaders: Record<string, string>[] = [];
 
-      globalThis.fetch = mock(async (_url: string | URL | Request, init?: RequestInit) => {
+      globalThis.fetch = mockFetch(async (_url: string | URL | Request, init?: RequestInit) => {
         capturedHeaders.push(init?.headers as Record<string, string>);
         return makeResponse(200, { url: 'https://hook.example.com' });
-      }) as typeof globalThis.fetch;
+      });
 
       await client.getWebhook('inst-x');
 

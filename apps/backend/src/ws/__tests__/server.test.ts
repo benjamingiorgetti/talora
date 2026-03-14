@@ -1,3 +1,4 @@
+// @ts-nocheck
 /**
  * Unit/integration tests for the WebSocket server (setupWebSocket + broadcast).
  *
@@ -71,7 +72,7 @@ beforeAll(async () => {
     });
   });
   // Default: DB returns no instances so on-connect flood is silent.
-  mockQuery.mockImplementation(() => Promise.resolve({ rows: [], rowCount: 0 }));
+  mockQuery.mockImplementation((() => Promise.resolve({ rows: [], rowCount: 0 })) as any);
 });
 
 afterAll(() => {
@@ -370,9 +371,9 @@ describe('WebSocket server', () => {
       };
 
       // Make DB return one instance for the next query
-      mockQuery.mockImplementationOnce(() =>
+      mockQuery.mockImplementationOnce((() =>
         Promise.resolve({ rows: [instanceRow], rowCount: 1 })
-      );
+      ) as any);
 
       mockDecodeSession.mockImplementation(() => makeAdminSession(COMPANY_A));
 

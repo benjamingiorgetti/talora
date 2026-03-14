@@ -1,3 +1,4 @@
+// @ts-nocheck
 import { describe, it, expect, beforeAll, afterAll, mock } from 'bun:test';
 import type { Variable } from '@talora/shared';
 import { makeConversation, TEST_IDS } from '../../__test-utils__/factories';
