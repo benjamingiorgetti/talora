@@ -12,7 +12,7 @@ import { Button } from "@/components/ui/button";
 import { FileText, Eye, EyeOff } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { AnimatePresence, motion } from "framer-motion";
-import { Panel, PanelGroup, PanelResizeHandle } from "react-resizable-panels";
+import { Panel, Group, Separator } from "react-resizable-panels";
 
 function highlightVariables(text: string) {
   // Split text around {{variable}} patterns
@@ -97,7 +97,7 @@ export function PromptEditorTab() {
       </div>
 
       {/* Main layout */}
-      <PanelGroup direction="horizontal" autoSaveId="prompt-editor" className="flex-1">
+      <Group orientation="horizontal" id="prompt-editor" className="flex-1">
         <Panel defaultSize={60} minSize={30}>
           <AnimatePresence mode="wait">
             {showResolved ? (
@@ -170,13 +170,13 @@ export function PromptEditorTab() {
             )}
           </AnimatePresence>
         </Panel>
-        <PanelResizeHandle className="w-1.5 mx-1 rounded-full bg-border/50 hover:bg-primary/30 transition-colors cursor-col-resize" />
+        <Separator className="w-1.5 mx-1 rounded-full bg-border/50 hover:bg-primary/30 transition-colors cursor-col-resize" />
         <Panel defaultSize={40} minSize={20}>
           <div className="rounded-lg border border-border bg-card overflow-hidden flex flex-col h-full">
             <TestChatPanel promptSavedAt={promptSavedAt} />
           </div>
         </Panel>
-      </PanelGroup>
+      </Group>
 
       {/* Save/discard bar */}
       <SaveDiscardBar
