@@ -181,6 +181,41 @@ function makeQueryResult<T>(rows: T[]): QueryResult<T> {
 - `makeResponse(status, body)` helper builds minimal Response-compatible object (`.ok`, `.status`, `.text()`, `.json()`)
 - `apikey` header is lowercase — `headers['apikey']`, not `Authorization`
 
+## mock.module path resolution — rule confirmed
+
+`mock.module` paths are relative to the **test file**, not the source file under test.
+To mock `./client` imported by `src/calendar/operations.ts`, from a test at
+`src/calendar/__tests__/operations.test.ts` you write `mock.module('../client', ...)`.
+
+Bun resolves both paths to the same absolute path and intercepts the import — no matter
+which file issues the import.
+
+## Calendar Operations Tests
+
+- `src/calendar/__tests__/operations.test.ts` — 16 tests
+- Mocks: `../client` (getCalendarClient), `../../config`, `../../utils/logger`
+- `bookingLocks` Map is module-level state but self-cleans after each call completes; no
+  explicit reset needed in `beforeEach` — `mockReset()` on the mock functions is sufficient.
+- `checkSlot` makes TWO `freebusy.query` calls when the slot is busy (1st for the slot,
+  2nd for the suggestion search window); mock both with `.mockImplementationOnce`.
+- `deleteEvent` 404 idempotency: throw `Object.assign(new Error('Not Found'), { code: 404 })`.
+
+## Webhook Handler Tests (evolution/webhook.ts)
+
+- `src/evolution/__tests__/webhook.test.ts` — 22 tests
+- Mocks: `../../db/pool`, `../../config`, `../../ws/server`, `../../agent/index`,
+  `../client` (EvolutionClient class), `../../utils/logger`, `../../utils/timeout`,
+  `../../conversations/reset`, `../../conversations/archive`
+- `EvolutionClient` is instantiated at module load via `new EvolutionClient()`.
+  Mock it as a class with instance methods: `mock.module('../client', () => ({ EvolutionClient: class { sendText = ...; } }))`.
+- `processedMessages` Set is module-level — persists across all tests in file.
+  Use unique `key.id` per test to avoid idempotency false-negatives.
+- `pool.query` call shape: `args[0]` = SQL string, `args[1]` = params array.
+  Assert params as: `expect(call[1]).toEqual([...])` NOT `.toBe(scalar)`.
+- Config mock is a plain object — safe to mutate within a test and restore after.
+  `(config as Record<string, unknown>).webhookSecret = 'val'` then restore.
+- `withTimeout` mock: `mock(<T>(p: Promise<T>) => p)` — just passes through the promise.
+
 ## Links to Detail Files
 
 - `patterns.md` — patrones de mocking y test architecture (TODO: expandir)
