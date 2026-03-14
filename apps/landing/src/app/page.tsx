@@ -4,7 +4,7 @@ import { Metrics } from "@/components/landing/metrics";
 import { Benefits } from "@/components/landing/benefits";
 import { HowItWorks } from "@/components/landing/how-it-works";
 import { FAQ } from "@/components/landing/faq";
-import { Waitlist } from "@/components/landing/waitlist";
+import { FinalCTA } from "@/components/landing/final-cta";
 import { Footer } from "@/components/landing/footer";
 
 export default function LandingPage() {
@@ -16,7 +16,7 @@ export default function LandingPage() {
       <Benefits />
       <HowItWorks />
       <FAQ />
-      <Waitlist />
+      <FinalCTA />
       <Footer />
     </main>
   );

@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { Scissors, Pen, Stethoscope, Sparkles } from "lucide-react";
+import { CheckCircle2, Scissors, Pen, Stethoscope, Sparkles } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { hero } from "@/lib/content";
@@ -60,7 +60,7 @@ function WhatsAppMockup() {
   return (
     <div className="relative">
       {/* iPhone frame */}
-      <div className="relative w-[280px] rounded-[50px] bg-gradient-to-b from-[#3A3442] to-[#2C2B33] p-[12px] shadow-2xl">
+      <div className="relative w-[240px] sm:w-[270px] md:w-[290px] rounded-[42px] sm:rounded-[50px] bg-gradient-to-b from-[#3A3442] to-[#2C2B33] p-[10px] sm:p-[12px] shadow-2xl">
         {/* Side buttons — volume (left) */}
         <div className="absolute -left-[3px] top-[72px] h-[28px] w-[3px] rounded-l-sm bg-[#2C2B33]" />
         <div className="absolute -left-[3px] top-[110px] h-[44px] w-[3px] rounded-l-sm bg-[#2C2B33]" />
@@ -72,7 +72,7 @@ function WhatsAppMockup() {
         <div className="relative rounded-[40px] overflow-hidden bg-white">
           {/* Dynamic Island */}
           <div className="absolute top-[8px] left-1/2 -translate-x-1/2 z-10 flex items-center justify-center">
-            <div className="w-[90px] h-[28px] rounded-full bg-black flex items-center justify-end pr-[10px]">
+            <div className="w-[75px] h-[24px] sm:w-[90px] sm:h-[28px] rounded-full bg-black flex items-center justify-end pr-[10px]">
               <div className="h-[10px] w-[10px] rounded-full bg-[#1a1a2e] ring-1 ring-[#2a2a3e]" />
             </div>
           </div>
@@ -108,7 +108,7 @@ function WhatsAppMockup() {
           </div>
 
           {/* Messages */}
-          <div className="flex flex-col gap-2 p-3 bg-[#F8F9FC] h-[280px] overflow-hidden">
+          <div className="flex flex-col gap-2 p-3 bg-[#F8F9FC] h-[200px] sm:h-[240px] overflow-hidden">
             <AnimatePresence mode="wait">
               <motion.div
                 key={currentIndex}
@@ -246,6 +246,25 @@ function DashboardMockup() {
   );
 }
 
+// Floating UI elements that orbit the mockup area
+function FloatingNotification() {
+  return (
+    <motion.div
+      animate={{ y: [-6, 6] }}
+      transition={{ y: { duration: 3, repeat: Infinity, repeatType: "reverse" as const, ease: "easeInOut" as const } }}
+      className="absolute -right-4 top-8 sm:-right-12 sm:top-12 z-20 hidden sm:flex items-center gap-2 rounded-xl bg-white px-3 py-2 shadow-lg shadow-ink/8 border border-[#E2E4EC]/60"
+    >
+      <div className="h-7 w-7 rounded-full bg-mint flex items-center justify-center">
+        <CheckCircle2 className="h-4 w-4 text-emerald-600" />
+      </div>
+      <div>
+        <p className="text-[11px] font-medium text-ink">Turno confirmado</p>
+        <p className="text-[9px] text-gray-medium">Manana 14:30</p>
+      </div>
+    </motion.div>
+  );
+}
+
 function FloatingStatPill() {
   return (
     <motion.div
@@ -339,6 +358,17 @@ export function Hero() {
 
           {/* Trust signal + niche pills */}
           <motion.div variants={fadeUp} className="mt-4 flex flex-col items-center gap-3">
+            {/* Trust signal */}
+            <div className="flex items-center gap-4 text-xs text-gray-medium">
+              <span className="flex items-center gap-1.5">
+                <CheckCircle2 className="h-3.5 w-3.5 text-gray-soft" />
+                Sin tarjeta de credito
+              </span>
+              <span className="flex items-center gap-1.5">
+                <CheckCircle2 className="h-3.5 w-3.5 text-gray-soft" />
+                Setup en 5 minutos
+              </span>
+            </div>
             {/* Niche pills */}
             <div className="flex flex-wrap items-center justify-center gap-2">
               {nichePills.map((niche) => (
@@ -363,6 +393,7 @@ export function Hero() {
 
             <div className="relative flex flex-col md:flex-row items-center justify-center gap-4 sm:gap-6 md:gap-10">
               {/* Floating elements */}
+              <FloatingNotification />
               <FloatingStatPill />
               <FloatingConnectedBadge />
 
