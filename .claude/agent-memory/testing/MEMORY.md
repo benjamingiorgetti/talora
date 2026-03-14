@@ -166,6 +166,7 @@ function makeQueryResult<T>(rows: T[]): QueryResult<T> {
 
 ## Existing Test Files
 
+- `apps/backend/src/agent/__tests__/orchestration.test.ts` — 15 tests: safeJsonParse, buildAgentToolTrace, handleIncomingMessage (single-turn, tool loop, max iterations, early exits, locking)
 - `apps/backend/src/agent/__tests__/tool-executor.test.ts` — guards, appointment ownership
 - `apps/backend/src/agent/__tests__/fuzzy-matching.test.ts` — normalizeLabel, tokenize, scoreServiceMatch, scoreProfessionalMatch, resolveServiceSelection, resolveProfessionalSelection (35 tests)
 - `apps/backend/src/api/__tests__/validation.test.ts` — isValidUuid, parsePositiveInt, todos los schemas Zod, validateBody middleware (76 tests)

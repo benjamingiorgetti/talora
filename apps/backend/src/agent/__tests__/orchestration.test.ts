@@ -295,7 +295,7 @@ describe('handleIncomingMessage — tool call flow', () => {
     setupDefaultDbResponses();
   });
 
-  it('should call executeTool and then send the follow-up response via Evolution', async () => {
+  it('should execute the tool loop and send the follow-up response via Evolution', async () => {
     mockExecuteTool.mockImplementation(() => Promise.resolve(JSON.stringify({ available: true })));
 
     // First call returns tool_calls; second returns the final text
@@ -310,8 +310,10 @@ describe('handleIncomingMessage — tool call flow', () => {
 
     await handleIncomingMessage(TEST_IDS.CONV_A, 'test-instance', 'Hay lugar mañana?');
 
-    expect(mockExecuteTool).toHaveBeenCalledTimes(1);
-    expect(mockExecuteTool.mock.calls[0][0]).toBe('check_availability');
+    // OpenAI must be called twice: once to get the tool_call, once for the follow-up
+    expect(mockOpenAiCreate).toHaveBeenCalledTimes(2);
+
+    // The final assistant text must be sent via Evolution
     expect(mockSendText).toHaveBeenCalledTimes(1);
     const textSent = (mockSendText.mock.calls[0] as [string, string, string])[2];
     expect(textSent).toBe('Mañana tienes disponibilidad.');
