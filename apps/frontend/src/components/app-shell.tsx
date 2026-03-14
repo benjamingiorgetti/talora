@@ -24,11 +24,9 @@ import {
   Settings2,
   Shield,
   Sparkles,
-  TestTube2,
   UsersRound,
   Wrench,
   BellRing,
-  FileStack,
   X,
 } from "lucide-react";
 import { toast } from "sonner";
@@ -66,16 +64,15 @@ const sharedNav: NavItem[] = [
 ];
 
 const configNav: NavItem[] = [
+  { href: "/settings/general", label: "General", icon: Settings2 },
   { href: "/settings/services", label: "Servicios", icon: BookOpenText },
   { href: "/settings/professionals", label: "Profesionales", icon: Sparkles },
 ];
 
 const adminNav: NavItem[] = [
   { href: "/admin/companies", label: "Compañías", icon: Building2 },
-  { href: "/admin/templates", label: "Plantillas admin", icon: FileStack },
   { href: "/admin/ai", label: "IA", icon: Sparkles },
   { href: "/admin/messages", label: "Mensajes", icon: BellRing },
-  { href: "/admin/tests", label: "Tests", icon: TestTube2 },
   { href: "/admin/settings", label: "Ajustes", icon: Settings2 },
 ];
 

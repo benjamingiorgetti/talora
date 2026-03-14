@@ -10,6 +10,7 @@ type ToolExecutionContext = {
   phoneNumber?: string;
   contactName?: string | null;
   professionalId?: string | null;
+  isTestContext?: boolean;
 };
 
 type ServiceOption = {
@@ -618,12 +619,13 @@ export async function executeTool(
           name
         );
         const endsAt = new Date(new Date(date).getTime() + scheduling.durationMinutes * 60 * 1000).toISOString();
+        const appointmentStatus = context.isTestContext ? 'draft' : 'confirmed';
 
         const result = await pool.query<Appointment>(
           `INSERT INTO appointments (
              company_id, client_id, professional_id, service_id, conversation_id, phone_number, client_name,
              google_event_id, starts_at, ends_at, status, source, title, notes
-           ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, 'confirmed', 'bot', $11, $12)
+           ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, 'bot', $12, $13)
            RETURNING *`,
           [
             context.companyId,
@@ -636,6 +638,7 @@ export async function executeTool(
             booking.eventId ?? null,
             date,
             endsAt,
+            appointmentStatus,
             title,
             description,
           ]
