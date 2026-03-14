@@ -679,6 +679,16 @@ END $$;
 CREATE INDEX IF NOT EXISTS idx_conversations_active_by_company
   ON conversations(company_id, archived_at, last_message_at DESC);
 
+-- ARCH-1: Enforce one agent per company.
+-- Remove duplicates keeping the oldest agent, then add a unique constraint.
+DELETE FROM agents a
+USING agents b
+WHERE a.company_id = b.company_id
+  AND a.created_at > b.created_at;
+
+CREATE UNIQUE INDEX IF NOT EXISTS idx_agents_unique_company
+  ON agents(company_id);
+
 DO $$ BEGIN
   ALTER TABLE appointments DROP CONSTRAINT IF EXISTS chk_appointment_status;
   ALTER TABLE appointments ADD CONSTRAINT chk_appointment_status
