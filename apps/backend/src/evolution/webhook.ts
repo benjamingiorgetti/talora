@@ -68,7 +68,7 @@ function enforceIdempotencyMapSize() {
  * Normalize a phone number: strip non-digit characters.
  * Ensures consistent format for conversation lookups.
  */
-function normalizePhone(raw: string): string {
+export function normalizePhone(raw: string): string {
   return raw.replace(/\D/g, '');
 }
 
@@ -85,7 +85,7 @@ function getClientIp(req: Request): string {
   return req.ip || req.socket.remoteAddress || '';
 }
 
-function isWebhookAuthorized(req: Request): boolean {
+export function isWebhookAuthorized(req: Request): boolean {
   const secret = config.webhookSecret;
 
   // If a webhook secret is configured, check it first (takes priority)
@@ -186,7 +186,7 @@ webhookRouter.post('/evolution/:event?', (req, res) => {
   })();
 });
 
-async function handleMessagesUpsert(body: EvolutionWebhookBody) {
+export async function handleMessagesUpsert(body: EvolutionWebhookBody) {
   const data = body.data;
   if (!data) return;
 
@@ -408,7 +408,7 @@ async function handleMessagesUpsert(body: EvolutionWebhookBody) {
   await handleIncomingMessage(conversation.id, instanceName, messageText);
 }
 
-async function handleConnectionUpdate(body: EvolutionWebhookBody) {
+export async function handleConnectionUpdate(body: EvolutionWebhookBody) {
   const instanceName = body.instance;
   const state = body.data?.state;
 
@@ -464,7 +464,7 @@ async function handleConnectionUpdate(body: EvolutionWebhookBody) {
   }
 }
 
-async function handleQrCodeUpdate(body: EvolutionWebhookBody) {
+export async function handleQrCodeUpdate(body: EvolutionWebhookBody) {
   const instanceName = body.instance;
   const qrCode = body.data?.qrcode?.base64 || body.data?.base64 || null;
 

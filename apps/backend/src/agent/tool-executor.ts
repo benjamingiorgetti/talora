@@ -63,7 +63,7 @@ function hasSchedulingHints(toolInput: Record<string, unknown>): boolean {
   );
 }
 
-function normalizeLabel(value: string): string {
+export function normalizeLabel(value: string): string {
   return value
     .toLowerCase()
     .normalize('NFD')
@@ -73,7 +73,7 @@ function normalizeLabel(value: string): string {
     .replace(/\s+/g, ' ');
 }
 
-function tokenize(value: string): string[] {
+export function tokenize(value: string): string[] {
   return normalizeLabel(value).split(' ').filter(Boolean);
 }
 
@@ -151,7 +151,7 @@ function toServiceOption(service: Service): ServiceOption {
   };
 }
 
-function scoreServiceMatch(query: string, service: Service): number {
+export function scoreServiceMatch(query: string, service: Service): number {
   const normalizedQuery = normalizeLabel(query);
   if (!normalizedQuery) return 0;
 
@@ -195,7 +195,7 @@ function scoreServiceMatch(query: string, service: Service): number {
   return bestScore;
 }
 
-async function resolveServiceSelection(
+export async function resolveServiceSelection(
   companyId: string,
   toolInput: Record<string, unknown>,
   professionalId?: string | null
@@ -282,7 +282,7 @@ async function resolveServiceSelection(
   return { kind: 'resolved', service: matches[0].service };
 }
 
-function scoreProfessionalMatch(query: string, professional: Professional): number {
+export function scoreProfessionalMatch(query: string, professional: Professional): number {
   const normalizedQuery = normalizeLabel(query);
   if (!normalizedQuery) return 0;
 
@@ -303,7 +303,7 @@ function scoreProfessionalMatch(query: string, professional: Professional): numb
   return 0;
 }
 
-async function resolveProfessionalSelection(
+export async function resolveProfessionalSelection(
   companyId: string,
   toolInput: Record<string, unknown>,
   contextProfessionalId?: string | null
@@ -453,7 +453,7 @@ async function getPrimaryAgentId(companyId: string): Promise<string> {
   return id;
 }
 
-async function upsertClient(
+export async function upsertClient(
   companyId: string,
   agentId: string,
   professionalId: string,
@@ -494,7 +494,7 @@ async function upsertClient(
   return result.rows[0] ?? null;
 }
 
-async function resolveAppointmentByReference(
+export async function resolveAppointmentByReference(
   companyId: string,
   toolInput: Record<string, unknown>,
   professionalId: string | null = null
