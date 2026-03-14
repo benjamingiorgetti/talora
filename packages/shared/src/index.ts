@@ -330,4 +330,5 @@ export type WsEvent =
   | { type: 'message:new'; payload: Message & { company_id?: string } }
   | { type: 'appointment:created'; payload: AppointmentWsPayload }
   | { type: 'appointment:rescheduled'; payload: AppointmentWsPayload }
-  | { type: 'appointment:cancelled'; payload: AppointmentWsPayload };
+  | { type: 'appointment:cancelled'; payload: AppointmentWsPayload }
+  | { type: 'appointment:confirmed'; payload: AppointmentWsPayload };

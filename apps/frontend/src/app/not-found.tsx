@@ -27,12 +27,20 @@ export default function NotFound() {
           </p>
         </div>
 
-        <Link
-          href="/dashboard"
-          className="inline-flex h-11 items-center rounded-2xl bg-emerald-950 px-5 text-sm font-semibold text-white hover:bg-emerald-900"
-        >
-          Ir al dashboard
-        </Link>
+        <div className="flex gap-3">
+          <Link
+            href="/"
+            className="inline-flex h-11 items-center rounded-2xl border border-slate-200 bg-white px-5 text-sm font-semibold text-slate-700 hover:bg-slate-50"
+          >
+            Volver al inicio
+          </Link>
+          <Link
+            href="/dashboard"
+            className="inline-flex h-11 items-center rounded-2xl bg-emerald-950 px-5 text-sm font-semibold text-white hover:bg-emerald-900"
+          >
+            Ir al dashboard
+          </Link>
+        </div>
       </div>
     </div>
   );
