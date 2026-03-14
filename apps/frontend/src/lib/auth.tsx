@@ -238,7 +238,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       } else if (pathname === "/login") {
         router.replace(resolveDefaultRoute(nextSession, nextActiveCompanyId));
       }
-    } else if (pathname !== "/login") {
+    } else if (pathname !== "/login" && pathname !== "/") {
       redirectToLogin();
     }
     setIsLoading(false);
