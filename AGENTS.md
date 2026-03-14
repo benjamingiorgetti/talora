@@ -1,6 +1,6 @@
 # Talora Agent Guide
 
-Use `CLAUDE.md` for project memory: stack, commands, architecture, env, and gotchas. This file defines how an agent should work in this repo.
+Use `CLAUDE.md` for project memory. This file defines how an agent should work in this repo.
 
 ## Interaction Defaults
 
@@ -14,7 +14,7 @@ Use `CLAUDE.md` for project memory: stack, commands, architecture, env, and gotc
 - Explore relevant code before proposing or changing anything.
 - For non-trivial features, ask whether the user wants a plan first.
 - Before running the app, verify env files exist and required values are populated.
-- Bug fixes should start with reproduction. If there is a viable test harness, add a failing test first; if not, state the gap and use the strongest available verification.
+- **Bug fixes must start with a test.** Write a failing test that reproduces the bug, then fix it and prove the test passes. If no test harness exists for that area, state the gap explicitly.
 - When debugging, check in this order: env vars, service health, logs, then code.
 - Parallelize only when the scope justifies it:
   - Frontend only: 1 agent
@@ -35,5 +35,6 @@ Use `CLAUDE.md` for project memory: stack, commands, architecture, env, and gotc
 
 - Backend typecheck: `cd apps/backend && bun run typecheck`
 - Frontend lint: `cd apps/frontend && bun run lint`
+- Backend tests: `cd apps/backend && bun run test`
 - Healthcheck: `curl http://localhost:3001/api/health`
-- Manual verification is still required because there is no automated test framework configured yet.
+- Manual verification is still needed for UI flows and integrations (Evolution, Google Calendar).
