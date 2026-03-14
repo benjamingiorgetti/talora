@@ -147,12 +147,39 @@ Assert on the invariant prefix: `SECURITY_PREAMBLE.split('{{')[0]`.
 - Single-pass substitution: a variable value containing `{{...}}` is NOT expanded a second time.
 - `variableOverrides` win over system vars and custom vars (applied last).
 
+## Stateful Module Cache Tests (agent-cache pattern)
+
+Para módulos que mantienen estado en Maps a nivel de módulo (ej: `cachedConfig`, `cacheExpiry`, `pendingFetch`):
+
+1. Exponer y llamar la función de invalidación total (`invalidateAgentCache()`) en `beforeEach`.
+2. Llamar `mockQuery.mockReset()` en `beforeEach` para limpiar call counts entre tests.
+3. Para verificar cache hit: capturar `mockQuery.mock.calls.length` tras el primer fetch, luego llamar de nuevo y verificar que el count no cambió.
+4. Para verificar dedup de concurrent requests: usar `Promise.all([getX(id), getX(id)])` y contar llamadas SQL con `filter` por fragmento de SQL.
+5. Para mutation testing: romper la condición `now < expiry` → los tests de cache hit y de aislamiento de companyId deben fallar.
+
+`makeQueryResult<T>` helper útil para crear `QueryResult<T>` tipados:
+```typescript
+function makeQueryResult<T>(rows: T[]): QueryResult<T> {
+  return { rows, rowCount: rows.length, command: 'SELECT', oid: 0, fields: [] };
+}
+```
+
 ## Existing Test Files
 
 - `apps/backend/src/agent/__tests__/tool-executor.test.ts` — guards, appointment ownership
 - `apps/backend/src/agent/__tests__/fuzzy-matching.test.ts` — normalizeLabel, tokenize, scoreServiceMatch, scoreProfessionalMatch, resolveServiceSelection, resolveProfessionalSelection (35 tests)
 - `apps/backend/src/api/__tests__/validation.test.ts` — isValidUuid, parsePositiveInt, todos los schemas Zod, validateBody middleware (76 tests)
 - `apps/backend/src/agent/__tests__/prompt-builder.test.ts` — getSystemVariableValues, buildSystemPrompt, getResolvedPreview (19 tests)
+- `apps/backend/src/cache/__tests__/agent-cache.test.ts` — cache miss/hit/TTL, concurrent dedup, invalidation, null/notfound cases (10 tests)
+
+## EvolutionClient Tests — Patterns
+
+- `src/evolution/__tests__/client.test.ts` — 15 tests, sendText/fetchInstances/createInstance/ping/getInstanceStatus, retry logic, EvolutionApiError properties, URL/header construction
+- `config` mock: `mock.module('../../config', () => ({ config: { evolutionApiUrl, evolutionApiKey } }))` before `await import('../client')`
+- `global.fetch` mock: assign `globalThis.fetch = mock(async (...) => makeResponse(status, body))` per test
+- Retry delays bypassed: `globalThis.setTimeout = mock((fn) => { fn(); return 0; })` in `beforeAll`
+- `makeResponse(status, body)` helper builds minimal Response-compatible object (`.ok`, `.status`, `.text()`, `.json()`)
+- `apikey` header is lowercase — `headers['apikey']`, not `Authorization`
 
 ## Links to Detail Files
 
