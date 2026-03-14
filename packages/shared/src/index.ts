@@ -238,6 +238,7 @@ export interface DashboardMetrics {
   automation_rate: number;
   confirmation_rate: number;
   estimated_time_saved_minutes: number;
+  last_bot_activity_at: string | null;
 }
 
 // --- Test Sessions ---

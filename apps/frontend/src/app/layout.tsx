@@ -12,6 +12,7 @@ const plusJakarta = Plus_Jakarta_Sans({
 export const metadata: Metadata = {
   title: "Talora - Admin",
   description: "Panel de administracion del bot de WhatsApp",
+  icons: { icon: "/talora-icon.png" },
 };
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {

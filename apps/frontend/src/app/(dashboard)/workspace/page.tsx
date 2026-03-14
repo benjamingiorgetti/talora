@@ -5,7 +5,7 @@ import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import useSWR from "swr";
 import type { Appointment, Company, Conversation, DashboardMetrics, WhatsAppInstance } from "@talora/shared";
-import { ArrowRight, CalendarCheck2, CalendarDays, Clock3, MessageSquareText, Sparkles } from "lucide-react";
+import { ArrowRight, CalendarCheck2, CalendarDays, Clock3, MessageSquareText, Sparkles, Timer, TrendingUp } from "lucide-react";
 import { companyScopedFetcher, companyScopedKey } from "@/lib/api";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -31,6 +31,25 @@ function isSameDay(value: string, target: Date) {
     date.getMonth() === target.getMonth() &&
     date.getDate() === target.getDate()
   );
+}
+
+function formatTimeSaved(minutes: number) {
+  if (minutes <= 0) return "0m";
+  if (minutes < 60) return `${minutes}m`;
+  const h = Math.floor(minutes / 60);
+  const m = minutes % 60;
+  return m > 0 ? `${h}h ${m}m` : `${h}h`;
+}
+
+function formatBotActivity(isoDate: string | null | undefined): { label: string; tone: "green" | "yellow" | "red" } {
+  if (!isoDate) return { label: "Sin actividad registrada", tone: "red" };
+  const diffMs = Date.now() - new Date(isoDate).getTime();
+  const diffMin = Math.floor(diffMs / 60_000);
+  if (diffMin < 1) return { label: "Activo hace instantes", tone: "green" };
+  if (diffMin < 60) return { label: `Activo hace ${diffMin} min`, tone: diffMin < 30 ? "green" : "yellow" };
+  const diffH = Math.floor(diffMin / 60);
+  if (diffH < 24) return { label: `Ultima actividad hace ${diffH}h`, tone: diffH < 2 ? "yellow" : "red" };
+  return { label: `Ultima actividad hace ${Math.floor(diffH / 24)}d`, tone: "red" };
 }
 
 function formatSlot(value: string) {
@@ -144,6 +163,34 @@ export default function WorkspaceDashboardPage() {
     },
   ];
 
+  const cumulativeMetrics = [
+    {
+      label: "Turnos confirmados",
+      value: formatMetric(metrics?.confirmed_appointments ?? 0),
+      tone: "sky" as const,
+      icon: CalendarCheck2,
+      caption: "Total historico de turnos confirmados.",
+    },
+    {
+      label: "Tasa de confirmacion",
+      value: formatMetric(metrics?.confirmation_rate ?? 0, "%"),
+      tone: "rose" as const,
+      icon: TrendingUp,
+      caption: "Porcentaje de turnos que se confirman.",
+    },
+    {
+      label: "Tiempo ahorrado",
+      value: formatTimeSaved(metrics?.estimated_time_saved_minutes ?? 0),
+      tone: "neutral" as const,
+      icon: Timer,
+      caption: "Estimado por gestion automatizada.",
+    },
+  ];
+
+  const isFullyEmpty = (metrics?.confirmed_appointments ?? 0) === 0
+    && todayAppointments.length === 0
+    && pausedConversations.length === 0;
+
   const operationalAlerts: Array<{
     key: string;
     label: string;
@@ -194,10 +241,37 @@ export default function WorkspaceDashboardPage() {
           : null,
       ].filter((item): item is NonNullable<typeof item> => item !== null);
 
+  const botActivity = formatBotActivity(metrics?.last_bot_activity_at);
+  const botDotColor = botActivity.tone === "green"
+    ? "bg-emerald-500"
+    : botActivity.tone === "yellow"
+      ? "bg-amber-400"
+      : "bg-red-400";
+
   return (
     <div className="mx-auto max-w-[1080px] space-y-6">
+      {!isProfessional && (
+        <div className="flex items-center gap-2 text-sm text-slate-500">
+          <span className={cn("h-2 w-2 rounded-full", botDotColor)} />
+          <span>{botActivity.label}</span>
+        </div>
+      )}
+
       <section className="grid gap-3 sm:gap-4 md:grid-cols-3">
         {dashboardMetrics.map((metric) => (
+          <WorkspaceMetricCard
+            key={metric.label}
+            label={metric.label}
+            value={metric.value}
+            caption={metric.caption}
+            icon={metric.icon}
+            tone={metric.tone}
+          />
+        ))}
+      </section>
+
+      <section className="grid gap-3 sm:gap-4 md:grid-cols-3">
+        {cumulativeMetrics.map((metric) => (
           <WorkspaceMetricCard
             key={metric.label}
             label={metric.label}
@@ -306,11 +380,29 @@ export default function WorkspaceDashboardPage() {
             ) : (
               <WorkspaceEmptyState
                 className="px-4 py-10"
-                title={isProfessional ? "No tenes turnos proximos." : "Sin turnos proximos."}
+                title={
+                  isFullyEmpty
+                    ? "Tu panel se va a llenar cuando empieces a operar."
+                    : isProfessional
+                      ? "No tenes turnos proximos."
+                      : "Sin turnos proximos."
+                }
                 description={
-                  isProfessional
-                    ? "Cuando el bot o tu admin agenden turnos para vos, van a aparecer aca."
-                    : "Cuando entren reservas, este panel va a mostrar lo siguiente que viene."
+                  isFullyEmpty
+                    ? "Conecta WhatsApp, configura tu agenda y deja que el bot atienda el primer turno."
+                    : isProfessional
+                      ? "Cuando el bot o tu admin agenden turnos para vos, van a aparecer aca."
+                      : "Cuando entren reservas, este panel va a mostrar lo siguiente que viene."
+                }
+                action={
+                  isFullyEmpty && !isProfessional ? (
+                    <Button asChild variant="outline" className="h-11 rounded-2xl border-[#dde1ea] px-4 hover:bg-[#f6f7fb]">
+                      <Link href={!company?.calendar_connected ? "/settings/professionals" : "/whatsapp"}>
+                        {!company?.calendar_connected ? "Configurar agenda" : "Conectar WhatsApp"}
+                        <ArrowRight className="ml-2 h-4 w-4" />
+                      </Link>
+                    </Button>
+                  ) : undefined
                 }
               />
             )}
