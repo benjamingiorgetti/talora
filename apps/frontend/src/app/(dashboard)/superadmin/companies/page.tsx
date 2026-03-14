@@ -1,21 +1,29 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import Link from "next/link";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import Image from "next/image";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import useSWR from "swr";
 import type { Company, Professional, Service, WhatsAppInstance } from "@talora/shared";
-import { ArrowRight, Building2, CalendarRange, Link2, Plus, RefreshCw, Trash2, Wand2, Wifi } from "lucide-react";
+import { ArrowRight, Building2, CalendarRange, Plus, RefreshCw, Trash2, Users, Wifi } from "lucide-react";
 import { toast } from "sonner";
 import { api, fetcher } from "@/lib/api";
 import { useAuth } from "@/lib/auth";
 import { RequireAdminAccess } from "@/components/role-guards";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger,
+} from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { cn } from "@/lib/utils";
 
 type CompanyOverview = Company & {
@@ -83,8 +91,6 @@ const emptyCompany = {
   adminFullName: "",
   adminEmail: "",
   adminPassword: "",
-  professionals: "",
-  services: "",
 };
 
 const emptyProfessional = {
@@ -147,9 +153,8 @@ export default function SuperadminCompaniesPage() {
   const [professionalEdits, setProfessionalEdits] = useState<Record<string, ProfessionalEditDraft>>({});
   const [serviceEdits, setServiceEdits] = useState<Record<string, ServiceEditDraft>>({});
   const [instanceQr, setInstanceQr] = useState<Record<string, string | null>>({});
-  const professionalsSectionRef = useRef<HTMLDivElement | null>(null);
-  const servicesSectionRef = useRef<HTMLDivElement | null>(null);
-  const whatsappSectionRef = useRef<HTMLDivElement | null>(null);
+  const [activeTab, setActiveTab] = useState("general");
+  const [createDialogOpen, setCreateDialogOpen] = useState(false);
 
   useEffect(() => {
     if (activeCompanyId && activeCompanyId !== selectedCompanyId) {
@@ -194,18 +199,6 @@ export default function SuperadminCompaniesPage() {
     companyScope ? `/auth/google/calendars?${companyScope}` : null,
     fetcher
   );
-
-  const totals = useMemo(() => {
-    return (companies ?? []).reduce(
-      (acc, company) => {
-        acc.professionals += company.professional_count ?? 0;
-        acc.services += company.service_count ?? 0;
-        acc.ready += company.setup_ready ? 1 : 0;
-        return acc;
-      },
-      { professionals: 0, services: 0, ready: 0 }
-    );
-  }, [companies]);
 
   const refreshSelectedWorkspace = useCallback(async () => {
     await Promise.all([
@@ -308,23 +301,16 @@ export default function SuperadminCompaniesPage() {
         admin_email: companyForm.adminEmail.trim(),
         admin_password: companyForm.adminPassword,
         admin_full_name: companyForm.adminFullName.trim(),
-        professionals: parseCommaList(companyForm.professionals).map((name, index) => ({
-          name,
-          calendar_id: "primary",
-          color_hex: ["#17352d", "#6c8f7f", "#d78d5c", "#b7c9d6"][index % 4],
-        })),
-        services: parseCommaList(companyForm.services).map((name) => ({
-          name,
-          duration_minutes: 60,
-          price: 0,
-          description: "",
-        })),
+        professionals: [],
+        services: [],
       });
       await mutateCompanies();
       setSelectedCompanyId(response.data.company.id);
       setActiveCompanyId(response.data.company.id);
       setCompanyForm(emptyCompany);
-      toast.success("Empresa creada. Ya podes completar agenda y WhatsApp.");
+      setCreateDialogOpen(false);
+      setActiveTab("whatsapp");
+      toast.success("Empresa creada. Conecta WhatsApp para empezar.");
     } catch (error) {
       toast.error(error instanceof Error ? error.message : "No se pudo crear la empresa.");
     } finally {
@@ -340,7 +326,7 @@ export default function SuperadminCompaniesPage() {
       const message = error instanceof Error ? error.message : "No se pudo abrir el workspace.";
       toast.error(
         message.includes("No company admin available")
-          ? "Esta empresa todavía no tiene un admin cliente listo para abrir el workspace."
+          ? "Esta empresa todavia no tiene un admin cliente listo para abrir el workspace."
           : message
       );
       setImpersonatingId(null);
@@ -361,7 +347,7 @@ export default function SuperadminCompaniesPage() {
       return;
     }
     if ((professionalDraft.user_email && !professionalDraft.user_password) || (!professionalDraft.user_email && professionalDraft.user_password)) {
-      toast.error("Si querés crear login, completa email y password.");
+      toast.error("Si queres crear login, completa email y password.");
       return;
     }
     setCreatingProfessional(true);
@@ -534,15 +520,10 @@ export default function SuperadminCompaniesPage() {
     }
   };
 
-  const handleConnectGoogle = () => {
-    professionalsSectionRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
-    toast.message("Primero crea o elige un profesional. La conexión de Google está en su tarjeta.");
-  };
-
   const handleConnectProfessionalGoogle = (professionalId: string) => {
     const token = typeof window !== "undefined" ? localStorage.getItem("token") : null;
     if (!token) {
-      toast.error("La sesión expiró. Volvé a iniciar sesión.");
+      toast.error("La sesion expiro. Volve a iniciar sesion.");
       return;
     }
 
@@ -563,104 +544,50 @@ export default function SuperadminCompaniesPage() {
     }
   };
 
+  const handleDeleteInstance = async (instanceId: string) => {
+    if (!selectedCompanyId) return;
+    try {
+      await api.delete(`/instances/${instanceId}?company_id=${selectedCompanyId}`);
+      await refreshSelectedWorkspace();
+      toast.success("Instancia eliminada.");
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "No se pudo eliminar la instancia.");
+    }
+  };
+
   const professionalValidationMap = new Map(
     (googleCalendars?.professionals ?? []).map((item) => [item.id, item])
   );
-  const setupSteps = selectedCompany
-    ? [
-        {
-          step: "1",
-          title: "Empresa",
-          status: "listo",
-          description: `${selectedCompany.name} ya está creada y activa.`,
-        },
-        {
-          step: "2",
-          title: "Profesionales + Google",
-          status: (googleStatus?.connected_professional_count ?? 0) > 0 ? "en curso" : "pendiente",
-          description:
-            (googleStatus?.connected_professional_count ?? 0) > 0
-              ? `${googleStatus?.connected_professional_count ?? 0} profesional(es) con Google conectado.`
-              : "Crea profesionales y conecta Google desde cada tarjeta.",
-        },
-        {
-          step: "3",
-          title: "Servicios",
-          status: (services?.length ?? 0) > 0 ? "listo" : "pendiente",
-          description: (services?.length ?? 0) > 0 ? `${services?.length ?? 0} servicio(s) cargados.` : "Define qué se puede reservar.",
-        },
-        {
-          step: "4",
-          title: "WhatsApp",
-          status: (instances?.some((instance) => instance.status === "connected") ?? false) ? "listo" : "pendiente",
-          description:
-            (instances?.length ?? 0) > 0
-              ? `${instances?.filter((instance) => instance.status === "connected").length ?? 0} instancia(s) conectadas.`
-              : "Crea la instancia y pedí QR.",
-        },
-        {
-          step: "5",
-          title: "Workspace",
-          status: selectedCompany.setup_ready ? "listo" : "bloqueado",
-          description: selectedCompany.setup_ready ? "Ya podés entrar como cliente." : "Solo tiene sentido entrar cuando los pasos previos cierran.",
-        },
-      ]
-    : [];
+
+  const whatsappConnected = instances?.some((i) => i.status === "connected") ?? false;
+  const googleConnectedCount = googleStatus?.connected_professional_count ?? 0;
+  const googleTotalCount = googleStatus?.professional_count ?? 0;
 
   return (
     <div className="space-y-6">
-      <section className="grid gap-4 xl:grid-cols-[1.2fr_0.8fr]">
-        <Card className="rounded-[30px] border-[#e9dfd2] bg-white shadow-none">
-          <CardContent className="p-5 sm:p-6">
-            <div className="flex flex-wrap items-end justify-between gap-3">
-              <div>
-                <p className="text-[11px] uppercase tracking-[0.22em] text-slate-400">Cuentas</p>
-                <h2 className="mt-2 text-2xl font-semibold tracking-[-0.04em] text-slate-950">Empresas activas</h2>
-              </div>
-              <span className="rounded-full border border-[#eadfce] bg-[#fcfaf6] px-3 py-1.5 text-xs font-semibold text-slate-600">
-                {companies?.length ?? 0} seleccionables
-              </span>
-            </div>
-
-            <div className="mt-5 grid gap-4 md:grid-cols-4">
-              {[
-                { label: "Empresas", value: companies?.length ?? 0 },
-                { label: "Listas", value: totals.ready },
-                { label: "Profesionales", value: totals.professionals },
-                { label: "Servicios", value: totals.services },
-              ].map((item) => (
-                <Card key={item.label} className="rounded-[24px] border-[#eadfce] bg-white shadow-none">
-                  <CardContent className="p-5">
-                    <p className="text-xs uppercase tracking-[0.18em] text-slate-400">{item.label}</p>
-                    <p className="mt-3 text-3xl font-semibold tracking-[-0.05em] text-slate-950">{item.value}</p>
-                  </CardContent>
-                </Card>
-              ))}
-            </div>
-          </CardContent>
-        </Card>
-
-        <Card className="rounded-[30px] border-[#e9dfd2] bg-white shadow-none">
-          <CardContent className="p-7">
-              <div className="flex items-center gap-3">
-              <div className="flex h-12 w-12 items-center justify-center rounded-[20px] bg-[#17352d] text-white">
-                <Plus className="h-5 w-5" />
-              </div>
-              <div>
-                <p className="text-[11px] uppercase tracking-[0.18em] text-slate-400">Paso 0</p>
-                <h3 className="mt-1 text-xl font-semibold tracking-[-0.03em] text-slate-950">Crear nueva empresa</h3>
-              </div>
-            </div>
-
-            <div className="mt-6 grid gap-4">
+      {/* Top: create button */}
+      <div className="flex justify-end">
+        <Dialog open={createDialogOpen} onOpenChange={setCreateDialogOpen}>
+          <DialogTrigger asChild>
+            <Button className="h-11 rounded-2xl bg-[#17352d] px-5 hover:bg-[#21453a]">
+              <Plus className="mr-2 h-4 w-4" />
+              Crear empresa
+            </Button>
+          </DialogTrigger>
+          <DialogContent className="rounded-[28px] sm:max-w-[480px]">
+            <DialogHeader>
+              <DialogTitle>Crear nueva empresa</DialogTitle>
+              <DialogDescription>Completa los datos basicos para la nueva cuenta.</DialogDescription>
+            </DialogHeader>
+            <div className="grid gap-4 py-2">
               <div className="space-y-2">
                 <Label>Empresa</Label>
-                <Input value={companyForm.name} onChange={(event) => setCompanyForm((current) => ({ ...current, name: event.target.value }))} className="h-11 rounded-2xl border-[#eadfcd]" placeholder="Clinica Armonia Dental" />
+                <Input value={companyForm.name} onChange={(event) => setCompanyForm((current) => ({ ...current, name: event.target.value }))} className="h-11 rounded-2xl border-[#dde1ea]" placeholder="Clinica Armonia Dental" />
               </div>
               <div className="space-y-2">
                 <Label>Rubro</Label>
                 <Select value={companyForm.industry} onValueChange={(value) => setCompanyForm((current) => ({ ...current, industry: value }))}>
-                  <SelectTrigger className="h-11 rounded-2xl border-[#eadfcd]">
+                  <SelectTrigger className="h-11 rounded-2xl border-[#dde1ea]">
                     <SelectValue placeholder="Selecciona un vertical" />
                   </SelectTrigger>
                   <SelectContent>
@@ -674,42 +601,32 @@ export default function SuperadminCompaniesPage() {
               </div>
               <div className="space-y-2">
                 <Label>WhatsApp principal</Label>
-                <Input value={companyForm.whatsapp} onChange={(event) => setCompanyForm((current) => ({ ...current, whatsapp: event.target.value }))} className="h-11 rounded-2xl border-[#eadfcd]" placeholder="+54 9 11..." />
+                <Input value={companyForm.whatsapp} onChange={(event) => setCompanyForm((current) => ({ ...current, whatsapp: event.target.value }))} className="h-11 rounded-2xl border-[#dde1ea]" placeholder="+54 9 11..." />
               </div>
               <div className="grid gap-4 md:grid-cols-2">
                 <div className="space-y-2">
                   <Label>Admin nombre</Label>
-                  <Input value={companyForm.adminFullName} onChange={(event) => setCompanyForm((current) => ({ ...current, adminFullName: event.target.value }))} className="h-11 rounded-2xl border-[#eadfcd]" placeholder="Juliana Perez" />
+                  <Input value={companyForm.adminFullName} onChange={(event) => setCompanyForm((current) => ({ ...current, adminFullName: event.target.value }))} className="h-11 rounded-2xl border-[#dde1ea]" placeholder="Juliana Perez" />
                 </div>
                 <div className="space-y-2">
                   <Label>Admin email</Label>
-                  <Input value={companyForm.adminEmail} onChange={(event) => setCompanyForm((current) => ({ ...current, adminEmail: event.target.value }))} className="h-11 rounded-2xl border-[#eadfcd]" placeholder="equipo@clinica.com" />
+                  <Input value={companyForm.adminEmail} onChange={(event) => setCompanyForm((current) => ({ ...current, adminEmail: event.target.value }))} className="h-11 rounded-2xl border-[#dde1ea]" placeholder="equipo@clinica.com" />
                 </div>
               </div>
               <div className="space-y-2">
                 <Label>Password temporal</Label>
-                <Input type="password" value={companyForm.adminPassword} onChange={(event) => setCompanyForm((current) => ({ ...current, adminPassword: event.target.value }))} className="h-11 rounded-2xl border-[#eadfcd]" placeholder="••••••••" />
+                <Input type="password" value={companyForm.adminPassword} onChange={(event) => setCompanyForm((current) => ({ ...current, adminPassword: event.target.value }))} className="h-11 rounded-2xl border-[#dde1ea]" placeholder="••••••••" />
               </div>
-              <div className="grid gap-4 md:grid-cols-2">
-                <div className="space-y-2">
-                  <Label>Profesionales</Label>
-                  <Input value={companyForm.professionals} onChange={(event) => setCompanyForm((current) => ({ ...current, professionals: event.target.value }))} className="h-11 rounded-2xl border-[#eadfcd]" placeholder="Dra. Nuñez, Dra. Mora" />
-                </div>
-                <div className="space-y-2">
-                  <Label>Servicios</Label>
-                  <Input value={companyForm.services} onChange={(event) => setCompanyForm((current) => ({ ...current, services: event.target.value }))} className="h-11 rounded-2xl border-[#eadfcd]" placeholder="Control, Limpieza, Consulta" />
-                </div>
-              </div>
-
-              <Button disabled={creatingCompany} onClick={handleCreateCompany} className="mt-2 h-11 rounded-2xl bg-[#17352d] hover:bg-[#21453a]">
+              <Button disabled={creatingCompany} onClick={() => void handleCreateCompany()} className="mt-2 h-11 rounded-2xl bg-[#17352d] hover:bg-[#21453a]">
                 <Plus className="mr-2 h-4 w-4" />
                 {creatingCompany ? "Creando..." : "Crear empresa"}
               </Button>
             </div>
-          </CardContent>
-        </Card>
-      </section>
+          </DialogContent>
+        </Dialog>
+      </div>
 
+      {/* Company list + detail panel */}
       {(companies?.length ?? 0) === 0 ? (
         <Card className="rounded-[32px] border-[#ebe1d4] bg-white shadow-none">
           <CardContent className="px-8 py-14 text-center">
@@ -722,222 +639,242 @@ export default function SuperadminCompaniesPage() {
                 Crea la primera empresa para empezar
               </h3>
               <p className="mt-4 max-w-lg text-pretty text-sm leading-7 text-slate-500">
-                Completa los datos básicos y después seguí con profesionales, Google, servicios y WhatsApp.
+                Completa los datos basicos y despues segui con WhatsApp, equipo y servicios.
               </p>
+              <Button onClick={() => setCreateDialogOpen(true)} className="mt-6 h-11 rounded-2xl bg-[#17352d] px-5 hover:bg-[#21453a]">
+                <Plus className="mr-2 h-4 w-4" />
+                Crear empresa
+              </Button>
             </div>
           </CardContent>
         </Card>
       ) : (
-      <section className="grid gap-4 xl:grid-cols-[0.95fr_1.05fr]">
-        <Card className="rounded-[32px] border-[#ebe1d4] bg-white shadow-none">
-          <CardContent className="p-0">
-            <div className="grid grid-cols-[minmax(0,1.2fr)_140px_120px_140px_160px] border-b border-[#efe6da] px-6 py-4 text-[11px] uppercase tracking-[0.18em] text-slate-400">
-              <span>Empresa</span>
-              <span>Setup</span>
-              <span>WhatsApp</span>
-              <span>Agenda</span>
-              <span className="text-right">Accion</span>
-            </div>
-            <div className="divide-y divide-[#f1e8dd]">
-              {(companies ?? []).map((company) => (
-                <div
-                  key={company.id}
-                  role="button"
-                  tabIndex={0}
-                  onClick={() => {
-                    setSelectedCompanyId(company.id);
-                    setActiveCompanyId(company.id);
-                  }}
-                  onKeyDown={(event) => {
-                    if (event.key === "Enter" || event.key === " ") {
-                      event.preventDefault();
+        <section className="grid gap-4 xl:grid-cols-[0.95fr_1.05fr]">
+          {/* Left: company list */}
+          <Card className="rounded-[32px] border-[#ebe1d4] bg-white shadow-none">
+            <CardContent className="p-0">
+              <div className="grid grid-cols-[minmax(0,1.2fr)_100px_100px_100px_160px] border-b border-[#efe6da] px-6 py-4 text-[11px] uppercase tracking-[0.18em] text-slate-400">
+                <span>Empresa</span>
+                <span>Estado</span>
+                <span>WhatsApp</span>
+                <span>Google</span>
+                <span className="text-right">Accion</span>
+              </div>
+              <div className="divide-y divide-[#f1e8dd]">
+                {(companies ?? []).map((company) => (
+                  <div
+                    key={company.id}
+                    role="button"
+                    tabIndex={0}
+                    onClick={() => {
                       setSelectedCompanyId(company.id);
                       setActiveCompanyId(company.id);
-                    }
-                  }}
-                  className={`grid w-full cursor-pointer grid-cols-[minmax(0,1.2fr)_140px_120px_140px_160px] items-center gap-4 px-6 py-5 text-left transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-[#17352d] ${selectedCompanyId === company.id ? "bg-[#fcfaf6]" : "hover:bg-[#fdfaf5]"}`}
-                >
-                  <div className="min-w-0">
-                    <p className="truncate text-sm font-semibold text-slate-950">{company.name}</p>
-                    <p className="mt-1 text-sm text-slate-500">{company.industry}</p>
-                  </div>
-                  <div>
-                    <div className="text-sm font-semibold text-slate-950">{company.setup_progress}%</div>
-                    <div className="mt-1 h-2 overflow-hidden rounded-full bg-[#f1e8db]">
-                      <div className="h-full rounded-full bg-[#17352d]" style={{ width: `${company.setup_progress}%` }} />
+                    }}
+                    onKeyDown={(event) => {
+                      if (event.key === "Enter" || event.key === " ") {
+                        event.preventDefault();
+                        setSelectedCompanyId(company.id);
+                        setActiveCompanyId(company.id);
+                      }
+                    }}
+                    className={`grid w-full cursor-pointer grid-cols-[minmax(0,1.2fr)_100px_100px_100px_160px] items-center gap-4 px-6 py-5 text-left transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-[#17352d] ${selectedCompanyId === company.id ? "bg-[#fcfaf6]" : "hover:bg-[#fdfaf5]"}`}
+                  >
+                    <div className="min-w-0">
+                      <p className="truncate text-sm font-semibold text-slate-950">{company.name}</p>
+                      <p className="mt-1 text-sm text-slate-500">{company.industry}</p>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <span className={cn("inline-block h-2.5 w-2.5 rounded-full", company.setup_ready ? "bg-emerald-500" : "bg-amber-400")} />
+                      <span className="text-sm text-slate-700">{company.setup_ready ? "Lista" : "Setup"}</span>
+                    </div>
+                    <span className={company.whatsapp_connected ? "text-sm font-semibold text-emerald-700" : "text-sm text-amber-700"}>
+                      {company.whatsapp_connected ? "Listo" : "Pendiente"}
+                    </span>
+                    <span className={company.calendar_connected ? "text-sm font-semibold text-emerald-700" : "text-sm text-amber-700"}>
+                      {company.calendar_connected ? "Listo" : "Pendiente"}
+                    </span>
+                    <div className="flex justify-end">
+                      <div className="flex items-center gap-2">
+                        <Button
+                          type="button"
+                          variant={activeCompanyId === company.id ? "default" : "outline"}
+                          onClick={(event) => {
+                            event.stopPropagation();
+                            setSelectedCompanyId(company.id);
+                            setActiveCompanyId(company.id);
+                          }}
+                          className={cn(
+                            "h-10 rounded-2xl px-3",
+                            activeCompanyId === company.id
+                              ? "bg-[#17352d] text-white hover:bg-[#21453a]"
+                              : "border-[#e5d9c8] bg-white text-slate-700 hover:bg-[#f7efe4]"
+                          )}
+                        >
+                          {activeCompanyId === company.id ? "Activa" : "Usar"}
+                        </Button>
+                        <Button
+                          type="button"
+                          disabled={impersonatingId === company.id}
+                          variant="ghost"
+                          onClick={(event) => {
+                            event.stopPropagation();
+                            void handleImpersonate(company.id);
+                          }}
+                          className="h-10 rounded-2xl px-3 text-slate-600 hover:bg-[#f7efe4] hover:text-slate-950"
+                        >
+                          {impersonatingId === company.id ? "Abriendo..." : "Ver como cliente"}
+                          <ArrowRight className="ml-2 h-4 w-4" />
+                        </Button>
+                      </div>
                     </div>
                   </div>
-                  <span className={company.whatsapp_connected ? "text-sm font-semibold text-emerald-700" : "text-sm text-amber-700"}>
-                    {company.whatsapp_connected ? "Listo" : "Pendiente"}
-                  </span>
-                  <span className={company.calendar_connected ? "text-sm font-semibold text-emerald-700" : "text-sm text-amber-700"}>
-                    {company.calendar_connected ? "Lista" : "Pendiente"}
-                  </span>
-                  <div className="flex justify-end">
+                ))}
+              </div>
+            </CardContent>
+          </Card>
+
+          {/* Right: company detail with tabs */}
+          <Card className="rounded-[32px] border-[#ebe1d4] bg-white shadow-none">
+            <CardContent className="p-6">
+              {selectedCompany ? (
+                <div className="space-y-5">
+                  {/* Company header */}
+                  <div className="flex flex-wrap items-start justify-between gap-4">
+                    <div>
+                      <h3 className="text-2xl font-semibold tracking-[-0.04em] text-slate-950">{selectedCompany.name}</h3>
+                      <p className="mt-1 text-sm text-slate-500">{selectedCompany.industry}</p>
+                    </div>
                     <div className="flex items-center gap-2">
+                      <span className={statusBadge(selectedCompany.setup_ready)}>
+                        {selectedCompany.setup_ready ? "Lista" : "En setup"}
+                      </span>
                       <Button
                         type="button"
-                        variant={activeCompanyId === company.id ? "default" : "outline"}
-                        onClick={(event) => {
-                          event.stopPropagation();
-                          setSelectedCompanyId(company.id);
-                          setActiveCompanyId(company.id);
-                        }}
-                        className={cn(
-                          "h-10 rounded-2xl px-3",
-                          activeCompanyId === company.id
-                            ? "bg-[#17352d] text-white hover:bg-[#21453a]"
-                            : "border-[#e5d9c8] bg-white text-slate-700 hover:bg-[#f7efe4]"
-                        )}
+                        disabled={!selectedCompany.setup_ready || impersonatingId === selectedCompany.id}
+                        variant="outline"
+                        onClick={() => void handleImpersonate(selectedCompany.id)}
+                        className="h-9 rounded-2xl border-[#e5d9c8] bg-white px-4 hover:bg-[#f7efe4]"
                       >
-                        {activeCompanyId === company.id ? "Activa" : "Usar"}
-                      </Button>
-                      <Button
-                        type="button"
-                        disabled={impersonatingId === company.id}
-                        variant="ghost"
-                        onClick={(event) => {
-                          event.stopPropagation();
-                          void handleImpersonate(company.id);
-                        }}
-                        className="h-10 rounded-2xl px-3 text-slate-600 hover:bg-[#f7efe4] hover:text-slate-950"
-                      >
-                        {impersonatingId === company.id ? "Abriendo..." : "Ver como cliente"}
+                        {impersonatingId === selectedCompany.id ? "Abriendo..." : "Ver como cliente"}
                         <ArrowRight className="ml-2 h-4 w-4" />
                       </Button>
                     </div>
                   </div>
-                </div>
-              ))}
-            </div>
-          </CardContent>
-        </Card>
 
-        <Card className="rounded-[32px] border-[#ebe1d4] bg-white shadow-none">
-          <CardContent className="p-6">
-            {selectedCompany ? (
-              <div className="space-y-6">
-                <div className="flex flex-wrap items-start justify-between gap-4">
-                  <div>
-                    <p className="text-[11px] uppercase tracking-[0.18em] text-slate-400">Cuenta seleccionada</p>
-                    <h3 className="mt-2 text-2xl font-semibold tracking-[-0.04em] text-slate-950">{selectedCompany.name}</h3>
-                    <p className="mt-2 text-sm text-slate-500">
-                      {selectedCompany.industry} · {selectedCompany.professional_count} profesionales · {selectedCompany.service_count} servicios
-                    </p>
-                  </div>
-                  <span className={statusBadge(selectedCompany.setup_ready)}>
-                    {selectedCompany.setup_ready ? "Lista para demo" : "Falta setup"}
-                  </span>
-                </div>
-
-                <div className="grid gap-3 md:grid-cols-5">
-                  {setupSteps.map((item) => (
-                    <div key={item.step} className="rounded-[22px] border border-[#ece2d5] bg-[#fcfaf6] p-4">
-                      <div className="flex items-center justify-between gap-3">
-                        <span className="rounded-full border border-[#e4d7c6] bg-white px-2.5 py-1 text-[11px] font-semibold text-slate-700">
-                          Paso {item.step}
-                        </span>
-                        <span
-                          className={cn(
-                            "rounded-full px-2.5 py-1 text-[11px] font-semibold",
-                            item.status === "listo"
-                              ? "bg-emerald-50 text-emerald-700"
-                              : item.status === "en curso"
-                                ? "bg-sky-50 text-sky-700"
-                                : item.status === "bloqueado"
-                                  ? "bg-slate-100 text-slate-600"
-                                  : "bg-amber-50 text-amber-700"
-                          )}
-                        >
-                          {item.status}
-                        </span>
-                      </div>
-                      <p className="mt-3 text-sm font-semibold text-slate-950">{item.title}</p>
-                      <p className="mt-2 text-sm leading-6 text-slate-500">{item.description}</p>
-                    </div>
-                  ))}
-                </div>
-
-                <div className="grid gap-3 md:grid-cols-3">
-                  <div className="rounded-[24px] border border-[#efe4d5] bg-[#fcfaf6] p-4">
-                    <div className="flex items-center gap-2 text-sm font-semibold text-slate-900">
-                      <Link2 className="h-4 w-4 text-[#17352d]" />
-                      Google por profesional
-                    </div>
-                    <p className="mt-2 text-sm text-slate-500">
-                      {googleStatus?.connected
-                        ? `${googleStatus.connected_professional_count ?? 0} de ${googleStatus.professional_count ?? 0} profesionales ya tienen Google Calendar conectado.`
-                        : "Todavía no hay profesionales con Google Calendar conectado."}
-                    </p>
-                    <div className="mt-4 flex flex-wrap gap-2">
-                      <Button variant="outline" onClick={handleConnectGoogle} className="h-10 rounded-2xl border-[#e5d9c8] bg-white px-4 hover:bg-[#f7efe4]">
-                        <CalendarRange className="mr-2 h-4 w-4" />
-                        Ir a profesionales
-                      </Button>
-                      {googleStatus?.connected && (
-                        <Button variant="outline" onClick={() => void mutateGoogleCalendars()} className="h-10 rounded-2xl border-[#e5d9c8] bg-white px-4 hover:bg-[#f7efe4]">
-                          <RefreshCw className="mr-2 h-4 w-4" />
-                          Validar
-                        </Button>
-                      )}
-                    </div>
-                    {googleStatus?.connected && (
-                      <div className="mt-4 rounded-[18px] border border-[#eadfce] bg-white p-3 text-xs text-slate-500">
-                        {googleCalendars?.professionals?.length
-                          ? googleCalendars.professionals.slice(0, 4).map((professional) => (
-                              <div key={professional.id} className="flex items-center justify-between gap-3 py-1">
-                                <span className="truncate">{professional.name}</span>
-                                <span className="shrink-0 text-slate-400">
-                                  {professional.is_connected ? professional.google_account_email ?? "Conectado" : "Pendiente"}
-                                </span>
-                              </div>
-                            ))
-                          : "Todavía no hay profesionales activos para configurar."}
-                      </div>
-                    )}
+                  {/* Status badges */}
+                  <div className="flex flex-wrap gap-2">
+                    <span className={cn("inline-flex items-center gap-1.5", statusBadge(whatsappConnected))}>
+                      <Wifi className="h-3 w-3" />
+                      WhatsApp: {whatsappConnected ? "Conectado" : "Pendiente"}
+                    </span>
+                    <span className={cn("inline-flex items-center gap-1.5", statusBadge(googleConnectedCount > 0))}>
+                      <CalendarRange className="h-3 w-3" />
+                      Google: {googleConnectedCount}/{googleTotalCount}
+                    </span>
+                    <span className={cn("inline-flex items-center gap-1.5", statusBadge((professionals?.length ?? 0) > 0))}>
+                      <Users className="h-3 w-3" />
+                      Equipo: {professionals?.length ?? 0}
+                    </span>
+                    <span className={cn("inline-flex items-center gap-1.5", statusBadge((services?.length ?? 0) > 0))}>
+                      Servicios: {services?.length ?? 0}
+                    </span>
                   </div>
 
-                  <div ref={whatsappSectionRef} className="rounded-[24px] border border-[#efe4d5] bg-[#fcfaf6] p-4">
-                    <div className="flex items-center gap-2 text-sm font-semibold text-slate-900">
-                      <Wifi className="h-4 w-4 text-[#17352d]" />
-                      WhatsApp
-                    </div>
-                    <p className="mt-2 text-sm text-slate-500">
-                      {(instances?.length ?? 0) > 0
-                        ? `${instances?.filter((instance) => instance.status === "connected").length ?? 0} instancia(s) conectadas.`
-                        : "Todavia no hay instancia creada para este cliente."}
-                    </p>
-                    <div className="mt-4 flex flex-wrap gap-2">
-                      <Button disabled={creatingInstance} onClick={handleCreateInstance} className="h-10 rounded-2xl bg-[#17352d] px-4 hover:bg-[#21453a]">
-                        <Plus className="mr-2 h-4 w-4" />
-                        {creatingInstance ? "Creando..." : "Crear instancia"}
-                      </Button>
-                      {instances?.[0] && (
-                        <>
-                          <Button variant="outline" onClick={() => handleConnectInstance(instances[0].id)} className="h-10 rounded-2xl border-[#e5d9c8] bg-white px-4 hover:bg-[#f7efe4]">
-                            <Wifi className="mr-2 h-4 w-4" />
-                            Pedir QR
+                  {/* Tabs */}
+                  <Tabs value={activeTab} onValueChange={setActiveTab}>
+                    <TabsList className="h-11 w-full justify-start rounded-2xl border border-[#eadfce] bg-[#fcfaf6] p-1">
+                      <TabsTrigger value="general" className="rounded-xl px-4 py-2 text-sm data-[state=active]:bg-white data-[state=active]:shadow-sm">
+                        General
+                      </TabsTrigger>
+                      <TabsTrigger value="whatsapp" className="rounded-xl px-4 py-2 text-sm data-[state=active]:bg-white data-[state=active]:shadow-sm">
+                        WhatsApp
+                      </TabsTrigger>
+                      <TabsTrigger value="equipo" className="rounded-xl px-4 py-2 text-sm data-[state=active]:bg-white data-[state=active]:shadow-sm">
+                        Equipo ({professionals?.length ?? 0})
+                      </TabsTrigger>
+                      <TabsTrigger value="servicios" className="rounded-xl px-4 py-2 text-sm data-[state=active]:bg-white data-[state=active]:shadow-sm">
+                        Servicios ({services?.length ?? 0})
+                      </TabsTrigger>
+                    </TabsList>
+
+                    {/* General tab */}
+                    <TabsContent value="general" className="mt-4">
+                      <div className="space-y-4">
+                        <div className="rounded-[22px] border border-[#ece2d5] bg-[#fcfaf6] p-5">
+                          <div className="grid gap-4 sm:grid-cols-2">
+                            <div>
+                              <p className="text-[11px] uppercase tracking-[0.18em] text-slate-400">Empresa</p>
+                              <p className="mt-1 text-sm font-semibold text-slate-950">{selectedCompany.name}</p>
+                            </div>
+                            <div>
+                              <p className="text-[11px] uppercase tracking-[0.18em] text-slate-400">Rubro</p>
+                              <p className="mt-1 text-sm font-semibold text-slate-950">{selectedCompany.industry}</p>
+                            </div>
+                            <div>
+                              <p className="text-[11px] uppercase tracking-[0.18em] text-slate-400">WhatsApp</p>
+                              <p className="mt-1 text-sm text-slate-700">{selectedCompany.whatsapp_number || "No configurado"}</p>
+                            </div>
+                            <div>
+                              <p className="text-[11px] uppercase tracking-[0.18em] text-slate-400">Admins</p>
+                              <p className="mt-1 text-sm text-slate-700">{selectedCompany.admin_count} admin(s)</p>
+                            </div>
+                          </div>
+                        </div>
+
+                        <div className="rounded-[22px] border border-[#ece2d5] bg-[#fcfaf6] p-5">
+                          <p className="text-[11px] uppercase tracking-[0.18em] text-slate-400">Resumen de setup</p>
+                          <div className="mt-3 grid gap-3 sm:grid-cols-2">
+                            <div className="flex items-center gap-2">
+                              <span className={cn("h-2 w-2 rounded-full", whatsappConnected ? "bg-emerald-500" : "bg-amber-400")} />
+                              <span className="text-sm text-slate-700">WhatsApp {whatsappConnected ? "conectado" : "pendiente"}</span>
+                            </div>
+                            <div className="flex items-center gap-2">
+                              <span className={cn("h-2 w-2 rounded-full", googleConnectedCount > 0 ? "bg-emerald-500" : "bg-amber-400")} />
+                              <span className="text-sm text-slate-700">Google Calendar: {googleConnectedCount}/{googleTotalCount} profesionales</span>
+                            </div>
+                            <div className="flex items-center gap-2">
+                              <span className={cn("h-2 w-2 rounded-full", (professionals?.length ?? 0) > 0 ? "bg-emerald-500" : "bg-amber-400")} />
+                              <span className="text-sm text-slate-700">{professionals?.length ?? 0} profesional(es)</span>
+                            </div>
+                            <div className="flex items-center gap-2">
+                              <span className={cn("h-2 w-2 rounded-full", (services?.length ?? 0) > 0 ? "bg-emerald-500" : "bg-amber-400")} />
+                              <span className="text-sm text-slate-700">{services?.length ?? 0} servicio(s)</span>
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+                    </TabsContent>
+
+                    {/* WhatsApp tab */}
+                    <TabsContent value="whatsapp" className="mt-4">
+                      <div className="space-y-4">
+                        <div className="flex flex-wrap items-center justify-between gap-3">
+                          <div>
+                            <h4 className="text-lg font-semibold tracking-[-0.03em] text-slate-950">WhatsApp</h4>
+                            <p className="mt-1 text-sm text-slate-500">
+                              {(instances?.length ?? 0) > 0
+                                ? `${instances?.filter((i) => i.status === "connected").length ?? 0} de ${instances?.length ?? 0} instancia(s) conectadas`
+                                : "Crea una instancia y escanea el QR para conectar"}
+                            </p>
+                          </div>
+                          <Button disabled={creatingInstance} onClick={handleCreateInstance} className="h-10 rounded-2xl bg-[#17352d] px-4 hover:bg-[#21453a]">
+                            <Plus className="mr-2 h-4 w-4" />
+                            {creatingInstance ? "Creando..." : "Crear instancia"}
                           </Button>
-                          <Button variant="outline" onClick={() => handleRefreshQr(instances[0].id)} className="h-10 rounded-2xl border-[#e5d9c8] bg-white px-4 hover:bg-[#f7efe4]">
-                            <RefreshCw className="mr-2 h-4 w-4" />
-                            Refrescar
-                          </Button>
-                        </>
-                      )}
-                      <Button
-                        variant="outline"
-                        onClick={() => whatsappSectionRef.current?.scrollIntoView({ behavior: "smooth", block: "start" })}
-                        className="h-10 rounded-2xl border-[#e5d9c8] bg-white px-4 hover:bg-[#f7efe4]"
-                      >
-                        Ver estado
-                      </Button>
-                    </div>
-                    {(instances ?? []).length > 0 && (
-                      <div className="mt-4 space-y-3">
+                        </div>
+
+                        {(instances ?? []).length === 0 && (
+                          <div className="rounded-[22px] border border-dashed border-[#e5d9c7] bg-[#fcfaf6] px-4 py-10 text-center">
+                            <Wifi className="mx-auto h-8 w-8 text-slate-300" />
+                            <p className="mt-3 text-sm font-semibold text-slate-950">Sin instancia de WhatsApp</p>
+                            <p className="mt-1 text-sm text-slate-500">Crea una instancia para vincular el numero de WhatsApp de esta empresa.</p>
+                          </div>
+                        )}
+
                         {(instances ?? []).map((instance) => {
                           const qrSrc = toQrSrc(instanceQr[instance.id] ?? instance.qr_code);
                           return (
-                            <div key={instance.id} className="rounded-[20px] border border-[#eadfce] bg-white p-3">
+                            <div key={instance.id} className="rounded-[22px] border border-[#eadfce] bg-[#fcfaf6] p-5">
                               <div className="flex items-center justify-between gap-3">
                                 <div className="min-w-0">
                                   <p className="truncate text-sm font-semibold text-slate-950">{instance.name}</p>
@@ -953,117 +890,117 @@ export default function SuperadminCompaniesPage() {
                                   {instance.status === "connected" ? "Conectado" : instance.status === "qr_pending" ? "QR" : "Pendiente"}
                                 </span>
                               </div>
+
                               {qrSrc && instance.status !== "connected" && (
-                                <div className="mt-3 rounded-[18px] border border-[#f0e7da] bg-[#fcfaf6] p-3">
+                                <div className="mt-4 rounded-[18px] border border-[#f0e7da] bg-white p-4">
                                   <Image
                                     src={qrSrc}
                                     alt={`QR ${instance.name}`}
-                                    width={160}
-                                    height={160}
+                                    width={200}
+                                    height={200}
                                     unoptimized
                                     className="mx-auto rounded-xl bg-white p-2"
                                   />
-                                  <p className="mt-2 text-center text-xs text-slate-500">
-                                    Escanea este QR desde WhatsApp para terminar la vinculacion.
+                                  <p className="mt-3 text-center text-sm text-slate-500">
+                                    Escanea este QR desde WhatsApp para vincular el numero.
                                   </p>
                                 </div>
                               )}
+
+                              <div className="mt-4 flex flex-wrap gap-2">
+                                {instance.status !== "connected" && (
+                                  <>
+                                    <Button variant="outline" onClick={() => handleConnectInstance(instance.id)} className="h-9 rounded-2xl border-[#e5d9c8] bg-white px-4 hover:bg-[#f7efe4]">
+                                      <Wifi className="mr-2 h-4 w-4" />
+                                      Pedir QR
+                                    </Button>
+                                    <Button variant="outline" onClick={() => handleRefreshQr(instance.id)} className="h-9 rounded-2xl border-[#e5d9c8] bg-white px-4 hover:bg-[#f7efe4]">
+                                      <RefreshCw className="mr-2 h-4 w-4" />
+                                      Refrescar
+                                    </Button>
+                                  </>
+                                )}
+                                <Button variant="outline" onClick={() => handleDeleteInstance(instance.id)} className="h-9 rounded-2xl border-[#edd6d3] bg-white px-3 text-rose-600 hover:bg-rose-50 hover:text-rose-700">
+                                  <Trash2 className="mr-2 h-4 w-4" />
+                                  Eliminar
+                                </Button>
+                              </div>
                             </div>
                           );
                         })}
                       </div>
-                    )}
-                  </div>
+                    </TabsContent>
 
-                  <div className="rounded-[24px] border border-[#efe4d5] bg-[#fcfaf6] p-4">
-                    <div className="flex items-center gap-2 text-sm font-semibold text-slate-900">
-                      <Wand2 className="h-4 w-4 text-[#17352d]" />
-                      Estado de setup
-                    </div>
-                    <p className="mt-2 text-sm text-slate-500">
-                      {selectedCompany.setup_progress}% completo · {googleStatus?.connected_professional_count ?? 0} profesionales con Google · {selectedCompany.connected_instance_count} instancias conectadas.
-                    </p>
-                    <Button
-                      type="button"
-                      disabled={!selectedCompany.setup_ready || impersonatingId === selectedCompany.id}
-                      variant="outline"
-                      onClick={() => void handleImpersonate(selectedCompany.id)}
-                      className="mt-4 h-10 rounded-2xl border-[#e5d9c8] bg-white px-4 hover:bg-[#f7efe4]"
-                    >
-                      {impersonatingId === selectedCompany.id ? "Abriendo..." : "Abrir workspace"}
-                    </Button>
-                  </div>
-                </div>
-
-                <div className="grid gap-4 xl:grid-cols-2">
-                  <Card ref={professionalsSectionRef} className="rounded-[26px] border-[#ece2d5] bg-[#fcfaf6] shadow-none">
-                    <CardContent className="p-5">
-                      <div className="flex items-center justify-between gap-3">
-                        <div>
-                          <p className="text-[11px] uppercase tracking-[0.18em] text-slate-400">Paso 2 · Profesionales</p>
-                          <h4 className="mt-2 text-lg font-semibold tracking-[-0.03em] text-slate-950">Agenda por persona</h4>
+                    {/* Equipo tab */}
+                    <TabsContent value="equipo" className="mt-4">
+                      <div className="space-y-4">
+                        <div className="flex items-center justify-between gap-3">
+                          <h4 className="text-lg font-semibold tracking-[-0.03em] text-slate-950">Equipo</h4>
+                          <Button variant="outline" onClick={() => void mutateProfessionals()} className="h-9 rounded-2xl border-[#e5d9c8] bg-white px-3 hover:bg-[#f7efe4]">
+                            <RefreshCw className="mr-2 h-4 w-4" />
+                            Actualizar
+                          </Button>
                         </div>
-                        <Button variant="outline" onClick={() => void mutateProfessionals()} className="h-9 rounded-2xl border-[#e5d9c8] bg-white px-3 hover:bg-[#f7efe4]">
-                          <RefreshCw className="mr-2 h-4 w-4" />
-                          Actualizar
-                        </Button>
-                      </div>
 
-                      <div className="mt-5 grid gap-3">
-                        <Input value={professionalDraft.name} onChange={(event) => setProfessionalDraft((current) => ({ ...current, name: event.target.value }))} className="h-10 rounded-2xl border-[#eadfcd]" placeholder="Nombre del profesional" />
-                        <Input value={professionalDraft.specialty} onChange={(event) => setProfessionalDraft((current) => ({ ...current, specialty: event.target.value }))} className="h-10 rounded-2xl border-[#eadfcd]" placeholder="Especialidad o rol" />
-                        <div className="grid gap-3 md:grid-cols-[1fr_120px]">
-                          <select
-                            value={professionalDraft.calendar_id}
-                            onChange={(event) => setProfessionalDraft((current) => ({ ...current, calendar_id: event.target.value }))}
-                            className="h-10 rounded-2xl border border-[#eadfcd] bg-white px-3 text-sm text-slate-700"
-                          >
-                            {(googleCalendars?.calendars?.length ?? 0) > 0 ? (
-                              googleCalendars!.calendars.map((calendar) => (
-                                <option key={calendar.id} value={calendar.id}>
-                                  {calendar.summary}{calendar.primary ? " · principal" : ""}
-                                </option>
-                              ))
-                            ) : (
-                              <option value={professionalDraft.calendar_id}>
-                                {professionalDraft.calendar_id || "primary"}
-                              </option>
-                            )}
-                          </select>
-                          <Input value={professionalDraft.color_hex} onChange={(event) => setProfessionalDraft((current) => ({ ...current, color_hex: event.target.value }))} className="h-10 rounded-2xl border-[#eadfcd]" placeholder="#17352d" />
+                        {/* New professional form */}
+                        <div className="rounded-[22px] border border-[#ece2d5] bg-[#fcfaf6] p-5">
+                          <p className="mb-3 text-sm font-semibold text-slate-950">Agregar profesional</p>
+                          <div className="grid gap-3">
+                            <Input value={professionalDraft.name} onChange={(event) => setProfessionalDraft((current) => ({ ...current, name: event.target.value }))} className="h-10 rounded-2xl border-[#eadfcd]" placeholder="Nombre del profesional" />
+                            <Input value={professionalDraft.specialty} onChange={(event) => setProfessionalDraft((current) => ({ ...current, specialty: event.target.value }))} className="h-10 rounded-2xl border-[#eadfcd]" placeholder="Especialidad o rol" />
+                            <div className="grid gap-3 md:grid-cols-[1fr_120px]">
+                              <select
+                                value={professionalDraft.calendar_id}
+                                onChange={(event) => setProfessionalDraft((current) => ({ ...current, calendar_id: event.target.value }))}
+                                className="h-10 rounded-2xl border border-[#eadfcd] bg-white px-3 text-sm text-slate-700"
+                              >
+                                {(googleCalendars?.calendars?.length ?? 0) > 0 ? (
+                                  googleCalendars!.calendars.map((calendar) => (
+                                    <option key={calendar.id} value={calendar.id}>
+                                      {calendar.summary}{calendar.primary ? " · principal" : ""}
+                                    </option>
+                                  ))
+                                ) : (
+                                  <option value={professionalDraft.calendar_id}>
+                                    {professionalDraft.calendar_id || "primary"}
+                                  </option>
+                                )}
+                              </select>
+                              <Input value={professionalDraft.color_hex} onChange={(event) => setProfessionalDraft((current) => ({ ...current, color_hex: event.target.value }))} className="h-10 rounded-2xl border-[#eadfcd]" placeholder="#17352d" />
+                            </div>
+                            <div className="grid gap-3 md:grid-cols-2">
+                              <Input
+                                value={professionalDraft.user_full_name}
+                                onChange={(event) => setProfessionalDraft((current) => ({ ...current, user_full_name: event.target.value }))}
+                                className="h-10 rounded-2xl border-[#eadfcd]"
+                                placeholder="Nombre para el login"
+                              />
+                              <Input
+                                type="email"
+                                value={professionalDraft.user_email}
+                                onChange={(event) => setProfessionalDraft((current) => ({ ...current, user_email: event.target.value }))}
+                                className="h-10 rounded-2xl border-[#eadfcd]"
+                                placeholder="Email del profesional"
+                              />
+                            </div>
+                            <Input
+                              type="password"
+                              value={professionalDraft.user_password}
+                              onChange={(event) => setProfessionalDraft((current) => ({ ...current, user_password: event.target.value }))}
+                              className="h-10 rounded-2xl border-[#eadfcd]"
+                              placeholder="Password inicial del profesional"
+                            />
+                            <p className="text-xs text-slate-500">
+                              Si dejas email y password vacios, se crea solo la agenda. Si los completas, el profesional ya queda listo para iniciar sesion.
+                            </p>
+                            <Button disabled={creatingProfessional} onClick={handleCreateProfessional} className="h-10 rounded-2xl bg-[#17352d] hover:bg-[#21453a]">
+                              <Plus className="mr-2 h-4 w-4" />
+                              {creatingProfessional ? "Guardando..." : "Agregar profesional"}
+                            </Button>
+                          </div>
                         </div>
-                        <div className="grid gap-3 md:grid-cols-2">
-                          <Input
-                            value={professionalDraft.user_full_name}
-                            onChange={(event) => setProfessionalDraft((current) => ({ ...current, user_full_name: event.target.value }))}
-                            className="h-10 rounded-2xl border-[#eadfcd]"
-                            placeholder="Nombre para el login"
-                          />
-                          <Input
-                            type="email"
-                            value={professionalDraft.user_email}
-                            onChange={(event) => setProfessionalDraft((current) => ({ ...current, user_email: event.target.value }))}
-                            className="h-10 rounded-2xl border-[#eadfcd]"
-                            placeholder="Email del profesional"
-                          />
-                        </div>
-                        <Input
-                          type="password"
-                          value={professionalDraft.user_password}
-                          onChange={(event) => setProfessionalDraft((current) => ({ ...current, user_password: event.target.value }))}
-                          className="h-10 rounded-2xl border-[#eadfcd]"
-                          placeholder="Password inicial del profesional"
-                        />
-                        <p className="text-xs text-slate-500">
-                          Si dejás email y password vacíos, se crea solo la agenda. Si los completas, el profesional ya queda listo para iniciar sesión.
-                        </p>
-                        <Button disabled={creatingProfessional} onClick={handleCreateProfessional} className="h-10 rounded-2xl bg-[#17352d] hover:bg-[#21453a]">
-                          <Plus className="mr-2 h-4 w-4" />
-                          {creatingProfessional ? "Guardando..." : "Agregar profesional"}
-                        </Button>
-                      </div>
 
-                      <div className="mt-5 space-y-3">
+                        {/* Professional list */}
                         {(professionals ?? []).map((professional) => {
                           const draft = professionalEdits[professional.id] ?? {};
                           const validation = professionalValidationMap.get(professional.id);
@@ -1153,13 +1090,15 @@ export default function SuperadminCompaniesPage() {
                                     {validation?.is_connected ? "Desconectar Google" : "Conectar Google"}
                                   </Button>
                                 </div>
-                                <Button variant="outline" onClick={() => handleDeleteProfessional(professional.id)} className="h-9 rounded-2xl border-[#edd6d3] bg-white px-3 text-rose-600 hover:bg-rose-50 hover:text-rose-700">
-                                  <Trash2 className="mr-2 h-4 w-4" />
-                                  Eliminar
-                                </Button>
-                                <Button onClick={() => handleSaveProfessional(professional)} className="h-9 rounded-2xl bg-[#17352d] px-3 hover:bg-[#21453a]">
-                                  Guardar
-                                </Button>
+                                <div className="flex items-center gap-2">
+                                  <Button variant="outline" onClick={() => handleDeleteProfessional(professional.id)} className="h-9 rounded-2xl border-[#edd6d3] bg-white px-3 text-rose-600 hover:bg-rose-50 hover:text-rose-700">
+                                    <Trash2 className="mr-2 h-4 w-4" />
+                                    Eliminar
+                                  </Button>
+                                  <Button onClick={() => handleSaveProfessional(professional)} className="h-9 rounded-2xl bg-[#17352d] px-3 hover:bg-[#21453a]">
+                                    Guardar
+                                  </Button>
+                                </div>
                               </div>
                             </div>
                           );
@@ -1170,43 +1109,44 @@ export default function SuperadminCompaniesPage() {
                           </div>
                         )}
                       </div>
-                    </CardContent>
-                  </Card>
+                    </TabsContent>
 
-                  <Card ref={servicesSectionRef} className="rounded-[26px] border-[#ece2d5] bg-[#fcfaf6] shadow-none">
-                    <CardContent className="p-5">
-                      <div>
-                        <p className="text-[11px] uppercase tracking-[0.18em] text-slate-400">Paso 3 · Servicios</p>
-                        <h4 className="mt-2 text-lg font-semibold tracking-[-0.03em] text-slate-950">Qué se puede reservar</h4>
-                      </div>
+                    {/* Servicios tab */}
+                    <TabsContent value="servicios" className="mt-4">
+                      <div className="space-y-4">
+                        <h4 className="text-lg font-semibold tracking-[-0.03em] text-slate-950">Servicios</h4>
 
-                      <div className="mt-5 grid gap-3">
-                        <Input value={serviceDraft.name} onChange={(event) => setServiceDraft((current) => ({ ...current, name: event.target.value }))} className="h-10 rounded-2xl border-[#eadfcd]" placeholder="Nombre del servicio" />
-                        <Input value={serviceDraft.aliases} onChange={(event) => setServiceDraft((current) => ({ ...current, aliases: event.target.value }))} className="h-10 rounded-2xl border-[#eadfcd]" placeholder="Aliases para el bot: corte, pelo, corte clasico" />
-                        <div className="grid gap-3 md:grid-cols-[120px_1fr]">
-                          <Input value={serviceDraft.duration_minutes} onChange={(event) => setServiceDraft((current) => ({ ...current, duration_minutes: event.target.value }))} className="h-10 rounded-2xl border-[#eadfcd]" placeholder="60" />
-                          <Input value={serviceDraft.price} onChange={(event) => setServiceDraft((current) => ({ ...current, price: event.target.value }))} className="h-10 rounded-2xl border-[#eadfcd]" placeholder="25000" />
+                        {/* New service form */}
+                        <div className="rounded-[22px] border border-[#ece2d5] bg-[#fcfaf6] p-5">
+                          <p className="mb-3 text-sm font-semibold text-slate-950">Agregar servicio</p>
+                          <div className="grid gap-3">
+                            <Input value={serviceDraft.name} onChange={(event) => setServiceDraft((current) => ({ ...current, name: event.target.value }))} className="h-10 rounded-2xl border-[#eadfcd]" placeholder="Nombre del servicio" />
+                            <Input value={serviceDraft.aliases} onChange={(event) => setServiceDraft((current) => ({ ...current, aliases: event.target.value }))} className="h-10 rounded-2xl border-[#eadfcd]" placeholder="Aliases para el bot: corte, pelo, corte clasico" />
+                            <div className="grid gap-3 md:grid-cols-[120px_1fr]">
+                              <Input value={serviceDraft.duration_minutes} onChange={(event) => setServiceDraft((current) => ({ ...current, duration_minutes: event.target.value }))} className="h-10 rounded-2xl border-[#eadfcd]" placeholder="60" />
+                              <Input value={serviceDraft.price} onChange={(event) => setServiceDraft((current) => ({ ...current, price: event.target.value }))} className="h-10 rounded-2xl border-[#eadfcd]" placeholder="25000" />
+                            </div>
+                            <select
+                              value={serviceDraft.professional_id}
+                              onChange={(event) => setServiceDraft((current) => ({ ...current, professional_id: event.target.value }))}
+                              className="h-10 rounded-2xl border border-[#eadfcd] bg-white px-3 text-sm text-slate-700"
+                            >
+                              <option value="all">Disponible para todos</option>
+                              {(professionals ?? []).map((professional) => (
+                                <option key={professional.id} value={professional.id}>
+                                  {professional.name}
+                                </option>
+                              ))}
+                            </select>
+                            <Input value={serviceDraft.description} onChange={(event) => setServiceDraft((current) => ({ ...current, description: event.target.value }))} className="h-10 rounded-2xl border-[#eadfcd]" placeholder="Descripcion corta" />
+                            <Button disabled={creatingService} onClick={handleCreateService} className="h-10 rounded-2xl bg-[#17352d] hover:bg-[#21453a]">
+                              <Plus className="mr-2 h-4 w-4" />
+                              {creatingService ? "Guardando..." : "Agregar servicio"}
+                            </Button>
+                          </div>
                         </div>
-                        <select
-                          value={serviceDraft.professional_id}
-                          onChange={(event) => setServiceDraft((current) => ({ ...current, professional_id: event.target.value }))}
-                          className="h-10 rounded-2xl border border-[#eadfcd] bg-white px-3 text-sm text-slate-700"
-                        >
-                          <option value="all">Disponible para todos</option>
-                          {(professionals ?? []).map((professional) => (
-                            <option key={professional.id} value={professional.id}>
-                              {professional.name}
-                            </option>
-                          ))}
-                        </select>
-                        <Input value={serviceDraft.description} onChange={(event) => setServiceDraft((current) => ({ ...current, description: event.target.value }))} className="h-10 rounded-2xl border-[#eadfcd]" placeholder="Descripcion corta" />
-                        <Button disabled={creatingService} onClick={handleCreateService} className="h-10 rounded-2xl bg-[#17352d] hover:bg-[#21453a]">
-                          <Plus className="mr-2 h-4 w-4" />
-                          {creatingService ? "Guardando..." : "Agregar servicio"}
-                        </Button>
-                      </div>
 
-                      <div className="mt-5 space-y-3">
+                        {/* Service list */}
                         {(services ?? []).map((service) => {
                           const draft = serviceEdits[service.id] ?? {};
                           return (
@@ -1280,25 +1220,23 @@ export default function SuperadminCompaniesPage() {
                           </div>
                         )}
                       </div>
-                    </CardContent>
-                  </Card>
+                    </TabsContent>
+                  </Tabs>
                 </div>
-
-              </div>
-            ) : (
-              <div className="flex min-h-[420px] items-center justify-center rounded-[28px] border border-dashed border-[#e7dbc8] bg-[#fcfaf6] text-center">
-                <div className="max-w-sm px-6">
-                  <Building2 className="mx-auto h-10 w-10 text-slate-300" />
-                  <p className="mt-4 text-lg font-semibold text-slate-950">Todavia no hay empresas seleccionadas</p>
-                  <p className="mt-2 text-sm leading-6 text-slate-500">
-                    Elegí una empresa y seguí el orden: profesionales, Google, servicios, WhatsApp y recién después workspace.
-                  </p>
+              ) : (
+                <div className="flex min-h-[420px] items-center justify-center rounded-[28px] border border-dashed border-[#e7dbc8] bg-[#fcfaf6] text-center">
+                  <div className="max-w-sm px-6">
+                    <Building2 className="mx-auto h-10 w-10 text-slate-300" />
+                    <p className="mt-4 text-lg font-semibold text-slate-950">Selecciona una empresa</p>
+                    <p className="mt-2 text-sm leading-6 text-slate-500">
+                      Elegi una empresa de la lista para configurarla.
+                    </p>
+                  </div>
                 </div>
-              </div>
-            )}
-          </CardContent>
-        </Card>
-      </section>
+              )}
+            </CardContent>
+          </Card>
+        </section>
       )}
     </div>
   );

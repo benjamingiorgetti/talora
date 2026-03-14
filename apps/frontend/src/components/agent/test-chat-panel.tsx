@@ -1,10 +1,9 @@
 "use client";
 
 import { useState, useEffect, useRef, useCallback } from "react";
-import type { TestChatMode, TestChatResponse, TestSession, TestToolTrace } from "@talora/shared";
+import type { TestChatResponse, TestSession, TestToolTrace } from "@talora/shared";
 import { api } from "@/lib/api";
 import { Button } from "@/components/ui/button";
-import { Badge } from "@/components/ui/badge";
 import { MessageSquare, Send, RotateCcw, Bot, User, AlertTriangle, Wrench, CheckCircle2, XCircle } from "lucide-react";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
@@ -87,9 +86,6 @@ function MessageBubble({
                     <p className="mt-0.5 text-[11px] text-muted-foreground">{formatTraceSummary(trace)}</p>
                   </div>
                   <div className="flex items-center gap-1.5">
-                    <Badge variant="outline" className="h-5 px-1.5 text-[10px] font-medium">
-                      {trace.mode === "live" ? "Real" : "Simulado"}
-                    </Badge>
                     <span
                       className={cn(
                         "inline-flex h-5 w-5 items-center justify-center rounded-full",
@@ -151,7 +147,6 @@ export function TestChatPanel({ promptSavedAt }: TestChatPanelProps) {
   const [session, setSession] = useState<TestSession | null>(null);
   const [messages, setMessages] = useState<DisplayMessage[]>([]);
   const [input, setInput] = useState("");
-  const [mode, setMode] = useState<TestChatMode>("live");
   const [isSending, setIsSending] = useState(false);
   const [isCreatingSession, setIsCreatingSession] = useState(false);
   const [newMessageId, setNewMessageId] = useState<string | null>(null);
@@ -234,7 +229,7 @@ export function TestChatPanel({ promptSavedAt }: TestChatPanelProps) {
       const res = await api.post<{ data: TestChatResponse }>("/agent/test-chat/message", {
         session_id: session.id,
         content,
-        mode,
+        mode: 'live',
       });
 
       const assistantMsg: DisplayMessage = {
@@ -260,7 +255,7 @@ export function TestChatPanel({ promptSavedAt }: TestChatPanelProps) {
       setIsSending(false);
       textareaRef.current?.focus();
     }
-  }, [input, isSending, mode, session]);
+  }, [input, isSending, session]);
 
   const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
     if (e.key === "Enter" && !e.shiftKey) {
@@ -274,57 +269,20 @@ export function TestChatPanel({ promptSavedAt }: TestChatPanelProps) {
       {/* Header */}
       <div className="flex items-center justify-between px-3 py-2.5 border-b border-border shrink-0">
         <div className="flex items-center gap-2">
-          <MessageSquare
-            className="h-4 w-4 text-muted-foreground"
-            aria-hidden="true"
-          />
+          <MessageSquare className="h-4 w-4 text-muted-foreground" aria-hidden="true" />
           <span className="text-sm font-semibold">Prueba del Agente</span>
-          <Badge
-            variant="outline"
-            className="text-[10px] px-1.5 py-0 h-4 font-normal text-muted-foreground"
-          >
-            Sesion temporal
-          </Badge>
-          <Badge
-            variant={mode === "live" ? "default" : "outline"}
-            className="text-[10px] px-1.5 py-0 h-4 font-normal"
-          >
-            {mode === "live" ? "Modo real" : "Modo simulado"}
-          </Badge>
         </div>
-        <div className="flex items-center gap-2">
-          <div className="flex items-center gap-1 rounded-md border border-border bg-background p-1">
-            <Button
-              variant={mode === "live" ? "default" : "ghost"}
-              size="sm"
-              onClick={() => setMode("live")}
-              disabled={isSending || isCreatingSession}
-              className="h-7 px-2 text-[11px]"
-            >
-              Real
-            </Button>
-            <Button
-              variant={mode === "simulate" ? "default" : "ghost"}
-              size="sm"
-              onClick={() => setMode("simulate")}
-              disabled={isSending || isCreatingSession}
-              className="h-7 px-2 text-[11px]"
-            >
-              Simular
-            </Button>
-          </div>
-          <Button
-            variant="ghost"
-            size="sm"
-            onClick={clearSession}
-            disabled={isCreatingSession}
-            className="h-7 text-xs text-muted-foreground hover:text-foreground"
-            aria-label="Limpiar chat y crear nueva sesion"
-          >
-            <RotateCcw className="mr-1.5 h-3.5 w-3.5" />
-            Limpiar
-          </Button>
-        </div>
+        <Button
+          variant="ghost"
+          size="sm"
+          onClick={clearSession}
+          disabled={isCreatingSession}
+          className="h-7 text-xs text-muted-foreground hover:text-foreground"
+          aria-label="Limpiar chat y crear nueva sesion"
+        >
+          <RotateCcw className="mr-1.5 h-3.5 w-3.5" />
+          Limpiar
+        </Button>
       </div>
 
       {/* Messages area */}

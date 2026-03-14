@@ -10,6 +10,7 @@ type ToolExecutionContext = {
   phoneNumber?: string;
   contactName?: string | null;
   professionalId?: string | null;
+  isTestContext?: boolean;
 };
 
 type ServiceOption = {
@@ -63,7 +64,7 @@ function hasSchedulingHints(toolInput: Record<string, unknown>): boolean {
   );
 }
 
-function normalizeLabel(value: string): string {
+export function normalizeLabel(value: string): string {
   return value
     .toLowerCase()
     .normalize('NFD')
@@ -73,7 +74,7 @@ function normalizeLabel(value: string): string {
     .replace(/\s+/g, ' ');
 }
 
-function tokenize(value: string): string[] {
+export function tokenize(value: string): string[] {
   return normalizeLabel(value).split(' ').filter(Boolean);
 }
 
@@ -151,7 +152,7 @@ function toServiceOption(service: Service): ServiceOption {
   };
 }
 
-function scoreServiceMatch(query: string, service: Service): number {
+export function scoreServiceMatch(query: string, service: Service): number {
   const normalizedQuery = normalizeLabel(query);
   if (!normalizedQuery) return 0;
 
@@ -195,7 +196,7 @@ function scoreServiceMatch(query: string, service: Service): number {
   return bestScore;
 }
 
-async function resolveServiceSelection(
+export async function resolveServiceSelection(
   companyId: string,
   toolInput: Record<string, unknown>,
   professionalId?: string | null
@@ -282,7 +283,7 @@ async function resolveServiceSelection(
   return { kind: 'resolved', service: matches[0].service };
 }
 
-function scoreProfessionalMatch(query: string, professional: Professional): number {
+export function scoreProfessionalMatch(query: string, professional: Professional): number {
   const normalizedQuery = normalizeLabel(query);
   if (!normalizedQuery) return 0;
 
@@ -303,7 +304,7 @@ function scoreProfessionalMatch(query: string, professional: Professional): numb
   return 0;
 }
 
-async function resolveProfessionalSelection(
+export async function resolveProfessionalSelection(
   companyId: string,
   toolInput: Record<string, unknown>,
   contextProfessionalId?: string | null
@@ -453,7 +454,7 @@ async function getPrimaryAgentId(companyId: string): Promise<string> {
   return id;
 }
 
-async function upsertClient(
+export async function upsertClient(
   companyId: string,
   agentId: string,
   professionalId: string,
@@ -494,7 +495,7 @@ async function upsertClient(
   return result.rows[0] ?? null;
 }
 
-async function resolveAppointmentByReference(
+export async function resolveAppointmentByReference(
   companyId: string,
   toolInput: Record<string, unknown>,
   professionalId: string | null = null
@@ -618,12 +619,13 @@ export async function executeTool(
           name
         );
         const endsAt = new Date(new Date(date).getTime() + scheduling.durationMinutes * 60 * 1000).toISOString();
+        const appointmentStatus = context.isTestContext ? 'draft' : 'confirmed';
 
         const result = await pool.query<Appointment>(
           `INSERT INTO appointments (
              company_id, client_id, professional_id, service_id, conversation_id, phone_number, client_name,
              google_event_id, starts_at, ends_at, status, source, title, notes
-           ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, 'confirmed', 'bot', $11, $12)
+           ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, 'bot', $12, $13)
            RETURNING *`,
           [
             context.companyId,
@@ -636,6 +638,7 @@ export async function executeTool(
             booking.eventId ?? null,
             date,
             endsAt,
+            appointmentStatus,
             title,
             description,
           ]

@@ -678,6 +678,38 @@ END $$;
 
 CREATE INDEX IF NOT EXISTS idx_conversations_active_by_company
   ON conversations(company_id, archived_at, last_message_at DESC);
+
+-- ARCH-1: Enforce one agent per company.
+-- Remove duplicates keeping the oldest agent, then add a unique constraint.
+DELETE FROM agents a
+USING agents b
+WHERE a.company_id = b.company_id
+  AND a.created_at > b.created_at;
+
+CREATE UNIQUE INDEX IF NOT EXISTS idx_agents_unique_company
+  ON agents(company_id);
+
+DO $$ BEGIN
+  ALTER TABLE appointments DROP CONSTRAINT IF EXISTS chk_appointment_status;
+  ALTER TABLE appointments ADD CONSTRAINT chk_appointment_status
+    CHECK (status IN ('confirmed', 'cancelled', 'rescheduled', 'draft'));
+END $$;
+
+-- Company settings table
+CREATE TABLE IF NOT EXISTS company_settings (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  company_id UUID NOT NULL UNIQUE REFERENCES companies(id) ON DELETE CASCADE,
+  opening_hour TEXT NOT NULL DEFAULT '09:00',
+  closing_hour TEXT NOT NULL DEFAULT '18:00',
+  working_days INT[] NOT NULL DEFAULT '{1,2,3,4,5}',
+  show_prices BOOLEAN NOT NULL DEFAULT false,
+  timezone TEXT NOT NULL DEFAULT 'America/Argentina/Buenos_Aires',
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+-- Bot enabled flag per company
+ALTER TABLE companies ADD COLUMN IF NOT EXISTS bot_enabled BOOLEAN NOT NULL DEFAULT true;
 `;
 
 async function run() {

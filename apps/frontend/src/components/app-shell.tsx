@@ -4,8 +4,10 @@ import Image from "next/image";
 import Link from "next/link";
 import { useEffect, useRef, useState } from "react";
 import { usePathname, useRouter } from "next/navigation";
+import { AnimatePresence, motion } from "framer-motion";
 import useSWR, { useSWRConfig } from "swr";
 import type { Company, WsEvent } from "@talora/shared";
+import { fadeIn, slideInLeft } from "@/lib/motion";
 import {
   ArrowLeftRight,
   BookOpenText,
@@ -22,11 +24,9 @@ import {
   Settings2,
   Shield,
   Sparkles,
-  TestTube2,
   UsersRound,
   Wrench,
   BellRing,
-  FileStack,
   X,
 } from "lucide-react";
 import { toast } from "sonner";
@@ -64,16 +64,15 @@ const sharedNav: NavItem[] = [
 ];
 
 const configNav: NavItem[] = [
+  { href: "/settings/general", label: "General", icon: Settings2 },
   { href: "/settings/services", label: "Servicios", icon: BookOpenText },
   { href: "/settings/professionals", label: "Profesionales", icon: Sparkles },
 ];
 
 const adminNav: NavItem[] = [
   { href: "/admin/companies", label: "Compañías", icon: Building2 },
-  { href: "/admin/templates", label: "Plantillas admin", icon: FileStack },
   { href: "/admin/ai", label: "IA", icon: Sparkles },
   { href: "/admin/messages", label: "Mensajes", icon: BellRing },
-  { href: "/admin/tests", label: "Tests", icon: TestTube2 },
   { href: "/admin/settings", label: "Ajustes", icon: Settings2 },
 ];
 
@@ -406,15 +405,25 @@ export function AppShell({ children }: AppShellProps) {
 
   return (
     <div className="min-h-dvh bg-[linear-gradient(180deg,#f8f9fc_0%,#f1f3f8_100%)] text-foreground">
-      {mobileNavOpen && (
-        <div
-          className="fixed inset-0 z-50 bg-slate-950/28 backdrop-blur-[2px] lg:hidden"
-          onClick={() => setMobileNavOpen(false)}
-        >
-          <aside
-            className="flex h-full w-[min(88vw,340px)] flex-col border-r border-[#e2e4ec] bg-[linear-gradient(180deg,#ffffff_0%,#f7f8fb_100%)] px-4 py-4 shadow-[0_24px_80px_rgba(15,23,42,0.14)]"
-            onClick={(event) => event.stopPropagation()}
+      <AnimatePresence>
+        {mobileNavOpen && (
+          <motion.div
+            key="mobile-nav-backdrop"
+            variants={fadeIn}
+            initial="hidden"
+            animate="visible"
+            exit="exit"
+            className="fixed inset-0 z-50 bg-slate-950/28 backdrop-blur-[2px] lg:hidden"
+            onClick={() => setMobileNavOpen(false)}
           >
+            <motion.aside
+              variants={slideInLeft}
+              initial="hidden"
+              animate="visible"
+              exit="exit"
+              className="flex h-full w-[min(88vw,340px)] flex-col border-r border-[#e2e4ec] bg-[linear-gradient(180deg,#ffffff_0%,#f7f8fb_100%)] px-4 py-4 shadow-[0_24px_80px_rgba(15,23,42,0.14)]"
+              onClick={(event) => event.stopPropagation()}
+            >
             <div className="flex items-center justify-between gap-3">
               <Link href={resolveDefaultRoute(session, activeCompanyId)} className="flex min-w-0 items-center gap-3">
                 <BrandLockup collapsed={false} />
@@ -476,11 +485,12 @@ export function AppShell({ children }: AppShellProps) {
                 Salir
               </Button>
             </div>
-          </aside>
-        </div>
-      )}
+            </motion.aside>
+          </motion.div>
+        )}
+      </AnimatePresence>
 
-      <div className="mx-auto flex min-h-dvh w-full max-w-[1680px] gap-4 px-3 py-3 lg:px-6 lg:py-4">
+      <div className="mx-auto flex h-dvh w-full max-w-[1680px] overflow-hidden gap-4 px-3 py-3 lg:px-6 lg:py-4">
         <aside
           className={cn(
             "sticky top-4 hidden h-[calc(100dvh-2rem)] shrink-0 flex-col overflow-hidden rounded-[30px] border border-[#e2e4ec] bg-[linear-gradient(180deg,#ffffff_0%,#f7f8fb_100%)] p-4 shadow-[0_24px_64px_rgba(15,23,42,0.06)] lg:flex",
@@ -557,7 +567,7 @@ export function AppShell({ children }: AppShellProps) {
           </div>
         </aside>
 
-        <div className="flex min-h-0 min-w-0 flex-1 flex-col rounded-[28px] border border-[#e2e4ec] bg-[linear-gradient(180deg,#ffffff_0%,#fafbfe_100%)] shadow-[0_24px_80px_rgba(15,23,42,0.07)] sm:rounded-[32px]">
+        <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden rounded-[28px] border border-[#e2e4ec] bg-[linear-gradient(180deg,#ffffff_0%,#fafbfe_100%)] shadow-[0_24px_80px_rgba(15,23,42,0.07)] sm:rounded-[32px]">
           <header className="sticky top-0 z-20 rounded-t-[28px] border-b border-[#e6e7ee] bg-white/92 px-4 py-3.5 backdrop-blur sm:rounded-t-[32px] md:px-5 lg:px-8">
             <div className="flex flex-wrap items-center justify-between gap-4">
               <div className="flex min-w-0 items-center gap-3">
@@ -656,14 +666,14 @@ export function AppShell({ children }: AppShellProps) {
                 )}
 
                 <div className="hidden h-11 items-center gap-3 rounded-full border border-[#dde1ea] bg-white px-4 text-sm text-slate-600 sm:flex">
-                  <div className="h-2.5 w-2.5 rounded-full bg-slate-400" />
+                  <div className="h-2.5 w-2.5 rounded-full bg-slate-400 animate-status-pulse" />
                   <span className="hidden sm:inline">{session.email ?? "ops@talora"}</span>
                 </div>
               </div>
             </div>
           </header>
 
-          <main className="flex min-h-0 flex-1 flex-col px-3 py-3 sm:px-4 sm:py-4 md:px-6 md:py-6 lg:px-8 lg:py-7">{children}</main>
+          <main className="flex min-h-0 flex-1 flex-col overflow-hidden px-3 py-3 sm:px-4 sm:py-4 md:px-6 md:py-6 lg:px-8 lg:py-7">{children}</main>
         </div>
       </div>
     </div>

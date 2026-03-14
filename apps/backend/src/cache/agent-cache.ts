@@ -48,7 +48,7 @@ export async function getAgentConfig(companyId?: string | null): Promise<AgentCo
 
 async function fetchAgentConfig(companyId: string): Promise<AgentConfig | null> {
   const agentResult = await pool.query<Agent>(
-    'SELECT * FROM agents WHERE company_id = $1 ORDER BY created_at ASC LIMIT 1',
+    'SELECT * FROM agents WHERE company_id = $1',
     [companyId]
   );
   if (agentResult.rows.length === 0) return null;

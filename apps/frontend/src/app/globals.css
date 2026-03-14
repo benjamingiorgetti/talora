@@ -85,3 +85,10 @@
     transform: translateY(-1px);
   }
 }
+
+@media (prefers-reduced-motion: reduce) {
+  .animate-status-pulse,
+  .animate-gentle-float {
+    animation: none;
+  }
+}

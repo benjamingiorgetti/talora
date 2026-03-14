@@ -28,7 +28,7 @@ function normalizePhone(value: string | null | undefined): string {
   return (value ?? '').replace(/\D/g, '');
 }
 
-function getCachedAvailability(dateKey: string): { available: boolean; suggestions?: string[] } | null {
+export function getCachedAvailability(dateKey: string): { available: boolean; suggestions?: string[] } | null {
   const entry = availabilityCache.get(dateKey);
   if (!entry) return null;
   if (Date.now() - entry.timestamp > AVAILABILITY_CACHE_TTL) {
@@ -38,7 +38,7 @@ function getCachedAvailability(dateKey: string): { available: boolean; suggestio
   return entry.result;
 }
 
-function setCachedAvailability(dateKey: string, result: { available: boolean; suggestions?: string[] }): void {
+export function setCachedAvailability(dateKey: string, result: { available: boolean; suggestions?: string[] }): void {
   availabilityCache.set(dateKey, { result, timestamp: Date.now() });
   // Evict oldest entries if cache exceeds max size
   if (availabilityCache.size > MAX_AVAILABILITY_ENTRIES) {
@@ -47,7 +47,7 @@ function setCachedAvailability(dateKey: string, result: { available: boolean; su
   }
 }
 
-function safeJsonParse(value: string): Record<string, unknown> | string {
+export function safeJsonParse(value: string): Record<string, unknown> | string {
   try {
     const parsed = JSON.parse(value) as unknown;
     if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) {
@@ -60,7 +60,7 @@ function safeJsonParse(value: string): Record<string, unknown> | string {
   return value;
 }
 
-function buildAgentToolTrace(
+export function buildAgentToolTrace(
   toolCallId: string,
   name: string,
   input: Record<string, unknown>,
