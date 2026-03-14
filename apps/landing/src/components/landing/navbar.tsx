@@ -20,8 +20,10 @@ export function Navbar() {
     const onScroll = () => {
       const currentY = window.scrollY;
       setScrolled(currentY > 16);
+      const delta = currentY - lastScrollY.current;
       if (currentY > 60) {
-        setHidden(currentY > lastScrollY.current);
+        if (delta > 0) setHidden(true);
+        if (delta < -2) setHidden(false);
       } else {
         setHidden(false);
       }
