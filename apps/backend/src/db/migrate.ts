@@ -678,6 +678,12 @@ END $$;
 
 CREATE INDEX IF NOT EXISTS idx_conversations_active_by_company
   ON conversations(company_id, archived_at, last_message_at DESC);
+
+DO $$ BEGIN
+  ALTER TABLE appointments DROP CONSTRAINT IF EXISTS chk_appointment_status;
+  ALTER TABLE appointments ADD CONSTRAINT chk_appointment_status
+    CHECK (status IN ('confirmed', 'cancelled', 'rescheduled', 'draft'));
+END $$;
 `;
 
 async function run() {
