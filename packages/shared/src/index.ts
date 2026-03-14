@@ -10,6 +10,7 @@ export interface Company {
   industry: string;
   whatsapp_number: string | null;
   calendar_connected: boolean;
+  bot_enabled: boolean;
   created_at: string;
   updated_at: string;
 }
@@ -296,6 +297,19 @@ export interface Client {
   recent_appointments?: Array<Pick<Appointment, 'id' | 'starts_at' | 'status'>>;
   created_at: string;
   updated_at?: string;
+}
+
+// --- Company Settings ---
+export interface CompanySettings {
+  id: string;
+  company_id: string;
+  opening_hour: string;
+  closing_hour: string;
+  working_days: number[];
+  show_prices: boolean;
+  timezone: string;
+  created_at: string;
+  updated_at: string;
 }
 
 // --- Bot Config ---

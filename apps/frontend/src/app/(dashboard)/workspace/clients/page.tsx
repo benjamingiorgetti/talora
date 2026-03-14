@@ -3,11 +3,24 @@
 import { useEffect, useMemo, useState } from "react";
 import { usePathname, useRouter } from "next/navigation";
 import useSWR from "swr";
-import type { Client } from "@talora/shared";
-import { NotebookPen, PhoneCall, Search, UserRound } from "lucide-react";
-import { companyScopedFetcher, companyScopedKey } from "@/lib/api";
+import type { Client, Professional } from "@talora/shared";
+import { NotebookPen, PhoneCall, Plus, Search, UserRound } from "lucide-react";
+import { toast } from "sonner";
+import { api, companyScopedFetcher, companyScopedKey } from "@/lib/api";
+import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger,
+} from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useAuth } from "@/lib/auth";
 import { WorkspaceEmptyState } from "@/components/workspace/chrome";
 import { WorkspaceErrorState } from "@/components/workspace/error-state";
@@ -19,6 +32,9 @@ export default function WorkspaceClientsPage() {
   const isProfessional = session?.role === "professional";
   const professionalId = session?.professionalId ?? null;
   const [search, setSearch] = useState("");
+  const [createOpen, setCreateOpen] = useState(false);
+  const [creating, setCreating] = useState(false);
+  const [newClient, setNewClient] = useState({ name: "", phone_number: "", professional_id: "", notes: "" });
 
   const clientsPath = isProfessional && professionalId
     ? `/clients?professional_id=${professionalId}`
@@ -28,6 +44,37 @@ export default function WorkspaceClientsPage() {
     companyScopedKey(clientsPath, activeCompanyId),
     companyScopedFetcher<Client[]>
   );
+
+  const { data: professionals } = useSWR(
+    !isProfessional ? companyScopedKey("/professionals", activeCompanyId) : null,
+    companyScopedFetcher<Professional[]>
+  );
+
+  const handleCreateClient = async () => {
+    if (!newClient.phone_number.trim()) return;
+    const profId = isProfessional ? professionalId : newClient.professional_id || null;
+    if (!profId) {
+      toast.error("Selecciona un profesional.");
+      return;
+    }
+    setCreating(true);
+    try {
+      await api.post("/clients", {
+        phone_number: newClient.phone_number.trim(),
+        name: newClient.name.trim() || undefined,
+        professional_id: profId,
+        notes: newClient.notes.trim() || undefined,
+      });
+      toast.success("Cliente creado.");
+      setCreateOpen(false);
+      setNewClient({ name: "", phone_number: "", professional_id: "", notes: "" });
+      void mutate();
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "No se pudo crear el cliente.");
+    } finally {
+      setCreating(false);
+    }
+  };
 
   useEffect(() => {
     setSearch("");
@@ -56,7 +103,83 @@ export default function WorkspaceClientsPage() {
 
   return (
     <div className="space-y-5 lg:space-y-6">
-      <div className="flex flex-wrap justify-end gap-3">
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <Dialog open={createOpen} onOpenChange={setCreateOpen}>
+          <DialogTrigger asChild>
+            <Button className="h-11 rounded-2xl bg-slate-900 px-5 text-white hover:bg-slate-800">
+              <Plus className="mr-2 h-4 w-4" />
+              Crear cliente
+            </Button>
+          </DialogTrigger>
+          <DialogContent className="rounded-[28px] sm:max-w-[440px]">
+            <DialogHeader>
+              <DialogTitle>Nuevo cliente</DialogTitle>
+              <DialogDescription>Crea un cliente de forma manual.</DialogDescription>
+            </DialogHeader>
+            <div className="space-y-4 py-2">
+              <div className="space-y-2">
+                <Label htmlFor="client-name">Nombre</Label>
+                <Input
+                  id="client-name"
+                  value={newClient.name}
+                  onChange={(e) => setNewClient((prev) => ({ ...prev, name: e.target.value }))}
+                  placeholder="Juan Perez"
+                  className="h-11 rounded-2xl border-[#dde1ea]"
+                />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="client-phone">Telefono *</Label>
+                <Input
+                  id="client-phone"
+                  value={newClient.phone_number}
+                  onChange={(e) => setNewClient((prev) => ({ ...prev, phone_number: e.target.value }))}
+                  placeholder="5491112345678"
+                  className="h-11 rounded-2xl border-[#dde1ea]"
+                />
+              </div>
+              {!isProfessional && (professionals?.length ?? 0) > 0 && (
+                <div className="space-y-2">
+                  <Label>Profesional *</Label>
+                  <Select
+                    value={newClient.professional_id}
+                    onValueChange={(value) => setNewClient((prev) => ({ ...prev, professional_id: value }))}
+                  >
+                    <SelectTrigger className="h-11 rounded-2xl border-[#dde1ea]">
+                      <SelectValue placeholder="Selecciona un profesional" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {(professionals ?? []).map((prof) => (
+                        <SelectItem key={prof.id} value={prof.id}>
+                          {prof.name}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+              )}
+              <div className="space-y-2">
+                <Label htmlFor="client-notes">Notas</Label>
+                <Input
+                  id="client-notes"
+                  value={newClient.notes}
+                  onChange={(e) => setNewClient((prev) => ({ ...prev, notes: e.target.value }))}
+                  placeholder="Notas internas..."
+                  className="h-11 rounded-2xl border-[#dde1ea]"
+                />
+              </div>
+            </div>
+            <DialogFooter>
+              <Button
+                onClick={() => void handleCreateClient()}
+                disabled={creating || !newClient.phone_number.trim()}
+                className="h-11 w-full rounded-2xl bg-slate-900 text-white hover:bg-slate-800"
+              >
+                {creating ? "Creando..." : "Crear cliente"}
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
+
         <div className="relative w-full min-w-0 sm:w-[320px]">
           <Search className="pointer-events-none absolute left-4 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
           <Input
