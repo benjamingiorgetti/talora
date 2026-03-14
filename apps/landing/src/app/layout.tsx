@@ -15,15 +15,24 @@ const fraunces = Fraunces({
 });
 
 export const metadata: Metadata = {
-  title: "Talora",
+  metadataBase: new URL("https://talora.vip"),
+  title: "Talora - Turnos automaticos por WhatsApp con IA",
   description:
     "Automatiza la gestion de turnos de tu negocio con un agente de WhatsApp inteligente. Conecta Google Calendar, configura servicios y deja que tus clientes agenden solos.",
   openGraph: {
-    title: "Talora - Turnos por WhatsApp con IA",
+    title: "Talora - Turnos automaticos por WhatsApp con IA",
     description:
       "Automatiza la gestion de turnos de tu negocio con un agente de WhatsApp inteligente.",
     type: "website",
     locale: "es_AR",
+    siteName: "Talora",
+    url: "https://talora.vip",
+  },
+  twitter: {
+    card: "summary_large_image",
+    title: "Talora - Turnos automaticos por WhatsApp con IA",
+    description:
+      "Automatiza la gestion de turnos de tu negocio con un agente de WhatsApp inteligente.",
   },
 };
 
