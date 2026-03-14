@@ -4,12 +4,8 @@ Plataforma multiempresa de turnos por WhatsApp. No es solo tatuajes.
 
 ## What Matters Now
 
-Leer `todos.md` antes de arrancar trabajo nuevo. Prioridad MVP:
-
-1. Google Calendar real por profesional
-2. WhatsApp / Evolution real con QR usable
-3. Flujo end-to-end sobre una empresa demo
-4. QA manual del MVP vendible
+Leer `todos.md` antes de arrancar trabajo nuevo.
+Si modificas un todo en todos.md, actualiza luego para que quede actualizado lo que ya esta hecho.
 
 ## Bug Rule
 
@@ -26,15 +22,40 @@ Cuando reporto un bug, NO arrancar a fixearlo directo. Orden:
 3. Prototipo no gana contra pensamiento de producto: primero el porqué, después el cómo.
 4. Si el diseño original quedó mal, se refactoriza. Dejar el código mejor que como estaba.
 5. Más valor en limpiar y mejorar lo existente que en perseguir la próxima feature.
-6. Velocidad real > gratificación inmediata. Usar agentes no debe erosionar el criterio.
 
 ## Stack (non-obvious)
 
 - Bun workspaces, NOT Node
 - OpenAI SDK (`gpt-4o-mini`), NOT Anthropic — for the conversational agent
-- Evolution API v2.2.3 for WhatsApp (runs in Docker)
+- Evolution API v2.3.7 for WhatsApp (runs in Docker)
 - Google Calendar = source of truth for appointments
+- PostgreSQL on port 5433, raw SQL (no ORM) — schema in `apps/backend/src/db/migrate.ts`
+- Three apps: `backend` (Express:3001), `frontend` (Next.js:3000), `landing` (Next.js:3002)
 - Shared types: `packages/shared/src/index.ts` as `@talora/shared`
+
+## Architecture
+
+Backend (`apps/backend/src/`):
+- `api/` — Express route handlers (one file per domain)
+- `agent/` — OpenAI conversational agent (prompt-builder, tool-executor, runtime)
+- `evolution/` — WhatsApp client & webhook handler
+- `calendar/` — Google Calendar operations
+- `db/` — PostgreSQL pool, migrations, query helpers
+- `auth/` — JWT middleware, Google OAuth
+- `ws/` — WebSocket server
+
+Auth: JWT with roles `superadmin | admin_empresa | professional`. Multi-tenant by `company_id`.
+
+## Commands
+
+- Backend dev: `cd apps/backend && bun run dev`
+- Frontend dev: `cd apps/frontend && bun run dev`
+- Landing dev: `cd apps/landing && bun run dev`
+- Migrations: `cd apps/backend && bun run migrate`
+- Backend typecheck: `cd apps/backend && bun run typecheck`
+- Frontend lint: `cd apps/frontend && bun run lint`
+- Frontend build: `cd apps/frontend && bun run build`
+- Full environment: `/launch` skill
 
 ## Env Gotchas
 
@@ -70,7 +91,11 @@ Cuando reporto un bug, NO arrancar a fixearlo directo. Orden:
 - Single file: `cd apps/backend && bun test src/path/to/file.test.ts`
 - Coverage: `cd apps/backend && bun run test:coverage`
 - Helpers: `apps/backend/src/__test-utils__/`
-- CI: `.github/workflows/test.yml` (typecheck + tests on push/PR)
+- CI: `.github/workflows/test.yml` (tests) + `ci.yml` (typecheck + lint + build) on push/PR
+
+## Code Style
+
+- In React components, declare all functions BEFORE any `useEffect` that references them and BEFORE any early return. Prevents Temporal Dead Zone crashes.
 
 ## Skills
 
@@ -82,17 +107,13 @@ Cuando reporto un bug, NO arrancar a fixearlo directo. Orden:
 - `/browse` — headless browser for QA (from gstack)
 - `/qa` — systematic QA testing
 
-## Session Learnings / Repeated Patterns
+## Session Learnings
 
 - If a Next.js page is blank, do not assume the route code is the problem first.
   1. Check auth/redirect state
   2. Check `/_next/static/*` asset responses
   3. Restart `cd apps/frontend && bun run dev`
   4. Then inspect route-specific render/hydration issues
-- Route-specific white screens can also come from invalid nested interactive HTML such as `button > button`; check the rendered structure before chasing fetch logic.
-- Do not mark work as `Done` in `todos.md` unless it has real validation or objective evidence.
-- For this repo, "implemented" and "vendible" are different states. Prefer proving real flows over adding more surfaces.
-- Convention: in React components, declare all functions BEFORE any `useEffect` that references them, and BEFORE any early return. `const fn = () => {...}` after an early `if (!x) return` causes a Temporal Dead Zone crash if a `useEffect` above the return references `fn`. Audited 2025-03: 0 violations found, but enforce going forward.
 
 ## gstack
 
