@@ -104,7 +104,12 @@ Setup y rutas nuevas importantes:
 - Shared types belong in `packages/shared/src/index.ts`.
 - External API clients belong in `apps/backend/src/<service>/client.ts` with timeout, retry, and normalized errors.
 - Docker Desktop must be running before `docker-compose up -d`.
-- There is no automated test framework configured yet.
+- Test framework: `bun:test` with isolated per-file execution via `run-tests.sh`
+- Run tests: `cd apps/backend && bun run test`
+- Run single file: `cd apps/backend && bun test src/path/to/file.test.ts`
+- Run with coverage: `cd apps/backend && bun run test:coverage`
+- Test helpers in `apps/backend/src/__test-utils__/` (factories, mock pool, mock logger, mock request)
+- CI: `.github/workflows/test.yml` runs typecheck + tests on push/PR
 - `WEBHOOK_BASE_URL=http://host.docker.internal:3001` is the correct local default for Dockerized Evolution. `localhost` inside the container breaks webhooks.
 - If port `3001` is busy, inspect the running backend before changing code. A stale live process is common during debugging.
 

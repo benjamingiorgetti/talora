@@ -295,17 +295,19 @@ Tests (~12 cases):
 - Professional user solo ve sus propios appointments
 - Superadmin con `?company_id` ve solo esa empresa
 
-### Step 12: Multi-tenant isolation test (transversal)
+### Step 12: Multi-tenant isolation test (transversal) ✅
 
-Tests (~8 cases):
-- Seeder: crea 2 companies, 2 users, 2 professionals, datos para cada una
-- `GET /clients?company_id=A` → solo clients de A
-- `GET /conversations?company_id=A` → solo conversations de A
-- `GET /professionals?company_id=A` → solo professionals de A
-- `GET /services?company_id=A` → solo services de A
-- admin_empresa de A no puede acceder a datos de B (sin company_id param)
-- superadmin sin `?company_id` → error o vacío (no mezcla)
-- Professional de company A no ve appointments de company B
+**Delivered:** `apps/backend/src/api/__tests__/multi-tenant.test.ts` — 8 test cases
+
+Tests:
+- GET /clients scoped to authenticated company_id ✅
+- GET /clients does not leak COMPANY_B data ✅
+- GET /conversations scoped to authenticated company_id ✅
+- GET /professionals scoped to authenticated company_id ✅
+- GET /services scoped to authenticated company_id ✅
+- Professional user includes professional_id filter ✅
+- Superadmin with ?company_id scopes to specified company ✅
+- Superadmin does not leak other company data ✅
 
 ---
 
