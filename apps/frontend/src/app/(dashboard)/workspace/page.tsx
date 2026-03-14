@@ -10,6 +10,8 @@ import { companyScopedFetcher, companyScopedKey } from "@/lib/api";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { LoadingSpinner } from "@/components/ui/loading-spinner";
+import { PageEntrance } from "@/components/ui/page-entrance";
+import { AnimatedList, AnimatedItem } from "@/components/ui/animated-list";
 import { useAuth } from "@/lib/auth";
 import { cn } from "@/lib/utils";
 import { WorkspaceEmptyState, WorkspaceMetricCard, WorkspaceSectionHeader } from "@/components/workspace/chrome";
@@ -249,7 +251,7 @@ export default function WorkspaceDashboardPage() {
       : "bg-red-400";
 
   return (
-    <div className="mx-auto min-h-0 flex-1 overflow-y-auto max-w-[1080px] space-y-6">
+    <PageEntrance className="mx-auto min-h-0 flex-1 overflow-y-auto max-w-[1080px] space-y-6">
       {!isProfessional && (
         <div className="flex items-center gap-2 text-sm text-slate-500">
           <span className={cn("h-2 w-2 rounded-full", botDotColor)} />
@@ -257,19 +259,19 @@ export default function WorkspaceDashboardPage() {
         </div>
       )}
 
-
-      <section className="grid gap-3 sm:gap-4 md:grid-cols-3">
+      <AnimatedList className="grid gap-3 sm:gap-4 md:grid-cols-3">
         {dashboardMetrics.map((metric) => (
-          <WorkspaceMetricCard
-            key={metric.label}
-            label={metric.label}
-            value={metric.value}
-            caption={metric.caption}
-            icon={metric.icon}
-            tone={metric.tone}
-          />
+          <AnimatedItem key={metric.label}>
+            <WorkspaceMetricCard
+              label={metric.label}
+              value={metric.value}
+              caption={metric.caption}
+              icon={metric.icon}
+              tone={metric.tone}
+            />
+          </AnimatedItem>
         ))}
-      </section>
+      </AnimatedList>
 
       <section className="grid gap-3 sm:gap-4 md:grid-cols-3">
         {cumulativeMetrics.map((metric) => (
@@ -410,6 +412,6 @@ export default function WorkspaceDashboardPage() {
           </div>
         </CardContent>
       </Card>
-    </div>
+    </PageEntrance>
   );
 }

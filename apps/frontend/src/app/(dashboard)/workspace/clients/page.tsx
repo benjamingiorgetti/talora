@@ -20,6 +20,8 @@ import {
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { PageEntrance } from "@/components/ui/page-entrance";
+import { AnimatedList, AnimatedItem } from "@/components/ui/animated-list";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useAuth } from "@/lib/auth";
 import { WorkspaceEmptyState } from "@/components/workspace/chrome";
@@ -102,7 +104,7 @@ export default function WorkspaceClientsPage() {
   }
 
   return (
-    <div className="min-h-0 flex-1 overflow-y-auto space-y-5 lg:space-y-6">
+    <PageEntrance className="min-h-0 flex-1 overflow-y-auto space-y-5 lg:space-y-6">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <Dialog open={createOpen} onOpenChange={setCreateOpen}>
           <DialogTrigger asChild>
@@ -192,9 +194,10 @@ export default function WorkspaceClientsPage() {
         </div>
       </div>
 
-      <div className="grid gap-4 lg:grid-cols-2">
+      <AnimatedList className="grid gap-4 lg:grid-cols-2">
         {displayClients.map((client, index) => (
-          <Card key={client.id} className="interactive-soft rounded-[24px] border-[#e6e7ec] bg-white shadow-none sm:rounded-[28px]">
+          <AnimatedItem key={client.id}>
+            <Card className="interactive-soft rounded-[24px] border-[#e6e7ec] bg-white shadow-none sm:rounded-[28px]">
             <CardContent className="p-5 sm:p-6">
               <div className="flex items-start gap-4">
                 <div
@@ -249,9 +252,10 @@ export default function WorkspaceClientsPage() {
                 </div>
               </div>
             </CardContent>
-          </Card>
+            </Card>
+          </AnimatedItem>
         ))}
-      </div>
+      </AnimatedList>
 
       {displayClients.length === 0 && (
         <WorkspaceEmptyState
@@ -264,6 +268,6 @@ export default function WorkspaceClientsPage() {
           className="mx-auto max-w-2xl"
         />
       )}
-    </div>
+    </PageEntrance>
   );
 }

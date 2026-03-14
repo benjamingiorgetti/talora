@@ -344,6 +344,7 @@ export type WsEvent =
   | { type: 'conversation:updated'; payload: Pick<Conversation, 'id' | 'company_id' | 'instance_id' | 'professional_id' | 'last_message_at' | 'bot_paused' | 'archived_at' | 'archive_reason'> }
   | { type: 'message:new'; payload: Message & { company_id?: string } }
   | { type: 'appointment:created'; payload: AppointmentWsPayload }
+  | { type: 'appointment:confirmed'; payload: AppointmentWsPayload }
   | { type: 'appointment:rescheduled'; payload: AppointmentWsPayload }
   | { type: 'appointment:cancelled'; payload: AppointmentWsPayload }
   | { type: 'appointment:confirmed'; payload: AppointmentWsPayload };
