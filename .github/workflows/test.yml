@@ -23,4 +23,4 @@ jobs:
         run: cd apps/backend && bun run typecheck
 
       - name: Run tests
-        run: cd apps/backend && bun test
+        run: cd apps/backend && bun run test

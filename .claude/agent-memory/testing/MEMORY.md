@@ -234,6 +234,72 @@ and restore them if the linter has mangled them.
 - **Broadcast filtering mutation test**: removing the `payloadCompanyId !== socket.companyId` guard causes 3 tests to fail correctly (company isolation + professional company filter).
 - Accumulated sockets tracked in `openSockets[]` array and closed in `afterAll` to avoid leaked handles.
 
+## Route-Level Tests (HTTP server pattern)
+
+`src/api/__tests__/appointments.test.ts` — 20 tests
+
+Setup:
+1. All `mock.module(...)` calls before `await import('../appointments')`
+2. Build minimal `express()` app with `express.json()` + `app.use('/appointments', router)`
+3. `app.listen(0)` (OS-assigned port) in `beforeAll`, close in `afterAll`
+4. Use Bun's native `fetch` against `http://localhost:${port}`
+
+Mocks required for appointments route:
+- `../../db/pool` → `{ pool: { query: mockQuery } }`
+- `../../calendar/operations` → `{ bookSlot, checkSlot, deleteEvent, updateEvent }`
+- `../../config` → minimal flat object (no requireEnv calls)
+- `../../utils/logger` → `{ logger: { error, warn, info, debug } }`
+- `../../ws/server` → `{ broadcast: mockBroadcast }`
+- `../middleware` → full mock of all 4 exports (see mock pattern above)
+
+In `beforeEach`: reset ALL mocks + set safe default implementations (avoid state bleed).
+
+## TEST_IDS are NOT valid UUIDs (CRITICAL for route body tests)
+
+`TEST_IDS.PROF_A = 'prof-aaaa-1111-...'` fails `z.string().uuid()`.
+Any request body with a UUID field (professional_id, service_id) must use real UUIDs:
+`'a0000000-0000-4000-a000-000000000001'` etc.
+The DB mock can be configured to return factories regardless of the actual ID used.
+
+## resolveScopedProfessionalId behavior for admin_empresa
+
+When `role = 'admin_empresa'` and `professional_id` is in the body:
+- `resolveScopedProfessionalId` calls `getProfessional` directly
+- If not found: **throws** → caught as 500 (not 404)
+The 404 path only activates via `validateAssignment`, which runs *after* resolve succeeds.
+Don't assert exact status code when testing "professional not found" via admin POST.
+
+## appointments.ts has no GET /:id route
+
+Only: `GET /`, `GET /availability`, `POST /`, `POST /:id/reprogram`,
+`PUT /:id`, `POST /:id/cancel`, `DELETE /:id`.
+
+## Orchestration Tests (agent/index.ts)
+
+- `src/agent/__tests__/orchestration.test.ts` — 15 tests
+- Mocks required: `../../db/pool`, `../../config`, `../../evolution/client`,
+  `./tool-executor`, `./prompt-builder`, `../../calendar/operations`,
+  `../../cache/agent-cache`, `../../utils/logger`, `../../utils/timeout`,
+  `./openai-runtime`, `openai`
+- `calendar/operations` must export ALL functions (checkSlot, bookSlot, deleteEvent,
+  updateEvent, createEvent, listEvents) — missing exports cause module resolution errors.
+- `openai` mock: class constructor returning `{ chat: { completions: { create: () => mockFn() } } }`
+- **CRITICAL**: Mock instances must be STABLE (declared once, never re-assigned).
+  Use `mockReset()` + `mockImplementation()` in `beforeEach`, never `= createMock()`.
+  Re-assigning a mock variable breaks the closure captured by `mock.module`.
+- **`mockGetAgentConfig` state leak**: if one describe sets it to `null`, subsequent
+  describes see null. Fix: call `mockGetAgentConfig.mockImplementation(...)` in `beforeEach`
+  of every describe that runs `handleIncomingMessage`.
+- **`executeTool` spy limitation**: Bun may not update static import bindings when the
+  module was loaded via another path first. Use OBSERVABLE behavior instead:
+  - Tool loop ran → verify `mockOpenAiCreate` was called N times (2 = 1 tool call + 1 follow-up)
+  - Tool response sent → verify `mockSendText` was called with expected text
+- **`setupQueryMock` pattern**: the helper matches SQL substrings in order. For INSERT
+  RETURNING queries, the substring must appear in the real SQL. Empty `[]` as default
+  for queries that don't need specific rows.
+- **Conversation locking test**: use `setTimeout(r, 20)` between `handleIncomingMessage`
+  calls to let the first call start before enqueuing the second.
+
 ## Links to Detail Files
 
 - `patterns.md` — patrones de mocking y test architecture (TODO: expandir)
