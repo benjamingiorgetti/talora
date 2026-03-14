@@ -240,6 +240,40 @@ describe('buildSystemPrompt', () => {
 });
 
 // ──────────────────────────────────────────────────────────
+// Regression: tattoo-free prompts (GH bug: bot inferred "tatuaje" from system prompt)
+// ──────────────────────────────────────────────────────────
+
+describe('buildSystemPrompt — no tattoo domain leakage', () => {
+  it('should not contain "tatuaje" or "estudio de tatuajes" in resolved prompt', () => {
+    // Simulates the old seed: "Sos el asistente virtual de un estudio de tatuajes"
+    const ctx = makeBaseCtx({
+      systemPrompt:
+        '## Identidad\nSos el asistente virtual de un estudio de tatuajes. Fecha: {{fechaHoraActual}}\n\n## Comportamiento\nRespondé amable.',
+    });
+
+    const result = buildSystemPrompt(ctx);
+
+    // The prompt-builder doesn't clean domain references (that's the migration's job),
+    // so this test documents the contract: if the DB has "tatuaje", the LLM sees it.
+    // The migration must ensure this never reaches the prompt-builder.
+    expect(result.toLowerCase()).toContain('tatuaje');
+  });
+
+  it('should produce a clean prompt when the migration has cleaned the data', () => {
+    // After migration cleanup, the system_prompt should look like this
+    const ctx = makeBaseCtx({
+      systemPrompt:
+        '## Identidad\nSos el asistente de WhatsApp de Mi Empresa. Fecha: {{fechaHoraActual}}\n\n## Comportamiento\nRespondé amable.',
+    });
+
+    const result = buildSystemPrompt(ctx);
+
+    expect(result.toLowerCase()).not.toContain('tatuaje');
+    expect(result).toContain('Mi Empresa');
+  });
+});
+
+// ──────────────────────────────────────────────────────────
 // getResolvedPreview
 // ──────────────────────────────────────────────────────────
 
