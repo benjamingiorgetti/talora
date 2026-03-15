@@ -750,6 +750,33 @@ UPDATE agents SET system_prompt = COALESCE(
   system_prompt
 )
 WHERE system_prompt ILIKE '%tatuaje%';
+
+ALTER TABLE companies ADD COLUMN IF NOT EXISTS escalation_number TEXT;
+
+INSERT INTO variables (agent_id, key, default_value, description, category)
+SELECT a.id, v.key, v.default_value, v.description, 'system'
+FROM agents a, (VALUES
+  ('company_name', '', 'Nombre de la empresa (alias de company.name)'),
+  ('current_datetime', '', 'Fecha y hora actual (alias de fechaHoraActual)'),
+  ('client_name', 'Cliente', 'Nombre del cliente (alias de userName)'),
+  ('available_services', '', 'Servicios disponibles (alias de availableServices)'),
+  ('available_professionals', '', 'Profesionales disponibles (alias de availableProfessionals)'),
+  ('availability', 'Usar herramienta google_calendar_check para consultar disponibilidad.', 'Disponibilidad horaria (se resuelve por tool, no por inyeccion)'),
+  ('client_appointments', 'Sin turnos confirmados previos.', 'Turnos del cliente (alias de recentBookingsSummary)')
+) AS v(key, default_value, description)
+WHERE NOT EXISTS (SELECT 1 FROM variables WHERE agent_id = a.id AND key = v.key);
+
+INSERT INTO tools (agent_id, name, description, parameters, implementation, source)
+SELECT a.id,
+       'escalate',
+       'Escala la conversación a un humano enviando un mensaje de WhatsApp al número de escalación.',
+       '{"type":"object","properties":{"reason":{"type":"string","description":"Razón corta de por qué se escala."}},"required":["reason"]}'::jsonb,
+       'escalate',
+       'core'
+FROM agents a
+WHERE NOT EXISTS (
+  SELECT 1 FROM tools t WHERE t.agent_id = a.id AND t.name = 'escalate'
+);
 `;
 
 async function run() {

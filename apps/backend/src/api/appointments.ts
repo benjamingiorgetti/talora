@@ -2,7 +2,7 @@ import { Router } from 'express';
 import { pool } from '../db/pool';
 import { logger } from '../utils/logger';
 import { authMiddleware, getRequestCompanyId, getRequestProfessionalId, requireCompanyScope } from './middleware';
-import { bookSlot, checkSlot, deleteEvent, updateEvent } from '../calendar/operations';
+import { bookSlot, checkSlot, createEvent, deleteEvent, updateEvent } from '../calendar/operations';
 import { validateBody, createAppointmentSchema, reprogramAppointmentSchema } from './validation';
 import type { Appointment, AppointmentWsPayload, Client, Professional, Service, WsEvent } from '@talora/shared';
 import { broadcast } from '../ws/server';
@@ -208,6 +208,9 @@ async function reprogramAppointment(
     return { status: 409 as const, body: { error: 'Slot not available', suggestions: availability.suggestions ?? [] } };
   }
 
+  const title = service?.name ? `${appointment.client_name} - ${service.name}` : appointment.title;
+  let newGoogleEventId: string | null = null;
+
   if (appointment.google_event_id) {
     const updateResult = await updateEvent(
       appointment.google_event_id,
@@ -215,12 +218,25 @@ async function reprogramAppointment(
       durationMinutes,
       professional.calendar_id,
       professional.id,
-      service?.name ? `${appointment.client_name} - ${service.name}` : appointment.title,
+      title,
       options?.notes ?? appointment.notes
     );
     if (!updateResult.success) {
       return { status: 502 as const, body: { error: updateResult.error ?? 'Failed to update calendar event' } };
     }
+  } else {
+    const creation = await createEvent(
+      title,
+      startsAt,
+      durationMinutes,
+      options?.notes ?? appointment.notes ?? '',
+      professional.calendar_id,
+      professional.id
+    );
+    if (!creation.success) {
+      return { status: 502 as const, body: { error: 'Failed to create calendar event' } };
+    }
+    newGoogleEventId = creation.eventId ?? null;
   }
 
   const endsAt = new Date(new Date(startsAt).getTime() + durationMinutes * 60 * 1000).toISOString();
@@ -233,16 +249,18 @@ async function reprogramAppointment(
          title = $5,
          notes = $6,
          status = 'rescheduled',
+         google_event_id = COALESCE($7, google_event_id),
          updated_at = NOW()
-     WHERE id = $7 AND company_id = $8
+     WHERE id = $8 AND company_id = $9
      RETURNING *`,
     [
       professional.id,
       service?.id ?? null,
       startsAt,
       endsAt,
-      service?.name ? `${appointment.client_name} - ${service.name}` : appointment.title,
+      title,
       options?.notes ?? appointment.notes,
+      newGoogleEventId,
       appointmentId,
       companyId,
     ]
@@ -279,7 +297,7 @@ async function cancelAppointment(req: Parameters<typeof authMiddleware>[0], comp
 
   const updated = await pool.query<Appointment>(
     `UPDATE appointments
-     SET status = 'cancelled', updated_at = NOW()
+     SET status = 'cancelled', google_event_id = NULL, updated_at = NOW()
      WHERE id = $1 AND company_id = $2
      RETURNING *`,
     [appointmentId, companyId]

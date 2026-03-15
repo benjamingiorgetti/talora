@@ -88,6 +88,7 @@ const emptyCompany = {
   name: "",
   industry: "",
   whatsapp: "",
+  escalationNumber: "",
   adminFullName: "",
   adminEmail: "",
   adminPassword: "",
@@ -298,6 +299,7 @@ export default function SuperadminCompaniesPage() {
         name: companyForm.name.trim(),
         industry: companyForm.industry,
         whatsapp_number: companyForm.whatsapp.trim() || null,
+        escalation_number: companyForm.escalationNumber.trim() || null,
         admin_email: companyForm.adminEmail.trim(),
         admin_password: companyForm.adminPassword,
         admin_full_name: companyForm.adminFullName.trim(),
@@ -599,9 +601,15 @@ export default function SuperadminCompaniesPage() {
                   </SelectContent>
                 </Select>
               </div>
-              <div className="space-y-2">
-                <Label>WhatsApp principal</Label>
-                <Input value={companyForm.whatsapp} onChange={(event) => setCompanyForm((current) => ({ ...current, whatsapp: event.target.value }))} className="h-11 rounded-2xl border-[#dde1ea]" placeholder="+54 9 11..." />
+              <div className="grid gap-4 md:grid-cols-2">
+                <div className="space-y-2">
+                  <Label>WhatsApp principal</Label>
+                  <Input value={companyForm.whatsapp} onChange={(event) => setCompanyForm((current) => ({ ...current, whatsapp: event.target.value }))} className="h-11 rounded-2xl border-[#dde1ea]" placeholder="+54 9 11..." />
+                </div>
+                <div className="space-y-2">
+                  <Label>Numero de escalacion</Label>
+                  <Input value={companyForm.escalationNumber} onChange={(event) => setCompanyForm((current) => ({ ...current, escalationNumber: event.target.value }))} className="h-11 rounded-2xl border-[#dde1ea]" placeholder="+54 9 11..." />
+                </div>
               </div>
               <div className="grid gap-4 md:grid-cols-2">
                 <div className="space-y-2">

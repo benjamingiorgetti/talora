@@ -4,7 +4,7 @@ import { useEffect, useMemo, useState } from "react";
 import { usePathname, useRouter } from "next/navigation";
 import useSWR, { useSWRConfig } from "swr";
 import type { Conversation, Message } from "@talora/shared";
-import { Archive, PauseCircle, PlayCircle, Search, Send, ShieldCheck, Sparkles } from "lucide-react";
+import { Archive, Cog, PauseCircle, PlayCircle, Search, Send, ShieldCheck, Sparkles } from "lucide-react";
 import { toast } from "sonner";
 import { api, companyScopedFetcher, companyScopedKey } from "@/lib/api";
 import { useAuth } from "@/lib/auth";
@@ -129,13 +129,8 @@ export default function WorkspaceWhatsAppPage() {
 
   useEffect(() => {
     const currentList = filteredConversations;
-    const otherList = view === "active" ? archivedConversations ?? [] : activeConversations ?? [];
 
     if (currentList.length === 0) {
-      if (selectedId && otherList.some((conversation) => conversation.id === selectedId)) {
-        setView((current) => (current === "active" ? "archived" : "active"));
-        return;
-      }
       setSelectedId(null);
       return;
     }
@@ -144,13 +139,8 @@ export default function WorkspaceWhatsAppPage() {
       return;
     }
 
-    if (selectedId && otherList.some((conversation) => conversation.id === selectedId)) {
-      setView((current) => (current === "active" ? "archived" : "active"));
-      return;
-    }
-
     setSelectedId(currentList[0].id);
-  }, [activeConversations, archivedConversations, filteredConversations, selectedId, view]);
+  }, [filteredConversations, selectedId]);
 
   const selectedConversation =
     filteredConversations.find((conversation) => conversation.id === selectedId) ??
@@ -191,6 +181,10 @@ export default function WorkspaceWhatsAppPage() {
     }
   };
 
+  if (!activeCompanyId) {
+    return null;
+  }
+
   if (activeError) {
     return <WorkspaceErrorState className="min-h-[50vh]" onRetry={() => { void mutateActiveConversations(); }} />;
   }
@@ -216,7 +210,7 @@ export default function WorkspaceWhatsAppPage() {
               <div className="mt-4 grid grid-cols-2 rounded-[18px] bg-[#eef1f7] p-1">
                 <button
                   type="button"
-                  onClick={() => setView("active")}
+                  onClick={() => { setSelectedId(null); setView("active"); }}
                   className={cn(
                     "rounded-[14px] px-3 py-2 text-sm font-medium transition-colors",
                     view === "active" ? "bg-white text-slate-950 shadow-sm" : "text-slate-500"
@@ -226,7 +220,7 @@ export default function WorkspaceWhatsAppPage() {
                 </button>
                 <button
                   type="button"
-                  onClick={() => setView("archived")}
+                  onClick={() => { setSelectedId(null); setView("archived"); }}
                   className={cn(
                     "rounded-[14px] px-3 py-2 text-sm font-medium transition-colors",
                     view === "archived" ? "bg-white text-slate-950 shadow-sm" : "text-slate-500"
@@ -372,6 +366,27 @@ export default function WorkspaceWhatsAppPage() {
                         }
 
                         const isAssistant = message.role === "assistant";
+                        const isToolCallOnly = isAssistant && message.tool_calls?.length && !message.content;
+
+                        if (isToolCallOnly) {
+                          return (
+                            <div key={message.id} className="flex justify-end">
+                              <div className="flex flex-wrap items-center gap-1.5 rounded-full border border-slate-200 bg-slate-50 px-3 py-1.5">
+                                {message.tool_calls!.map((tc, i) => {
+                                  const name = (tc as { function?: { name?: string } }).function?.name ?? "tool";
+                                  return (
+                                    <span key={i} className="inline-flex items-center gap-1 text-[11px] font-medium text-slate-500">
+                                      <Cog className="h-3 w-3" />
+                                      {name}
+                                    </span>
+                                  );
+                                })}
+                                <span className="text-[11px] text-slate-400">{formatMessageTime(message.created_at)}</span>
+                              </div>
+                            </div>
+                          );
+                        }
+
                         return (
                           <div key={message.id} className={cn("flex", isAssistant ? "justify-end" : "justify-start")}>
                             <div

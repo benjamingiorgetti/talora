@@ -86,6 +86,7 @@ companiesRouter.post('/', authMiddleware, requireSuperadmin, validateBody(create
     name,
     industry,
     whatsapp_number,
+    escalation_number,
     admin_email,
     admin_password,
     admin_full_name,
@@ -101,10 +102,10 @@ companiesRouter.post('/', authMiddleware, requireSuperadmin, validateBody(create
     const slug = `${slugBase}-${Math.random().toString(36).slice(2, 6)}`;
 
     const companyResult = await client.query<Company>(
-      `INSERT INTO companies (name, slug, industry, whatsapp_number, calendar_connected)
-       VALUES ($1, $2, $3, $4, false)
+      `INSERT INTO companies (name, slug, industry, whatsapp_number, escalation_number, calendar_connected)
+       VALUES ($1, $2, $3, $4, $5, false)
        RETURNING *`,
-      [name, slug, industry, whatsapp_number || null]
+      [name, slug, industry, whatsapp_number || null, escalation_number || null]
     );
     const company = companyResult.rows[0];
 

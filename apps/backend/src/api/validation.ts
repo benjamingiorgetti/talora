@@ -168,6 +168,7 @@ export const createCompanySchema = z.object({
   admin_password: z.string().min(8, 'Admin password must be at least 8 characters'),
   admin_full_name: z.string().min(1, 'admin_full_name is required').max(200),
   whatsapp_number: z.string().max(30).optional(),
+  escalation_number: z.string().max(30).optional(),
   professionals: z.array(z.object({
     name: z.string().max(200).optional(),
     specialty: z.string().max(200).optional(),

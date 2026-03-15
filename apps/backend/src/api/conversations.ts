@@ -122,6 +122,8 @@ conversationsRouter.get('/:id/messages', async (req, res) => {
       ? `SELECT id FROM conversations WHERE id = $1 AND company_id = $2 AND professional_id = $3`
       : `SELECT id FROM conversations WHERE id = $1 AND company_id = $2`;
 
+    const resetFilter = `AND created_at > COALESCE((SELECT memory_reset_at FROM conversations WHERE id = $1), '1970-01-01'::timestamptz)`;
+
     if (before) {
       if (professionalId) values.push(professionalId);
       values.push(before, limit + 1);
@@ -129,6 +131,7 @@ conversationsRouter.get('/:id/messages', async (req, res) => {
                WHERE conversation_id = $1
                  AND conversation_id IN (${conversationScope})
                  AND created_at < (SELECT created_at FROM messages WHERE id = $${professionalId ? 4 : 3})
+                 ${resetFilter}
                ORDER BY created_at DESC
                LIMIT $${professionalId ? 5 : 4}`;
     } else {
@@ -137,6 +140,7 @@ conversationsRouter.get('/:id/messages', async (req, res) => {
       query = `SELECT * FROM messages
                WHERE conversation_id = $1
                  AND conversation_id IN (${conversationScope})
+                 ${resetFilter}
                ORDER BY created_at DESC
                LIMIT $${professionalId ? 4 : 3}`;
     }

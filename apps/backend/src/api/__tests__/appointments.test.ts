@@ -25,12 +25,14 @@ mock.module('../../db/pool', () => ({
 
 const mockBookSlot = mock(() => Promise.resolve({ success: true, eventId: 'gcal-new-evt' }));
 const mockCheckSlot = mock(() => Promise.resolve({ available: true, suggestions: [] }));
+const mockCreateEvent = mock(() => Promise.resolve({ success: true, eventId: 'gcal-created-evt' }));
 const mockDeleteEvent = mock(() => Promise.resolve({ success: true }));
 const mockUpdateEvent = mock(() => Promise.resolve({ success: true }));
 
 mock.module('../../calendar/operations', () => ({
   bookSlot: mockBookSlot,
   checkSlot: mockCheckSlot,
+  createEvent: mockCreateEvent,
   deleteEvent: mockDeleteEvent,
   updateEvent: mockUpdateEvent,
 }));
