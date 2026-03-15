@@ -313,7 +313,7 @@ function DashboardMockup() {
         className="flex items-center justify-between px-4 py-3 border-b border-[#E2E4EC]"
       >
         <div className="flex items-center gap-2">
-          <button className="rounded-md px-2 py-0.5 text-[11px] font-medium bg-[#F3F4F6] text-gray-600 hover:bg-[#E5E7EB] transition-colors">
+          <button aria-hidden="true" tabIndex={-1} className="rounded-md px-2 py-0.5 text-[11px] font-medium bg-[#F3F4F6] text-gray-600 hover:bg-[#E5E7EB] transition-colors">
             Hoy
           </button>
           <ChevronLeft className="h-4 w-4 text-gray-400 cursor-pointer" />
@@ -504,7 +504,7 @@ export function Hero() {
               <a href={hero.ctaPrimaryHref}>{hero.ctaPrimary}</a>
             </Button>
             <Button size="lg" variant="secondary" className="w-full sm:w-auto" asChild>
-              <a href={hero.ctaSecondaryHref}>{hero.ctaSecondary}</a>
+              <a href={hero.ctaSecondaryHref} target="_blank" rel="noopener noreferrer">{hero.ctaSecondary}</a>
             </Button>
           </motion.div>
 

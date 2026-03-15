@@ -147,7 +147,7 @@ export function Navbar() {
                 )}
                 asChild
               >
-                <a href={nav.ctaHref}>{nav.cta}</a>
+                <a href={nav.ctaHref} target="_blank" rel="noopener noreferrer">{nav.cta}</a>
               </Button>
             </div>
 
@@ -196,7 +196,7 @@ export function Navbar() {
                 ))}
                 <div className="pt-2 pb-1">
                   <Button className="w-full" size="default" asChild>
-                    <a href={nav.ctaHref} onClick={() => setOpen(false)}>
+                    <a href={nav.ctaHref} target="_blank" rel="noopener noreferrer" onClick={() => setOpen(false)}>
                       {nav.cta}
                     </a>
                   </Button>

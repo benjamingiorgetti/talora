@@ -103,7 +103,7 @@ mock.module('../../calendar/operations', () => ({
   deleteEvent: mock(() => Promise.resolve({ success: true })),
   updateEvent: mock(() => Promise.resolve({ eventId: 'evt-test' })),
   createEvent: mock(() => Promise.resolve({ eventId: 'evt-test' })),
-  listEvents: mock(() => Promise.resolve([])),
+  listEvents: mock(() => Promise.resolve({ events: [] })),
 }));
 
 mock.module('../../cache/agent-cache', () => ({

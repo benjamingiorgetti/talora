@@ -20,7 +20,7 @@ export function FinalCTA() {
           {/* Brand icon */}
           <img
             src="/images/icono-blanco.png"
-            alt=""
+            alt="Talora"
             width={40}
             height={40}
             className="mx-auto mb-6 h-10 w-10 opacity-80"
@@ -33,7 +33,7 @@ export function FinalCTA() {
           </p>
           <div className="mt-6 sm:mt-8">
             <Button size="lg" variant="invert" className="w-full sm:w-auto" asChild>
-              <a href={finalCta.ctaHref}>{finalCta.cta}</a>
+              <a href={finalCta.ctaHref} target="_blank" rel="noopener noreferrer">{finalCta.cta}</a>
             </Button>
           </div>
           <div className="mt-6 sm:mt-8 flex flex-wrap items-center justify-center gap-3 sm:gap-4 md:gap-6">

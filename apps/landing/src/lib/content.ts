@@ -177,19 +177,5 @@ export const footer = {
         { label: "FAQ", href: "#faq" },
       ],
     },
-    {
-      title: "Empresa",
-      links: [
-        { label: "Sobre nosotros", href: "#" },
-        { label: "Contacto", href: "#" },
-      ],
-    },
-    {
-      title: "Legal",
-      links: [
-        { label: "Privacidad", href: "#" },
-        { label: "Terminos", href: "#" },
-      ],
-    },
   ],
 };
