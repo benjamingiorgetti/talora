@@ -440,7 +440,7 @@ async function resolveSchedulingContext(
     professional,
     service,
     durationMinutes,
-    calendarId: calendarIdOverride ?? professional.calendar_id,
+    calendarId: calendarIdOverride ?? professional.calendar_id ?? '',
   };
 }
 
@@ -559,6 +559,12 @@ export async function executeTool(
         if (scheduling.issue) {
           return JSON.stringify(scheduling.issue);
         }
+        if (!scheduling.calendarId) {
+          return JSON.stringify({
+            error: `El profesional "${scheduling.professional.name}" no tiene un calendario de Google configurado. El administrador debe conectar Google Calendar desde Configurar > Profesionales.`,
+            needsCalendarSetup: true,
+          });
+        }
         const result = await checkSlot(date, scheduling.durationMinutes, scheduling.calendarId, scheduling.professional.id);
         return JSON.stringify(result);
       }
@@ -591,6 +597,12 @@ export async function executeTool(
         const scheduling = await resolveSchedulingContext(context.companyId, toolInput, context.professionalId);
         if (scheduling.issue) {
           return JSON.stringify(scheduling.issue);
+        }
+        if (!scheduling.calendarId) {
+          return JSON.stringify({
+            error: `El profesional "${scheduling.professional.name}" no tiene un calendario de Google configurado. El administrador debe conectar Google Calendar desde Configurar > Profesionales.`,
+            needsCalendarSetup: true,
+          });
         }
         const title = scheduling.service ? `${name} - ${scheduling.service.name}` : name;
         const fullDescription = [
@@ -695,6 +707,12 @@ export async function executeTool(
         }, context.professionalId);
         if (scheduling.issue) {
           return JSON.stringify(scheduling.issue);
+        }
+        if (!scheduling.calendarId) {
+          return JSON.stringify({
+            error: `El profesional "${scheduling.professional.name}" no tiene un calendario de Google configurado. El administrador debe conectar Google Calendar desde Configurar > Profesionales.`,
+            needsCalendarSetup: true,
+          });
         }
         const nextNotes = asString(toolInput.notes) ?? appointment.notes;
         const nextTitle = scheduling.service ? `${appointment.client_name} - ${scheduling.service.name}` : appointment.title;

@@ -5,7 +5,7 @@ import { usePathname, useRouter } from "next/navigation";
 import { AnimatePresence, motion } from "framer-motion";
 import useSWR from "swr";
 import type { Appointment, Professional, Service } from "@talora/shared";
-import { CalendarClock, Check, Clock3, FileEdit, Plus, RefreshCw, Sparkles, Trash2 } from "lucide-react";
+import { CalendarClock, Clock3, Plus, RefreshCw, Sparkles, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 import { api, companyScopedFetcher, companyScopedKey } from "@/lib/api";
 import { fadeIn, slideInRight } from "@/lib/motion";
@@ -106,11 +106,10 @@ export default function WorkspaceAppointmentsPage() {
   const stats = useMemo(() => {
     const rows = appointments ?? [];
     return {
-      today: rows.filter((appointment) => appointment.status !== "cancelled" && appointment.status !== "draft" && isToday(appointment.starts_at)).length,
+      today: rows.filter((appointment) => appointment.status !== "cancelled" && isToday(appointment.starts_at)).length,
       confirmed: rows.filter((appointment) => appointment.status === "confirmed").length,
       reprogrammed: rows.filter((appointment) => appointment.status === "rescheduled").length,
       cancelled: rows.filter((appointment) => appointment.status === "cancelled").length,
-      draft: rows.filter((appointment) => appointment.status === "draft").length,
     };
   }, [appointments]);
 
@@ -199,15 +198,6 @@ export default function WorkspaceAppointmentsPage() {
     }
   };
 
-  const handleConfirm = async (appointmentId: string) => {
-    try {
-      await api.post(`/appointments/${appointmentId}/confirm`);
-      await mutate();
-      toast.success("Turno confirmado.");
-    } catch (error) {
-      toast.error(error instanceof Error ? error.message : "No se pudo confirmar el turno.");
-    }
-  };
 
   return (
     <>
@@ -227,13 +217,12 @@ export default function WorkspaceAppointmentsPage() {
           </Button>
         </div>
 
-        <AnimatedList className="grid gap-3 sm:gap-4 md:grid-cols-2 xl:grid-cols-5">
+        <AnimatedList className="grid gap-3 sm:gap-4 md:grid-cols-2 xl:grid-cols-4">
           {[
-            { label: "Turnos de hoy", value: stats.today, icon: CalendarClock, tone: "lilac" as const },
-            { label: "Borradores", value: stats.draft, icon: FileEdit, tone: "lilac" as const },
-            { label: "Confirmados", value: stats.confirmed, icon: Sparkles, tone: "sky" as const },
-            { label: "Reprogramados", value: stats.reprogrammed, icon: RefreshCw, tone: "sand" as const },
-            { label: "Cancelados", value: stats.cancelled, icon: Clock3, tone: "rose" as const },
+            { label: "Turnos de hoy", value: stats.today, icon: CalendarClock, tone: "lilac" as const, caption: "Carga inmediata del equipo." },
+            { label: "Confirmados", value: stats.confirmed, icon: Sparkles, tone: "sky" as const, caption: "Agenda que ya no necesita seguimiento." },
+            { label: "Reprogramados", value: stats.reprogrammed, icon: RefreshCw, tone: "sand" as const, caption: "Ajustes que ya movieron la agenda." },
+            { label: "Cancelados", value: stats.cancelled, icon: Clock3, tone: "rose" as const, caption: "Cancelaciones visibles para no perder contexto." },
           ].map((item) => (
             <AnimatedItem key={item.label}>
               <WorkspaceMetricCard
@@ -241,17 +230,7 @@ export default function WorkspaceAppointmentsPage() {
                 value={item.value}
                 icon={item.icon}
                 tone={item.tone}
-                caption={
-                  item.label === "Turnos de hoy"
-                    ? "Carga inmediata del equipo."
-                    : item.label === "Borradores"
-                      ? "Turnos de prueba pendientes de confirmar."
-                    : item.label === "Confirmados"
-                      ? "Agenda que ya no necesita seguimiento."
-                      : item.label === "Reprogramados"
-                        ? "Ajustes que ya movieron la agenda."
-                        : "Cancelaciones visibles para no perder contexto."
-                }
+                caption={item.caption}
               />
             </AnimatedItem>
           ))}
@@ -290,18 +269,14 @@ export default function WorkspaceAppointmentsPage() {
                             ? "bg-[hsl(var(--surface-rose))] text-[#7c5b66]"
                             : appointment.status === "rescheduled"
                               ? "bg-[hsl(var(--surface-sand))] text-[#7b664a]"
-                              : appointment.status === "draft"
-                                ? "bg-violet-100 text-violet-700"
-                                : "bg-[hsl(var(--surface-mint))] text-[#517261]"
+                              : "bg-[hsl(var(--surface-mint))] text-[#517261]"
                         )}
                       >
                         {appointment.status === "confirmed"
                           ? "Confirmado"
                           : appointment.status === "rescheduled"
                             ? "Reprogramado"
-                            : appointment.status === "draft"
-                              ? "Borrador"
-                              : "Cancelado"}
+                            : "Cancelado"}
                       </span>
                     </div>
 
@@ -321,15 +296,6 @@ export default function WorkspaceAppointmentsPage() {
                     </div>
 
                     <div className="mt-4 flex flex-col gap-2 sm:flex-row">
-                      {appointment.status === "draft" && (
-                        <Button
-                          onClick={() => handleConfirm(appointment.id)}
-                          className="h-10 flex-1 rounded-2xl bg-violet-600 px-3 text-white hover:bg-violet-700"
-                        >
-                          <Check className="mr-2 h-4 w-4" />
-                          Confirmar
-                        </Button>
-                      )}
                       <Button
                         variant="outline"
                         onClick={() => openReschedulePanel(appointment)}
@@ -393,31 +359,18 @@ export default function WorkspaceAppointmentsPage() {
                               ? "bg-[hsl(var(--surface-rose))] text-[#7c5b66]"
                               : appointment.status === "rescheduled"
                                 ? "bg-[hsl(var(--surface-sand))] text-[#7b664a]"
-                                : appointment.status === "draft"
-                                  ? "bg-violet-100 text-violet-700"
-                                  : "bg-[hsl(var(--surface-mint))] text-[#517261]"
+                                : "bg-[hsl(var(--surface-mint))] text-[#517261]"
                           )}
                         >
                           {appointment.status === "confirmed"
                             ? "Confirmado"
                             : appointment.status === "rescheduled"
                               ? "Reprogramado"
-                              : appointment.status === "draft"
-                                ? "Borrador"
-                                : "Cancelado"}
+                              : "Cancelado"}
                         </span>
                       </TableCell>
                       <TableCell className="w-[18%]">
                         <div className="flex justify-end gap-2">
-                          {appointment.status === "draft" && (
-                            <Button
-                              onClick={() => handleConfirm(appointment.id)}
-                              className="h-9 rounded-2xl bg-violet-600 px-3 text-white hover:bg-violet-700"
-                            >
-                              <Check className="mr-2 h-4 w-4" />
-                              Confirmar
-                            </Button>
-                          )}
                           <Button
                             variant="outline"
                             onClick={() => openReschedulePanel(appointment)}

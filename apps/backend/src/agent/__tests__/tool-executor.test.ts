@@ -218,6 +218,54 @@ describe('cancel: professional ownership on appointment lookup', () => {
 // Verify SQL includes professional_id filter
 // ──────────────────────────────────────────────────────────
 
+// ──────────────────────────────────────────────────────────
+// google_calendar_check: null calendar_id handling
+// ──────────────────────────────────────────────────────────
+
+describe('google_calendar_check: professional with no calendar configured', () => {
+  beforeEach(() => mockQuery.mockReset());
+
+  it('returns actionable error when professional has null calendar_id', async () => {
+    const juliProf = {
+      id: PROF_A,
+      company_id: COMPANY_A,
+      name: 'Juli',
+      calendar_id: null,
+      is_active: true,
+    };
+    const corteService = {
+      id: 'svc-corte',
+      company_id: COMPANY_A,
+      name: 'Corte',
+      duration_minutes: 20,
+      professional_id: PROF_A,
+      is_active: true,
+    };
+
+    setupQueryMock([
+      ['FROM professionals', [juliProf]],
+      ['FROM services', [corteService]],
+    ]);
+
+    const result = await executeTool(
+      'google_calendar_check',
+      {
+        date: '2026-03-14T15:00:00',
+        professionalName: 'Juli',
+        serviceName: 'corte',
+        durationMinutes: 20,
+      },
+      makeContext({ professionalId: null })
+    );
+    const parsed = JSON.parse(result);
+
+    // Should return a clear, actionable error — not a generic "Tool execution failed"
+    expect(parsed.error).toBeDefined();
+    expect(parsed.error).not.toContain('Tool execution failed');
+    expect(parsed.error).toContain('calendario');
+  });
+});
+
 describe('resolveAppointmentByReference: SQL contains professional_id filter', () => {
   beforeEach(() => mockQuery.mockReset());
 
