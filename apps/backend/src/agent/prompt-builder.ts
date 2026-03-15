@@ -53,7 +53,15 @@ export function getSystemVariableValues(ctx: Pick<PromptBuildContext, 'conversat
     // Backward-compat aliases
     nombreCliente: contactName,
     numeroTelefono: phoneNumber,
-    horariosDisponibles: 'No disponible',
+    horariosDisponibles: 'Usar herramienta google_calendar_check para consultar disponibilidad.',
+    // Snake-case aliases for flexible prompts
+    company_name: '',
+    current_datetime: now,
+    client_name: contactName,
+    available_services: '',
+    available_professionals: '',
+    availability: 'Usar herramienta google_calendar_check para consultar disponibilidad.',
+    client_appointments: 'Sin turnos confirmados previos.',
   };
 }
 

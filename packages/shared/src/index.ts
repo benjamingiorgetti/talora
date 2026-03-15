@@ -9,6 +9,7 @@ export interface Company {
   slug: string;
   industry: string;
   whatsapp_number: string | null;
+  escalation_number: string | null;
   calendar_connected: boolean;
   created_at: string;
   updated_at: string;

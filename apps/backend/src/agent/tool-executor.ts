@@ -2,6 +2,7 @@ import { pool } from '../db/pool';
 import { bookSlot, checkSlot, deleteEvent, updateEvent } from '../calendar/operations';
 import { validateWebhookUrl } from '../utils/url-validator';
 import { logger } from '../utils/logger';
+import { EvolutionClient } from '../evolution/client';
 import type { Appointment, Client, Professional, Service } from '@talora/shared';
 
 type ToolExecutionContext = {
@@ -388,7 +389,8 @@ async function resolveProfessionalSelection(
 async function resolveSchedulingContext(
   companyId: string,
   toolInput: Record<string, unknown>,
-  contextProfessionalId?: string | null
+  contextProfessionalId?: string | null,
+  conversationId?: string | null,
 ): Promise<{ professional: Professional; service: Service | null; durationMinutes: number; calendarId: string; issue?: SchedulingIssue }> {
   const calendarIdOverride =
     asString(toolInput.calendarId) ??
@@ -427,6 +429,19 @@ async function resolveSchedulingContext(
 
   if (!professional) {
     throw new Error('No se pudo determinar el profesional para esta operación. La conversación no tiene un profesional asignado.');
+  }
+
+  // Bind professional to conversation on first resolution
+  if (!contextProfessionalId && conversationId && professional) {
+    try {
+      await pool.query(
+        `UPDATE conversations SET professional_id = $1, updated_at = NOW()
+         WHERE id = $2 AND professional_id IS NULL AND NOT professional_binding_suppressed`,
+        [professional.id, conversationId]
+      );
+    } catch (err) {
+      logger.error('Failed to bind professional to conversation:', err);
+    }
   }
 
   const durationMinutes =
@@ -554,7 +569,7 @@ export async function executeTool(
           return JSON.stringify(result);
         }
 
-        const scheduling = await resolveSchedulingContext(context.companyId, toolInput, context.professionalId);
+        const scheduling = await resolveSchedulingContext(context.companyId, toolInput, context.professionalId, context.conversationId);
         if (scheduling.issue) {
           return JSON.stringify(scheduling.issue);
         }
@@ -587,7 +602,7 @@ export async function executeTool(
           return JSON.stringify(result);
         }
 
-        const scheduling = await resolveSchedulingContext(context.companyId, toolInput, context.professionalId);
+        const scheduling = await resolveSchedulingContext(context.companyId, toolInput, context.professionalId, context.conversationId);
         if (scheduling.issue) {
           return JSON.stringify(scheduling.issue);
         }
@@ -689,7 +704,7 @@ export async function executeTool(
           professionalId,
           serviceId,
           durationMinutes: getAppointmentDurationMinutes(appointment),
-        }, context.professionalId);
+        }, context.professionalId, context.conversationId);
         if (scheduling.issue) {
           return JSON.stringify(scheduling.issue);
         }
@@ -794,6 +809,40 @@ export async function executeTool(
         return JSON.stringify({ success: true, appointmentId: appointment.id });
       }
 
+      case 'escalate': {
+        const reason = asString(toolInput.reason) ?? 'Sin razón especificada';
+        if (!context.companyId) {
+          return JSON.stringify({ error: 'No company context' });
+        }
+
+        const companyRow = await pool.query<{ escalation_number: string | null; name: string }>(
+          'SELECT escalation_number, name FROM companies WHERE id = $1',
+          [context.companyId]
+        );
+        const escalationNumber = companyRow.rows[0]?.escalation_number;
+        if (!escalationNumber) {
+          return JSON.stringify({ error: 'No hay número de escalación configurado para esta empresa.' });
+        }
+
+        const instanceRow = await pool.query<{ evolution_instance_name: string }>(
+          `SELECT evolution_instance_name FROM whatsapp_instances WHERE company_id = $1 AND status = 'connected' LIMIT 1`,
+          [context.companyId]
+        );
+        if (!instanceRow.rows[0]) {
+          return JSON.stringify({ error: 'No hay instancia de WhatsApp conectada.' });
+        }
+
+        const clientInfo = context.contactName
+          ? `${context.contactName} (${context.phoneNumber})`
+          : context.phoneNumber ?? 'desconocido';
+        const escalationMessage = `⚠️ *Escalación — ${companyRow.rows[0].name}*\n\nCliente: ${clientInfo}\nMotivo: ${reason}`;
+
+        const evolution = new EvolutionClient();
+        await evolution.sendText(instanceRow.rows[0].evolution_instance_name, escalationNumber, escalationMessage);
+
+        return JSON.stringify({ success: true, message: 'Escalación enviada al equipo.' });
+      }
+
       case 'webhook': {
         const url = toolInput.url as string;
         await validateWebhookUrl(url);
@@ -833,7 +882,7 @@ export async function executeTool(
   } catch (err) {
     logger.error(`Tool execution error (${toolName}):`, err);
     return JSON.stringify({
-      error: `Tool execution failed: ${err instanceof Error ? err.message : 'Unknown error'}`,
+      error: `La herramienta "${toolName}" no pudo completar la operación. Intenta de nuevo o sugiere una alternativa al usuario.`,
     });
   }
 }

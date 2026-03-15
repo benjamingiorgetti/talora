@@ -259,7 +259,18 @@ async function handleMessagesUpsert(body: EvolutionWebhookBody) {
      LIMIT 1`,
     [instance.company_id, phone]
   );
-  const assignedProfessionalId = clientResult.rows[0]?.professional_id ?? null;
+  let resolvedProfessionalId = clientResult.rows[0]?.professional_id ?? null;
+
+  // Fallback: if no client-based professional, auto-assign when company has exactly 1 active professional
+  if (!resolvedProfessionalId) {
+    const proResult = await pool.query<{ id: string }>(
+      'SELECT id FROM professionals WHERE company_id = $1 AND is_active = true',
+      [instance.company_id]
+    );
+    if (proResult.rows.length === 1) {
+      resolvedProfessionalId = proResult.rows[0].id;
+    }
+  }
 
   const existingConversationResult = await pool.query<{
     id: string;
@@ -292,7 +303,7 @@ async function handleMessagesUpsert(body: EvolutionWebhookBody) {
                    last_message_at = NOW(),
                    updated_at = NOW()
      RETURNING *`,
-    [instance.company_id, assignedProfessionalId, instance.id, phone, contactName]
+    [instance.company_id, resolvedProfessionalId, instance.id, phone, contactName]
   );
 
   let conversation = convResult.rows[0];

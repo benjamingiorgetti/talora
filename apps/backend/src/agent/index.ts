@@ -4,7 +4,7 @@ import { config } from '../config';
 import { EvolutionClient } from '../evolution/client';
 import { executeTool } from './tool-executor';
 import { buildSystemPrompt } from './prompt-builder';
-import { checkSlot } from '../calendar/operations';
+
 import { getAgentConfig } from '../cache/agent-cache';
 import { logger } from '../utils/logger';
 import { withTimeout } from '../utils/timeout';
@@ -19,32 +19,8 @@ const CALENDAR_TOOLS = new Set(['google_calendar_check', 'google_calendar_book',
 // Simple per-conversation lock to prevent race conditions on concurrent messages
 const conversationLocks = new Map<string, Promise<void>>();
 
-// In-memory cache for calendar availability results (TTL: 5 minutes, max 100 entries)
-const availabilityCache = new Map<string, { result: { available: boolean; suggestions?: string[] }; timestamp: number }>();
-const AVAILABILITY_CACHE_TTL = 300_000; // 5 minutes
-const MAX_AVAILABILITY_ENTRIES = 100;
-
 function normalizePhone(value: string | null | undefined): string {
   return (value ?? '').replace(/\D/g, '');
-}
-
-function getCachedAvailability(dateKey: string): { available: boolean; suggestions?: string[] } | null {
-  const entry = availabilityCache.get(dateKey);
-  if (!entry) return null;
-  if (Date.now() - entry.timestamp > AVAILABILITY_CACHE_TTL) {
-    availabilityCache.delete(dateKey);
-    return null;
-  }
-  return entry.result;
-}
-
-function setCachedAvailability(dateKey: string, result: { available: boolean; suggestions?: string[] }): void {
-  availabilityCache.set(dateKey, { result, timestamp: Date.now() });
-  // Evict oldest entries if cache exceeds max size
-  if (availabilityCache.size > MAX_AVAILABILITY_ENTRIES) {
-    const firstKey = availabilityCache.keys().next().value;
-    if (firstKey) availabilityCache.delete(firstKey);
-  }
 }
 
 function safeJsonParse(value: string): Record<string, unknown> | string {
@@ -306,7 +282,20 @@ async function processMessage(
       variableOverrides.recentBookingsSummary = 'Sin turnos confirmados previos.';
     }
 
-    if (variableKeys.has('availableServices') || variableKeys.has('availableProfessionals')) {
+    // Resolve company_name alias
+    if (variableKeys.has('company_name')) {
+      try {
+        const compResult = await pool.query<{ name: string }>(
+          'SELECT name FROM companies WHERE id = $1',
+          [conversation.company_id]
+        );
+        variableOverrides.company_name = compResult.rows[0]?.name ?? '';
+      } catch (err) {
+        logger.error('Error resolving company_name:', err);
+      }
+    }
+
+    if (variableKeys.has('availableServices') || variableKeys.has('availableProfessionals') || variableKeys.has('available_services') || variableKeys.has('available_professionals')) {
       try {
         const [servicesResult, professionalsResult] = await Promise.all([
           pool.query<{
@@ -356,61 +345,34 @@ async function processMessage(
       }
     }
 
-    // Resolve horariosDisponibles only if the prompt references it
-    if (variableKeys.has('horariosDisponibles')) {
+    // Propagate snake_case aliases for services/professionals
+    if (variableOverrides.availableServices !== undefined) {
+      variableOverrides.available_services = variableOverrides.availableServices;
+    }
+    if (variableOverrides.availableProfessionals !== undefined) {
+      variableOverrides.available_professionals = variableOverrides.availableProfessionals;
+    }
+
+    // Resolve professional context for nombreProfesional/professionalId variables
+    if (professionalId && (variableKeys.has('nombreProfesional') || variableKeys.has('professionalId'))) {
       try {
-        let calendarId: string | undefined;
-        let targetProfessionalId: string | undefined;
-
-        if (professionalId) {
-          const profResult = await pool.query<{ id: string; calendar_id: string; name: string }>(
-            'SELECT id, calendar_id, name FROM professionals WHERE id = $1 AND company_id = $2 AND is_active = true LIMIT 1',
-            [professionalId, conversation.company_id]
-          );
-          if (profResult.rows[0]) {
-            calendarId = profResult.rows[0].calendar_id;
-            targetProfessionalId = profResult.rows[0].id;
-            variableOverrides.nombreProfesional = profResult.rows[0].name;
-            variableOverrides.professionalId = profResult.rows[0].id;
-          }
-        } else {
-          variableOverrides.horariosDisponibles = 'No hay profesional asignado a esta conversación. No se puede consultar disponibilidad.';
-          variableOverrides.nombreProfesional = '';
-          variableOverrides.professionalId = '';
+        const profResult = await pool.query<{ id: string; name: string }>(
+          'SELECT id, name FROM professionals WHERE id = $1 AND company_id = $2 AND is_active = true LIMIT 1',
+          [professionalId, conversation.company_id]
+        );
+        if (profResult.rows[0]) {
+          variableOverrides.nombreProfesional = profResult.rows[0].name;
+          variableOverrides.professionalId = profResult.rows[0].id;
         }
-
-        if (calendarId && targetProfessionalId) {
-          const tomorrow = new Date();
-          tomorrow.setDate(tomorrow.getDate() + 1);
-          tomorrow.setHours(10, 0, 0, 0);
-          const durationMinutes = 60;
-          // Include professionalId in cache key to avoid cross-professional collisions
-          const dateKey = `${targetProfessionalId}:${tomorrow.toISOString().split('T')[0]}-${durationMinutes}`;
-
-          // Check cache first (key includes duration and professional to avoid collisions)
-          const cached = getCachedAvailability(dateKey);
-          const availability = cached ?? await withTimeout(
-            checkSlot(tomorrow.toISOString(), durationMinutes, calendarId, targetProfessionalId),
-            10_000,
-            'checkSlot:availability-injection',
-          );
-
-          // Cache the result if it was freshly fetched
-          if (!cached) {
-            setCachedAvailability(dateKey, availability);
-          }
-
-          if (availability.available) {
-            variableOverrides.horariosDisponibles = 'Mañana hay disponibilidad todo el día';
-          } else if (availability.suggestions && availability.suggestions.length > 0) {
-            variableOverrides.horariosDisponibles = 'Horarios sugeridos: ' + availability.suggestions
-              .map((s) => new Date(s).toLocaleString('es-AR', { timeZone: config.timezone }))
-              .join(', ');
-          }
-        }
-      } catch {
-        variableOverrides.horariosDisponibles = 'No se pudo consultar Google Calendar';
+      } catch (err) {
+        logger.error('Error resolving professional context:', err);
       }
+    }
+
+    // availability/horariosDisponibles: resolved 100% by google_calendar_check tool at runtime
+    // No injection needed — defaults in prompt-builder instruct the agent to use the tool
+    if (variableOverrides.recentBookingsSummary !== undefined) {
+      variableOverrides.client_appointments = variableOverrides.recentBookingsSummary;
     }
 
     const systemPrompt = buildSystemPrompt({

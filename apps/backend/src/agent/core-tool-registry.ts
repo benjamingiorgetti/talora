@@ -66,6 +66,18 @@ export const CORE_TOOL_DEFINITIONS: CoreToolDefinition[] = [
     },
     implementation: 'google_calendar_cancel',
   },
+  {
+    name: 'escalate',
+    description: 'Escala la conversación a un humano. Envía un mensaje de WhatsApp al número de escalación de la empresa con el contexto del problema.',
+    parameters: {
+      type: 'object',
+      properties: {
+        reason: { type: 'string', description: 'Razón corta de por qué se escala (1-2 oraciones).' },
+      },
+      required: ['reason'],
+    },
+    implementation: 'escalate',
+  },
 ];
 
 const CORE_TOOLS_BY_NAME = new Map(CORE_TOOL_DEFINITIONS.map((definition) => [definition.name, definition]));
