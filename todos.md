@@ -54,6 +54,17 @@ _(vacío — nada en progreso activo)_
   - Qué ya existe: `sitemap.ts` y `robots.ts` funcionando.
   - Qué falta: `apps/frontend/src/app/manifest.ts` para PWA install y `apps/frontend/src/components/seo/json-ld.tsx` para rich results en search.
 
+- [ ] `AGENT-1 · Inyectar turnos del cliente en contexto del agente`
+  - Resultado esperado: el agente conversacional sabe qué turnos tiene el cliente antes de que el cliente lo diga.
+  - Contexto: hoy el LLM no tiene visibilidad de los appointments existentes del cliente. Si pide cancelar, el bot no sabe qué appointment cancelar y pregunta servicio/profesional innecesariamente. Inyectar `recent_appointments` (filtrado por phone_number) en el system prompt del prompt-builder resolverría esto.
+  - Criterio de cierre: el prompt incluye appointments activos del cliente, y el bot puede responder "tu turno del martes a las 14hs" sin que el cliente lo especifique.
+
+- [ ] `AGENT-2 · Reprogram: extraer servicio del appointment existente`
+  - Resultado esperado: `google_calendar_reprogram` puede funcionar sin resolución de servicio si el appointment ya existe.
+  - Contexto: mismo patrón que el fix de cancel — si el appointment ya tiene service_id, se puede extraer duration y title sin pasar por resolveOrFail. Hoy funciona porque el LLM generalmente pasa hints de servicio, pero puede fallar igual que cancel.
+  - Depende de: fix de cancel (patrón a seguir).
+  - Criterio de cierre: reprogram con solo appointmentId + nueva fecha funciona sin pedir servicio.
+
 ## Reglas de uso
 - `Done` solo se usa para trabajo validado con evidencia objetiva o prueba real.
 - `Doing` debe tener máximo 4 cards activas al mismo tiempo.

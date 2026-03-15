@@ -800,23 +800,27 @@ export async function executeTool(
           return JSON.stringify(result);
         }
 
-        // Resolve professional first (replaces the early guard)
-        const resolved = await resolveOrFail(context.companyId, toolInput, context.professionalId, context.conversationId);
-        if (!resolved.ok) return resolved.errorJson;
-        const { scheduling } = resolved;
-
-        const appointment = await resolveAppointmentByReference(context.companyId, toolInput, scheduling.professional.id);
+        // Look up appointment directly — no service/professional resolution needed
+        const appointment = await resolveAppointmentByReference(context.companyId, toolInput, null);
         if (!appointment) {
-          return JSON.stringify({ error: 'Appointment not found' });
-        }
-
-        if (appointment.google_event_id) {
-          const result = await deleteEvent(appointment.google_event_id, scheduling.calendarId, scheduling.professional.id);
-          if (!result.success) {
+          if (eventId) {
+            const result = await deleteEvent(eventId);
             return JSON.stringify(result);
           }
-        } else if (eventId) {
-          const result = await deleteEvent(eventId);
+          return JSON.stringify({ error: 'No se encontró el turno a cancelar. Verificá el ID del turno.' });
+        }
+
+        // Resolve deletion credentials from the appointment itself
+        const targetEventId = appointment.google_event_id ?? eventId;
+        let calendarId = 'primary';
+        let profId: string | null = null;
+        if (appointment.professional_id) {
+          const professional = await getProfessional(context.companyId, appointment.professional_id);
+          calendarId = professional?.calendar_id ?? 'primary';
+          profId = appointment.professional_id;
+        }
+        if (targetEventId) {
+          const result = await deleteEvent(targetEventId, calendarId, profId);
           if (!result.success) {
             return JSON.stringify(result);
           }
