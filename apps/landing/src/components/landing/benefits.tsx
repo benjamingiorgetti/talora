@@ -20,10 +20,10 @@ function WhatsAppMiniMockup() {
         <div className="ml-auto h-1.5 w-1.5 rounded-full bg-emerald-500" />
       </div>
       <div className="self-end ml-auto max-w-[80%] rounded-lg bg-[#DCF8C6] px-2.5 py-1.5 text-[10px] text-ink">
-        Quiero un turno para manana
+        Quiero un turno para mañana
       </div>
       <div className="max-w-[85%] rounded-lg bg-white px-2.5 py-1.5 text-[10px] text-ink border border-[#E2E4EC]/40 shadow-sm">
-        Tengo 10:00 o 14:30. Cual te va?
+        Tengo 10:00 o 14:30. ¿Cuál te va?
       </div>
       <div className="self-end ml-auto max-w-[50%] rounded-lg bg-[#DCF8C6] px-2.5 py-1.5 text-[10px] text-ink">
         14:30!
@@ -48,7 +48,7 @@ function AgentMiniMockup() {
         </div>
         <div>
           <p className="text-[10px] font-medium text-ink">Nuevo turno agendado</p>
-          <p className="text-[9px] text-gray-medium">Maria - Corte - 14:30</p>
+          <p className="text-[9px] text-gray-medium">María - Corte - 14:30</p>
         </div>
       </div>
       <div className="flex items-center gap-2 rounded-lg bg-white px-2.5 py-2 border border-[#E2E4EC]/40">
@@ -56,7 +56,7 @@ function AgentMiniMockup() {
           <span className="text-[9px]">↻</span>
         </div>
         <div>
-          <p className="text-[10px] font-medium text-ink">Reprogramacion</p>
+          <p className="text-[10px] font-medium text-ink">Reprogramación</p>
           <p className="text-[9px] text-gray-medium">Juan - 15:00 → 17:00</p>
         </div>
       </div>
@@ -78,7 +78,7 @@ function CalendarMiniMockup() {
         <div className="flex items-center gap-2 rounded-lg bg-mint/50 px-2.5 py-1.5">
           <div className="w-1 h-6 rounded-full bg-mint" />
           <div>
-            <p className="text-[10px] font-medium text-ink">14:30 - Maria</p>
+            <p className="text-[10px] font-medium text-ink">14:30 - María</p>
             <p className="text-[9px] text-gray-medium">Corte</p>
           </div>
         </div>
@@ -107,7 +107,7 @@ function ProfessionalsMiniMockup() {
             ML
           </div>
           <div className="flex-1 min-w-0">
-            <p className="text-[10px] font-medium text-ink">Maria Lopez</p>
+            <p className="text-[10px] font-medium text-ink">María López</p>
             <p className="text-[9px] text-gray-medium">Corte · Color · Peinado</p>
           </div>
           <div className="h-2 w-2 rounded-full bg-emerald-500 shrink-0" />
@@ -117,7 +117,7 @@ function ProfessionalsMiniMockup() {
             DR
           </div>
           <div className="flex-1 min-w-0">
-            <p className="text-[10px] font-medium text-ink">Diego Ramirez</p>
+            <p className="text-[10px] font-medium text-ink">Diego Ramírez</p>
             <p className="text-[9px] text-gray-medium">Masaje · Spa</p>
           </div>
           <div className="h-2 w-2 rounded-full bg-emerald-500 shrink-0" />

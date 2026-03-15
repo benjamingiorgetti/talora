@@ -1,10 +1,9 @@
 "use client";
 
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef, useCallback } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import {
   ChevronLeft,
-  ChevronRight,
   Phone,
   Video,
   Paperclip,
@@ -13,9 +12,9 @@ import {
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { hero } from "@/lib/content";
-import { fadeUp, scaleIn, staggerContainer, slideFromRight } from "@/lib/animations";
+import { fadeUp, scaleIn, slideFromRight } from "@/lib/animations";
 
-// ─── Conversation data ──────────────────────────────────────────────────────
+// ─── Single conversation (scroll-driven, no loop) ───────────────────────────
 
 interface Message {
   from: "user" | "bot";
@@ -23,49 +22,19 @@ interface Message {
   time: string;
 }
 
-interface Conversation {
-  niche: string;
-  messages: Message[];
-}
-
-const conversations: Conversation[] = [
-  {
-    niche: "Peluqueria",
-    messages: [
-      { from: "user", text: "Hola! Quiero un turno para corte", time: "14:28" },
-      { from: "bot", text: "Hola! Tengo disponible manana a las 10:00, 14:30 o 17:00. Cual te queda mas comodo?", time: "14:28" },
-      { from: "user", text: "14:30 perfecto", time: "14:29" },
-      { from: "bot", text: "Perfecto! Queda confirmado tu turno para manana a las 14:30. Te voy a enviar un recordatorio antes", time: "14:29" },
-    ],
-  },
-  {
-    niche: "Tatuaje",
-    messages: [
-      { from: "user", text: "Quiero agendar una sesion", time: "11:02" },
-      { from: "bot", text: "Hola! Para sesion de tatuaje tengo jueves 11:00 o viernes 16:00. Cual te viene mejor?", time: "11:02" },
-      { from: "user", text: "Jueves a las 11", time: "11:03" },
-      { from: "bot", text: "Genial! Queda agendado para el jueves a las 11:00. No te olvides de traer tu referencia!", time: "11:03" },
-    ],
-  },
-  {
-    niche: "Dentista",
-    messages: [
-      { from: "user", text: "Necesito turno para limpieza", time: "09:15" },
-      { from: "bot", text: "Hola! Para limpieza dental tengo lunes 9:30 o miercoles 15:00. Cual preferis?", time: "09:15" },
-      { from: "user", text: "Lunes 9:30", time: "09:16" },
-      { from: "bot", text: "Listo! Tu turno queda confirmado el lunes 9:30 con la Dra. Martinez. Te esperamos!", time: "09:16" },
-    ],
-  },
-  {
-    niche: "Manicuria",
-    messages: [
-      { from: "user", text: "Hola! Turno para semi-permanente", time: "16:44" },
-      { from: "bot", text: "Hola! Para semi-permanente tengo manana a las 10:00 o 16:30. Cual te queda mejor?", time: "16:44" },
-      { from: "user", text: "16:30 genial!", time: "16:45" },
-      { from: "bot", text: "Perfecto! Queda confirmado manana a las 16:30. Te esperamos!", time: "16:45" },
-    ],
-  },
+const messages: Message[] = [
+  { from: "user", text: "Hola! Soy Martín, quiero un turno para corte", time: "14:28" },
+  { from: "bot", text: "¡Hola Martín! Tengo disponible mañana a las 10:00, 14:30 o 17:00. ¿Cuál te queda más cómodo?", time: "14:28" },
+  { from: "user", text: "14:30 perfecto", time: "14:29" },
+  { from: "bot", text: "¡Perfecto Martín! Queda confirmado tu turno para mañana a las 14:30. Te voy a enviar un recordatorio antes", time: "14:29" },
 ];
+
+// The event that appears in the calendar after all messages
+const bookedAppointment = {
+  time: "14:30",
+  name: "Martín Pérez",
+  service: "Corte de pelo",
+};
 
 // ─── SVG check marks ─────────────────────────────────────────────────────────
 
@@ -114,74 +83,19 @@ function TypingIndicator() {
   );
 }
 
-// ─── WhatsApp mockup ─────────────────────────────────────────────────────────
+// ─── WhatsApp mockup (scroll-driven) ─────────────────────────────────────────
 
-function WhatsAppMockup() {
-  const [convIndex, setConvIndex] = useState(0);
-  const [renderedMsgs, setRenderedMsgs] = useState<Message[]>([]);
-  const [isTyping, setIsTyping] = useState(false);
-
-  useEffect(() => {
-    let cancelled = false;
-    const ids: ReturnType<typeof setTimeout>[] = [];
-
-    // Reset state for new conversation
-    setRenderedMsgs([]);
-    setIsTyping(false);
-
-    const msgs = conversations[convIndex].messages;
-
-    // Build timeline with absolute delays
-    const timeline: { delay: number; action: () => void }[] = [];
-    let t = 500;
-
-    for (let i = 0; i < msgs.length; i++) {
-      const msg = msgs[i];
-      if (msg.from === "user") {
-        timeline.push({ delay: t, action: () => {
-          if (!cancelled) setRenderedMsgs((prev) => [...prev, msg]);
-        }});
-        t += 700;
-      } else {
-        timeline.push({ delay: t, action: () => {
-          if (!cancelled) setIsTyping(true);
-        }});
-        t += 1300;
-        timeline.push({ delay: t, action: () => {
-          if (!cancelled) {
-            setIsTyping(false);
-            setRenderedMsgs((prev) => [...prev, msg]);
-          }
-        }});
-        t += 900;
-      }
-    }
-
-    // After all messages: clear and advance to next conversation
-    timeline.push({ delay: t + 2000, action: () => {
-      if (!cancelled) setConvIndex((prev) => (prev + 1) % conversations.length);
-    }});
-
-    // Schedule all at once
-    for (const { delay, action } of timeline) {
-      ids.push(setTimeout(action, delay));
-    }
-
-    return () => {
-      cancelled = true;
-      ids.forEach(clearTimeout);
-    };
-  }, [convIndex]);
+function WhatsAppMockup({ visibleCount, isTyping }: { visibleCount: number; isTyping: boolean }) {
+  const visibleMsgs = messages.slice(0, visibleCount);
 
   return (
     <div className="relative">
       {/* iPhone frame */}
-      <div className="relative w-[280px] h-[560px] rounded-[50px] bg-gradient-to-b from-[#3A3442] to-[#2C2B33] p-[12px] shadow-2xl flex-shrink-0">
-        {/* Side buttons — volume (left) */}
+      <div className="relative w-[260px] sm:w-[280px] h-[520px] sm:h-[560px] rounded-[50px] bg-gradient-to-b from-[#3A3442] to-[#2C2B33] p-[12px] shadow-2xl flex-shrink-0">
+        {/* Side buttons */}
         <div className="absolute -left-[3px] top-[72px] h-[28px] w-[3px] rounded-l-sm bg-[#232029]" />
         <div className="absolute -left-[3px] top-[110px] h-[44px] w-[3px] rounded-l-sm bg-[#232029]" />
         <div className="absolute -left-[3px] top-[162px] h-[44px] w-[3px] rounded-l-sm bg-[#232029]" />
-        {/* Side button — power (right) */}
         <div className="absolute -right-[3px] top-[120px] h-[60px] w-[3px] rounded-r-sm bg-[#232029]" />
 
         {/* Screen area */}
@@ -201,7 +115,7 @@ function WhatsAppMockup() {
             </div>
             <div className="flex-1 min-w-0">
               <p className="text-[13px] font-semibold text-white leading-none">Talora</p>
-              <p className="text-[10px] text-white/70 mt-0.5">en linea</p>
+              <p className="text-[10px] text-white/70 mt-0.5">en línea</p>
             </div>
             <div className="flex items-center gap-3 ml-auto">
               <Video className="h-4 w-4 text-white/80" />
@@ -209,11 +123,11 @@ function WhatsAppMockup() {
             </div>
           </div>
 
-          {/* Messages area — always present in DOM for stable flex layout */}
-          <div className="flex-1 flex flex-col gap-1.5 px-3 py-3 overflow-hidden">
-            {renderedMsgs.map((msg, i) => (
+          {/* Messages area */}
+          <div className="flex-1 flex flex-col gap-1.5 px-3 py-3 overflow-hidden justify-end">
+            {visibleMsgs.map((msg, i) => (
               <motion.div
-                key={`${convIndex}-${i}`}
+                key={i}
                 initial={{ opacity: 0, y: 8, scale: 0.96 }}
                 animate={{ opacity: 1, y: 0, scale: 1 }}
                 transition={{ duration: 0.3, ease: [0.22, 1, 0.36, 1] }}
@@ -266,188 +180,124 @@ function WhatsAppMockup() {
   );
 }
 
-// ─── Calendar event data ──────────────────────────────────────────────────────
+// ─── Agenda Calendar ─────────────────────────────────────────────────────────
 
-interface CalEvent {
-  col: number;
-  startMin: number;
-  durationMin: number;
-  label: string;
-  color: string;
+interface AgendaEvent {
+  time: string;
+  name: string;
+  service: string;
+  dotColor: string;
+  bgColor: string;
 }
 
-const calEvents: CalEvent[] = [
-  { col: 0, startMin: 60, durationMin: 60, label: "Ana — Consulta", color: "bg-[#EFE9FF] border-[#C4B5FD]" },
-  { col: 0, startMin: 180, durationMin: 60, label: "Laura — Masaje", color: "bg-[#FFF5E0] border-[#FCD34D]" },
-  { col: 1, startMin: 120, durationMin: 60, label: "Diego — Masaje", color: "bg-[#FFF5E0] border-[#FCD34D]" },
-  { col: 1, startMin: 240, durationMin: 90, label: "Sofia — Tratamiento", color: "bg-[#FFE4E6] border-[#FCA5A5]" },
-  { col: 2, startMin: 60, durationMin: 60, label: "Carlos — Corte", color: "bg-[#E0F2FE] border-[#7DD3FC]" },
-  { col: 2, startMin: 180, durationMin: 60, label: "Paula — Consulta", color: "bg-[#EFE9FF] border-[#C4B5FD]" },
-  { col: 3, startMin: 30, durationMin: 60, label: "Belen — Peinado", color: "bg-[#E6F9EE] border-[#6EE7B7]" },
-  { col: 3, startMin: 300, durationMin: 60, label: "Juan — Corte", color: "bg-[#E0F2FE] border-[#7DD3FC]" },
-  { col: 4, startMin: 0, durationMin: 60, label: "Lucas — Barba", color: "bg-[#E6F9EE] border-[#6EE7B7]" },
-  { col: 4, startMin: 120, durationMin: 120, label: "Maria — Color", color: "bg-[#FFE4E6] border-[#FCA5A5]" },
+const agendaEvents: AgendaEvent[] = [
+  { time: "09:00", name: "Ana García", service: "Consulta", dotColor: "bg-violet-400", bgColor: "bg-violet-50" },
+  { time: "10:30", name: "Diego López", service: "Masaje relajante", dotColor: "bg-amber-400", bgColor: "bg-amber-50" },
+  { time: "12:00", name: "Laura Méndez", service: "Masaje descontracturante", dotColor: "bg-amber-400", bgColor: "bg-amber-50" },
+  { time: "14:00", name: "Carlos Ruiz", service: "Corte de pelo", dotColor: "bg-sky-400", bgColor: "bg-sky-50" },
 ];
 
-const GRID_HOURS = ["09:00", "10:00", "11:00", "12:00", "13:00", "14:00", "15:00"];
-const GRID_MINUTES = 360;
-
-const dayHeaders = [
-  { short: "LUN", num: "9", isToday: false },
-  { short: "MAR", num: "10", isToday: false },
-  { short: "MIE", num: "11", isToday: false },
-  { short: "JUE", num: "12", isToday: true },
-  { short: "VIE", num: "13", isToday: false },
-];
-
-const NOW_TOP_PCT = (255 / GRID_MINUTES) * 100;
-
-function DashboardMockup() {
+function CalendarAgenda({ showBooked }: { showBooked: boolean }) {
   return (
-    <div className="w-full max-w-[420px] rounded-2xl border border-[#E2E4EC] bg-white shadow-xl shadow-ink/5 ring-1 ring-black/[0.03] overflow-hidden">
+    <div className="w-[320px] sm:w-[360px] rounded-2xl border border-[#E2E4EC] bg-white shadow-xl shadow-ink/5 ring-1 ring-black/[0.03] overflow-hidden">
       {/* Header */}
       <motion.div
         initial={{ opacity: 0 }}
         animate={{ opacity: 1 }}
         transition={{ delay: 0.4, duration: 0.4 }}
-        className="flex items-center justify-between px-4 py-3 border-b border-[#E2E4EC]"
+        className="px-5 py-4 border-b border-[#E2E4EC]"
       >
-        <div className="flex items-center gap-2">
-          <button className="rounded-md px-2 py-0.5 text-[11px] font-medium bg-[#F3F4F6] text-gray-600 hover:bg-[#E5E7EB] transition-colors">
-            Hoy
-          </button>
-          <ChevronLeft className="h-4 w-4 text-gray-400 cursor-pointer" />
-          <ChevronRight className="h-4 w-4 text-gray-400 cursor-pointer" />
-          <span className="text-[13px] font-semibold text-gray-800">Marzo 2026</span>
-        </div>
-        <div className="flex items-center gap-0.5 rounded-full bg-[#F3F4F6] p-0.5">
-          {["Dia", "Semana", "Mes"].map((v) => (
-            <span
-              key={v}
-              className={`text-[10px] font-medium px-2 py-0.5 rounded-full cursor-pointer transition-colors ${
-                v === "Semana"
-                  ? "bg-[#1C1B22] text-white"
-                  : "text-gray-500 hover:text-gray-700"
-              }`}
-            >
-              {v}
-            </span>
-          ))}
-        </div>
-      </motion.div>
-
-      {/* Day headers */}
-      <motion.div
-        initial={{ opacity: 0 }}
-        animate={{ opacity: 1 }}
-        transition={{ delay: 0.5, duration: 0.35 }}
-        className="flex border-b border-[#E2E4EC]"
-      >
-        <div className="w-10 flex-shrink-0" />
-        {dayHeaders.map((d) => (
-          <div
-            key={d.short}
-            className="flex-1 flex flex-col items-center py-1.5 gap-0.5"
-          >
-            <span className="text-[9px] font-medium text-gray-400 uppercase tracking-wide">
-              {d.short}
-            </span>
-            <span
-              className={`text-[12px] font-semibold flex items-center justify-center h-5 w-5 rounded-full ${
-                d.isToday
-                  ? "bg-[#1C1B22] text-white"
-                  : "text-gray-700"
-              }`}
-            >
-              {d.num}
-            </span>
+        <div className="flex items-center justify-between">
+          <div>
+            <p className="text-[15px] font-semibold text-gray-800">Jueves 12 de Marzo</p>
+            <p className="text-[12px] text-gray-400 mt-0.5">
+              {showBooked ? "5" : "4"} turnos agendados
+            </p>
           </div>
-        ))}
+          <div className="flex items-center gap-1.5">
+            <div className="h-2 w-2 rounded-full bg-emerald-500" />
+            <span className="text-[11px] font-medium text-emerald-600">Google Calendar</span>
+          </div>
+        </div>
       </motion.div>
 
-      {/* Time grid */}
-      <motion.div
-        initial={{ opacity: 0 }}
-        animate={{ opacity: 1 }}
-        transition={{ delay: 0.6, duration: 0.35 }}
-        className="flex"
-        style={{ height: 216 }}
-      >
-        <div className="w-10 flex-shrink-0 flex flex-col relative">
-          {GRID_HOURS.map((h, i) => (
-            <div
-              key={h}
-              className="absolute left-0 right-0 flex justify-end pr-1"
-              style={{ top: `${(i / (GRID_HOURS.length - 1)) * 100}%`, transform: "translateY(-50%)" }}
-            >
-              <span className="text-[8px] text-gray-400 leading-none">{h}</span>
-            </div>
-          ))}
-        </div>
-
-        <div className="flex-1 flex relative">
-          {GRID_HOURS.map((h, i) => (
-            <div
-              key={h}
-              className="absolute left-0 right-0 border-t border-[#F0F0F0]"
-              style={{ top: `${(i / (GRID_HOURS.length - 1)) * 100}%` }}
-            />
-          ))}
-
-          {dayHeaders.map((d, colIdx) => (
-            <div
-              key={d.short}
-              className={`flex-1 relative ${colIdx < dayHeaders.length - 1 ? "border-r border-[#F0F0F0]" : ""}`}
-            >
-              {calEvents
-                .filter((e) => e.col === colIdx)
-                .map((evt, ei) => {
-                  const topPct = (evt.startMin / GRID_MINUTES) * 100;
-                  const heightPct = (evt.durationMin / GRID_MINUTES) * 100;
-                  return (
-                    <motion.div
-                      key={ei}
-                      initial={{ opacity: 0, x: -8 }}
-                      animate={{ opacity: 1, x: 0 }}
-                      transition={{
-                        delay: 1.0 + colIdx * 0.12 + ei * 0.1,
-                        duration: 0.35,
-                        ease: [0.22, 1, 0.36, 1],
-                      }}
-                      className={`absolute inset-x-0.5 ${evt.color} rounded border-l-[2px] px-1 py-0.5 overflow-hidden`}
-                      style={{
-                        top: `${topPct}%`,
-                        height: `${heightPct}%`,
-                      }}
-                    >
-                      <p className="text-[9px] font-medium text-gray-700 leading-tight truncate">
-                        {evt.label}
-                      </p>
-                    </motion.div>
-                  );
-                })}
-            </div>
-          ))}
-
+      {/* Event list */}
+      <div className="px-4 py-3 space-y-2">
+        {agendaEvents.map((evt, i) => (
           <motion.div
-            initial={{ scaleX: 0 }}
-            animate={{ scaleX: 1 }}
-            transition={{ delay: 2.0, duration: 0.6, ease: [0.22, 1, 0.36, 1] }}
-            className="absolute left-0 right-0 origin-left pointer-events-none z-10"
-            style={{ top: `${NOW_TOP_PCT}%` }}
+            key={i}
+            initial={{ opacity: 0, x: -12 }}
+            animate={{ opacity: 1, x: 0 }}
+            transition={{ delay: 0.7 + i * 0.1, duration: 0.35, ease: [0.22, 1, 0.36, 1] }}
+            className={`flex items-center gap-3 rounded-xl ${evt.bgColor} px-4 py-3 border border-black/[0.04]`}
           >
-            <div className="relative flex items-center" style={{ marginLeft: "60%", marginRight: "0%" }}>
-              <div className="h-2 w-2 rounded-full bg-red-500 -ml-1 flex-shrink-0" />
-              <div className="flex-1 h-[1.5px] bg-red-500" />
+            <div className={`h-2.5 w-2.5 rounded-full ${evt.dotColor} flex-shrink-0`} />
+            <div className="flex-1 min-w-0">
+              <p className="text-[13px] font-medium text-gray-800 truncate">{evt.name}</p>
+              <p className="text-[11px] text-gray-500">{evt.service}</p>
             </div>
+            <span className="text-[12px] font-medium text-gray-500 tabular-nums flex-shrink-0">{evt.time}</span>
           </motion.div>
-        </div>
-      </motion.div>
+        ))}
+
+        {/* Booked appointment from WhatsApp */}
+        <AnimatePresence>
+          {showBooked && (
+            <motion.div
+              key="booked"
+              initial={{ opacity: 0, scale: 0.9, y: -8 }}
+              animate={{ opacity: 1, scale: 1, y: 0 }}
+              transition={{ type: "spring", stiffness: 280, damping: 22 }}
+              className="flex items-center gap-3 rounded-xl bg-emerald-50 px-4 py-3 border-2 border-emerald-300 ring-4 ring-emerald-100 shadow-md shadow-emerald-100/50"
+            >
+              <motion.div
+                animate={{ scale: [1, 1.3, 1] }}
+                transition={{ duration: 0.6, delay: 0.3 }}
+                className="h-2.5 w-2.5 rounded-full bg-emerald-500 flex-shrink-0"
+              />
+              <div className="flex-1 min-w-0">
+                <div className="flex items-center gap-1.5">
+                  <p className="text-[13px] font-semibold text-emerald-800 truncate">{bookedAppointment.name}</p>
+                  <motion.span
+                    initial={{ opacity: 0, scale: 0 }}
+                    animate={{ opacity: 1, scale: 1 }}
+                    transition={{ delay: 0.4, type: "spring", stiffness: 400 }}
+                    className="text-[9px] font-bold uppercase tracking-wider text-emerald-600 bg-emerald-100 px-1.5 py-0.5 rounded-full flex-shrink-0"
+                  >
+                    Nuevo
+                  </motion.span>
+                </div>
+                <p className="text-[11px] text-emerald-600">{bookedAppointment.service}</p>
+              </div>
+              <span className="text-[12px] font-semibold text-emerald-700 tabular-nums flex-shrink-0">{bookedAppointment.time}</span>
+            </motion.div>
+          )}
+        </AnimatePresence>
+      </div>
     </div>
   );
 }
 
-// ─── Hero stagger ─────────────────────────────────────────────────────────────
+// ─── Simple connector arrow ──────────────────────────────────────────────────
+
+function ConnectorArrow() {
+  return (
+    <div className="flex flex-col items-center text-gray-soft">
+      <div className="hidden md:block">
+        <svg width="48" height="24" viewBox="0 0 48 24" fill="none">
+          <path d="M0 12h40m0 0l-6-6m6 6l-6 6" stroke="#E2E4EC" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" strokeDasharray="4 4" />
+        </svg>
+      </div>
+      <div className="md:hidden py-2">
+        <svg width="24" height="32" viewBox="0 0 24 32" fill="none">
+          <path d="M12 0v24m0 0l-5-5m5 5l5-5" stroke="#E2E4EC" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" strokeDasharray="4 4" />
+        </svg>
+      </div>
+    </div>
+  );
+}
+
+// ─── Hero ────────────────────────────────────────────────────────────────────
 
 const heroStagger = {
   hidden: {},
@@ -456,91 +306,130 @@ const heroStagger = {
   },
 };
 
-// ─── Hero export ──────────────────────────────────────────────────────────────
+// Scroll container adds this much extra height for the animation.
+// Must be enough for all steps to complete but not so much that mockups disappear.
+const SCROLL_EXTRA = 400;
 
 export function Hero() {
+  const scrollRef = useRef<HTMLDivElement>(null);
+  const [visibleCount, setVisibleCount] = useState(0);
+  const [isTyping, setIsTyping] = useState(false);
+  const [showBooked, setShowBooked] = useState(false);
+  const typingTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const prevStepRef = useRef(-1);
+
+  const handleScroll = useCallback(() => {
+    if (!scrollRef.current) return;
+
+    const rect = scrollRef.current.getBoundingClientRect();
+    const scrollable = rect.height - window.innerHeight;
+    if (scrollable <= 0) return;
+
+    // progress: 0 when top of scroll container hits top of viewport
+    //           1 when bottom of scroll container hits bottom of viewport
+    const progress = Math.max(0, Math.min(1, -rect.top / scrollable));
+
+    let step = -1;
+    if (progress >= 0.10) step = 0;  // user msg 1
+    if (progress >= 0.30) step = 1;  // bot msg 2 (with typing)
+    if (progress >= 0.50) step = 2;  // user msg 3
+    if (progress >= 0.65) step = 3;  // bot msg 4 (with typing)
+    if (progress >= 0.85) step = 4;  // booked event
+
+    if (step <= prevStepRef.current) return;
+
+    if (step <= 3) {
+      const msg = messages[step];
+      if (msg.from === "bot") {
+        setIsTyping(true);
+        if (typingTimerRef.current) clearTimeout(typingTimerRef.current);
+        prevStepRef.current = step;
+        typingTimerRef.current = setTimeout(() => {
+          setIsTyping(false);
+          setVisibleCount(step + 1);
+        }, 600);
+      } else {
+        prevStepRef.current = step;
+        setVisibleCount(step + 1);
+      }
+    } else if (step === 4) {
+      prevStepRef.current = step;
+      setShowBooked(true);
+    }
+  }, []);
+
+  useEffect(() => {
+    window.addEventListener("scroll", handleScroll, { passive: true });
+    return () => {
+      window.removeEventListener("scroll", handleScroll);
+      if (typingTimerRef.current) clearTimeout(typingTimerRef.current);
+    };
+  }, [handleScroll]);
+
   return (
-    <section className="relative overflow-hidden bg-white">
-      {/* Subtle radial gradient behind mockup area */}
-      <div className="absolute bottom-0 left-1/2 -translate-x-1/2 w-[800px] h-[600px] bg-[radial-gradient(ellipse_at_center,_rgba(239,233,255,0.15)_0%,_rgba(232,246,235,0.1)_40%,_transparent_70%)] pointer-events-none" />
-
-      <div className="container mx-auto max-w-[1200px] px-4 sm:px-6 pb-10 pt-4 sm:pb-14 sm:pt-12 md:pb-20 md:pt-24">
-        <motion.div
-          variants={heroStagger}
-          initial="hidden"
-          animate="visible"
-          className="flex flex-col items-center text-center"
-        >
-          {/* Badge */}
-          <motion.div variants={fadeUp}>
-            <Badge variant="outline" className="mb-4 sm:mb-6">
-              {hero.badge}
-            </Badge>
-          </motion.div>
-
-          {/* Headline */}
-          <motion.h1
-            variants={fadeUp}
-            className="font-display text-hero-mobile md:text-hero font-semibold text-text-strong max-w-3xl"
-          >
-            {hero.headline.before}
-            <span className="border-b-[3px] border-mint pb-0.5">
-              {hero.headline.highlight}
-            </span>
-            {hero.headline.after}
-          </motion.h1>
-
-          {/* Subheadline */}
-          <motion.p
-            variants={fadeUp}
-            className="mt-4 max-w-xl text-base sm:text-body-lg text-gray-medium"
-          >
-            {hero.subheadline}
-          </motion.p>
-
-          {/* CTAs */}
-          <motion.div variants={fadeUp} className="mt-6 flex flex-col sm:flex-row gap-3 w-full sm:w-auto">
-            <Button size="lg" className="w-full sm:w-auto" asChild>
-              <a href={hero.ctaPrimaryHref}>{hero.ctaPrimary}</a>
-            </Button>
-            <Button size="lg" variant="secondary" className="w-full sm:w-auto" asChild>
-              <a href={hero.ctaSecondaryHref}>{hero.ctaSecondary}</a>
-            </Button>
-          </motion.div>
-
-          {/* Mockup composition */}
+    <>
+      {/* Part 1: Static hero text */}
+      <section className="bg-white">
+        <div className="container mx-auto max-w-[1200px] px-4 sm:px-6 pt-4 sm:pt-12 md:pt-24 pb-6 sm:pb-8">
           <motion.div
-            variants={scaleIn}
-            className="relative mt-8 sm:mt-12 md:mt-16"
+            variants={heroStagger}
+            initial="hidden"
+            animate="visible"
+            className="flex flex-col items-center text-center"
           >
-            {/* Background glow */}
-            <div className="absolute inset-0 sm:-m-8 md:-m-12 rounded-3xl bg-gradient-to-b from-surface-cool via-surface-cool/50 to-transparent" />
-            {/* Dot grid background */}
-            <div className="absolute inset-0 sm:-m-4 md:-m-8 dot-grid opacity-40 rounded-3xl" />
+            <motion.div variants={fadeUp}>
+              <Badge variant="outline" className="mb-4 sm:mb-6">
+                {hero.badge}
+              </Badge>
+            </motion.div>
 
-            <div className="relative flex flex-col md:flex-row items-center justify-center gap-4 sm:gap-6 md:gap-10">
-              <WhatsAppMockup />
+            <motion.h1
+              variants={fadeUp}
+              className="font-display text-hero-mobile md:text-hero font-semibold text-text-strong max-w-3xl"
+            >
+              {hero.headline.before}
+              <span className="border-b-[3px] border-mint pb-0.5">
+                {hero.headline.highlight}
+              </span>
+              {hero.headline.after}
+            </motion.h1>
 
-              {/* Connector arrow */}
-              <div className="hidden md:flex flex-col items-center gap-2 text-gray-soft">
-                <svg width="48" height="24" viewBox="0 0 48 24" fill="none">
-                  <path d="M0 12h40m0 0l-6-6m6 6l-6 6" stroke="#E2E4EC" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" strokeDasharray="4 4" />
-                </svg>
-              </div>
+            <motion.p
+              variants={fadeUp}
+              className="mt-4 max-w-xl text-base sm:text-body-lg text-gray-medium"
+            >
+              {hero.subheadline}
+            </motion.p>
 
-              <motion.div
-                variants={slideFromRight}
-                initial="hidden"
-                whileInView="visible"
-                viewport={{ once: true, margin: "-64px" }}
-                className="hidden sm:block"
-              >
-                <DashboardMockup />
-              </motion.div>
-            </div>
+            <motion.div variants={fadeUp} className="mt-6 flex flex-col sm:flex-row gap-3 w-full sm:w-auto">
+              <Button size="lg" className="w-full sm:w-auto" asChild>
+                <a href={hero.ctaPrimaryHref}>{hero.ctaPrimary}</a>
+              </Button>
+              <Button size="lg" variant="secondary" className="w-full sm:w-auto" asChild>
+                <a href={hero.ctaSecondaryHref}>{hero.ctaSecondary}</a>
+              </Button>
+            </motion.div>
           </motion.div>
-        </motion.div>
-      </div>
-    </section>
+        </div>
+      </section>
+
+      {/* Part 2: Scroll-driven mockup section
+           The tall container creates scrollable space.
+           The sticky div keeps mockups centered on screen while scrolling.
+           overflow-hidden on the section clips mockups cleanly when exiting. */}
+      <section
+        ref={scrollRef}
+        className="relative bg-white"
+        style={{ height: `calc(100vh + ${SCROLL_EXTRA}px)` }}
+      >
+        <div className="sticky top-0 h-screen flex items-center justify-center px-4 sm:px-6 pointer-events-none">
+          <div className="pointer-events-auto flex flex-col md:flex-row items-center justify-center gap-4 sm:gap-6 md:gap-10">
+            <WhatsAppMockup visibleCount={visibleCount} isTyping={isTyping} />
+            <ConnectorArrow />
+            <CalendarAgenda showBooked={showBooked} />
+          </div>
+        </div>
+      </section>
+    </>
   );
 }
