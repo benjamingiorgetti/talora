@@ -3,16 +3,16 @@
 import { useEffect, useMemo, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import useSWR from "swr";
-import type { Professional } from "@talora/shared";
+import type { Appointment, Professional } from "@talora/shared";
 import {
   AlertTriangle,
   CalendarCheck2,
   CalendarClock,
+  CalendarDays,
   ExternalLink,
   Link2,
   Loader2,
   RefreshCw,
-  ShieldCheck,
   Users2,
 } from "lucide-react";
 import { toast } from "sonner";
@@ -70,6 +70,26 @@ export function ProfessionalsSettingsPage() {
     companyScopedFetcher<GoogleCalendarsPayload>
   );
 
+  const weekRange = useMemo(() => {
+    const now = new Date();
+    const day = now.getDay();
+    const start = new Date(now);
+    start.setDate(start.getDate() - (day === 0 ? 6 : day - 1));
+    start.setHours(0, 0, 0, 0);
+    const end = new Date(start);
+    end.setDate(end.getDate() + 6);
+    end.setHours(23, 59, 59, 999);
+    return { start, end };
+  }, []);
+
+  const { data: weekAppointments } = useSWR(
+    companyScopedKey(
+      `/appointments?from=${encodeURIComponent(weekRange.start.toISOString())}&to=${encodeURIComponent(weekRange.end.toISOString())}`,
+      activeCompanyId
+    ),
+    companyScopedFetcher<Appointment[]>
+  );
+
   useEffect(() => {
     if (searchParams.get("calendar") === "connected") {
       toast.success("Google Calendar conectado correctamente.");
@@ -93,13 +113,13 @@ export function ProfessionalsSettingsPage() {
     const dbConnected = rows.filter((professional) => professional.is_connected).length;
     return {
       total: rows.length,
-      connected: isConfigured ? dbConnected : 0,
       pending: isConfigured ? rows.length - dbConnected : rows.length,
       calendarsVisible: isConfigured
         ? (googleCalendars?.calendars.length || googleCalendars?.connected_calendar_count || 0)
         : 0,
+      weekAppointments: weekAppointments?.length ?? 0,
     };
-  }, [googleCalendars]);
+  }, [googleCalendars, weekAppointments]);
 
   if (!professionals || !googleCalendars) {
     return <LoadingSpinner className="min-h-[70vh]" />;
@@ -157,7 +177,7 @@ export function ProfessionalsSettingsPage() {
 
         <div className="mt-6 grid gap-3 md:grid-cols-2 xl:grid-cols-4">
           <WorkspaceMetricCard label="Profesionales visibles" value={stats.total} icon={Users2} tone="sky" />
-          <WorkspaceMetricCard label="Google conectado" value={stats.connected} icon={ShieldCheck} tone="mint" />
+          <WorkspaceMetricCard label="Turnos esta semana" value={stats.weekAppointments} icon={CalendarDays} tone="mint" />
           <WorkspaceMetricCard label="Pendientes" value={stats.pending} icon={CalendarClock} tone="rose" />
           <WorkspaceMetricCard label="Calendarios accesibles" value={stats.calendarsVisible} icon={CalendarCheck2} tone="lilac" />
         </div>

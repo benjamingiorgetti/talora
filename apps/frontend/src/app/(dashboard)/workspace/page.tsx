@@ -5,7 +5,7 @@ import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import useSWR from "swr";
 import type { Appointment, Company, Conversation, DashboardMetrics, WhatsAppInstance } from "@talora/shared";
-import { ArrowRight, CalendarCheck2, CalendarDays, Clock3, MessageSquareText, Sparkles, Timer, TrendingUp } from "lucide-react";
+import { ArrowRight, CalendarCheck2, CalendarDays, Clock3, MessageSquareText, Timer, Users } from "lucide-react";
 import { companyScopedFetcher, companyScopedKey } from "@/lib/api";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -141,6 +141,8 @@ export default function WorkspaceDashboardPage() {
     return <LoadingSpinner className="min-h-[70vh]" />;
   }
 
+  const uniqueClientsToday = new Set(todayAppointments.map((a) => a.client_name)).size;
+
   const dashboardMetrics = [
     {
       label: isProfessional ? "Mis turnos de hoy" : "Turnos de hoy",
@@ -157,40 +159,22 @@ export default function WorkspaceDashboardPage() {
       caption: "Casos que piden revision humana.",
     },
     {
-      label: "Resolucion automatica",
-      value: formatMetric(metrics?.automation_rate ?? 0, "%"),
-      tone: "mint" as const,
-      icon: Sparkles,
-      caption: "Operacion resuelta sin intervencion.",
-    },
-  ];
-
-  const cumulativeMetrics = [
-    {
-      label: "Turnos confirmados",
-      value: formatMetric(metrics?.confirmed_appointments ?? 0),
-      tone: "sky" as const,
-      icon: CalendarCheck2,
-      caption: "Total historico de turnos confirmados.",
-    },
-    {
-      label: "Tasa de confirmacion",
-      value: formatMetric(metrics?.confirmation_rate ?? 0, "%"),
-      tone: "rose" as const,
-      icon: TrendingUp,
-      caption: "Porcentaje de turnos que se confirman.",
-    },
-    {
       label: "Tiempo ahorrado",
       value: formatTimeSaved(metrics?.estimated_time_saved_minutes ?? 0),
       tone: "neutral" as const,
       icon: Timer,
       caption: "Estimado por gestion automatizada.",
     },
+    {
+      label: "Clientes atendidos hoy",
+      value: formatMetric(uniqueClientsToday),
+      tone: "mint" as const,
+      icon: Users,
+      caption: "Clientes unicos con turno hoy.",
+    },
   ];
 
-  const isFullyEmpty = (metrics?.confirmed_appointments ?? 0) === 0
-    && todayAppointments.length === 0
+  const isFullyEmpty = todayAppointments.length === 0
     && pausedConversations.length === 0;
 
   const operationalAlerts: Array<{
@@ -259,7 +243,7 @@ export default function WorkspaceDashboardPage() {
         </div>
       )}
 
-      <AnimatedList className="grid gap-3 sm:gap-4 md:grid-cols-3">
+      <AnimatedList className="grid gap-3 sm:gap-4 md:grid-cols-2 xl:grid-cols-4">
         {dashboardMetrics.map((metric) => (
           <AnimatedItem key={metric.label}>
             <WorkspaceMetricCard
@@ -272,19 +256,6 @@ export default function WorkspaceDashboardPage() {
           </AnimatedItem>
         ))}
       </AnimatedList>
-
-      <section className="grid gap-3 sm:gap-4 md:grid-cols-3">
-        {cumulativeMetrics.map((metric) => (
-          <WorkspaceMetricCard
-            key={metric.label}
-            label={metric.label}
-            value={metric.value}
-            caption={metric.caption}
-            icon={metric.icon}
-            tone={metric.tone}
-          />
-        ))}
-      </section>
 
       {operationalAlerts.length > 0 ? (
         <Card className="rounded-[28px] border-[#e6e7ec] bg-white shadow-none sm:rounded-[30px]">
