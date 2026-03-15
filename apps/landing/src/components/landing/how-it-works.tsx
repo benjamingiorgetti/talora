@@ -54,9 +54,9 @@ export function HowItWorks() {
 
         {howItWorks.steps.map((step, i) => {
           const Icon = stepIcons[i];
-          // Stagger: line draws first (0-1.2s), then each step appears sequentially
-          const stepDelay = isInView ? 0.4 + i * 0.4 : 0;
-          const contentDelay = stepDelay + 0.2;
+          // Stagger: line draws first, then each step appears sequentially
+          const stepDelay = isInView ? 0.3 + i * 0.2 : 0;
+          const contentDelay = stepDelay + 0.15;
 
           return (
             <div
