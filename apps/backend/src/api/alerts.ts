@@ -38,3 +38,15 @@ alertsRouter.get('/', async (req, res) => {
     res.status(500).json({ error: 'Failed to list alerts' });
   }
 });
+
+// DELETE / — clear all alerts for the company
+alertsRouter.delete('/', async (req, res) => {
+  const companyId = getRequestCompanyId(req)!;
+  try {
+    const result = await pool.query('DELETE FROM alerts WHERE company_id = $1', [companyId]);
+    res.json({ success: true, deleted: result.rowCount ?? 0 });
+  } catch (err) {
+    logger.error('Error clearing alerts:', err);
+    res.status(500).json({ error: 'Failed to clear alerts' });
+  }
+});

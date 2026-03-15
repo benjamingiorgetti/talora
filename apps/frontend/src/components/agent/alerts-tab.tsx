@@ -1,14 +1,15 @@
 "use client";
 
-import { useEffect } from "react";
+import { useCallback, useEffect, useState } from "react";
 import useSWR from "swr";
 import type { Alert } from "@talora/shared";
-import { fetcher } from "@/lib/api";
+import { api, fetcher } from "@/lib/api";
 import { useWebSocket } from "@/hooks/useWebSocket";
 import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { ScrollArea } from "@/components/ui/scroll-area";
-import { AlertTriangle, Info, AlertCircle, CheckCircle2 } from "lucide-react";
+import { AlertTriangle, Info, AlertCircle, CheckCircle2, Trash2 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { ErrorCard } from "@/components/ui/error-card";
 import { LoadingSpinner } from "@/components/ui/loading-spinner";
@@ -41,6 +42,7 @@ function getTypeConfig(type: string) {
 export function AlertsTab() {
   const { data: alerts, error, isLoading, mutate } = useSWR<Alert[]>("/alerts", fetcher);
   const { lastEvent } = useWebSocket();
+  const [clearing, setClearing] = useState(false);
 
   useEffect(() => {
     if (lastEvent?.type === "alert:new") {
@@ -48,16 +50,40 @@ export function AlertsTab() {
     }
   }, [lastEvent, mutate]);
 
+  const handleClear = useCallback(async () => {
+    setClearing(true);
+    try {
+      await api.delete("/alerts");
+      await mutate([], false);
+    } finally {
+      setClearing(false);
+    }
+  }, [mutate]);
+
   if (error) return <ErrorCard onRetry={() => mutate()} />;
   if (isLoading && !alerts) return <LoadingSpinner />;
 
   return (
     <div className="space-y-4">
-      <div>
-        <h2 className="text-xl font-semibold tracking-tight">Alertas</h2>
-        <p className="mt-0.5 text-sm font-medium text-muted-foreground">
-          Alertas y notificaciones recientes del sistema
-        </p>
+      <div className="flex items-center justify-between">
+        <div>
+          <h2 className="text-xl font-semibold tracking-tight">Alertas</h2>
+          <p className="mt-0.5 text-sm font-medium text-muted-foreground">
+            Alertas y notificaciones recientes del sistema
+          </p>
+        </div>
+        {alerts && alerts.length > 0 && (
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={handleClear}
+            disabled={clearing}
+            className="gap-1.5 text-muted-foreground"
+          >
+            <Trash2 className="h-3.5 w-3.5" />
+            {clearing ? "Limpiando..." : "Limpiar alertas"}
+          </Button>
+        )}
       </div>
 
       <ScrollArea className="h-[600px]">
