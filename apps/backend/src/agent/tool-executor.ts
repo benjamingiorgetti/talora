@@ -3,6 +3,7 @@ import { bookSlot, checkSlot, deleteEvent, updateEvent } from '../calendar/opera
 import { validateWebhookUrl } from '../utils/url-validator';
 import { logger } from '../utils/logger';
 import { EvolutionClient } from '../evolution/client';
+import { appEvents } from '../events';
 import type { Appointment, Client, Professional, Service } from '@talora/shared';
 
 type ToolExecutionContext = {
@@ -705,10 +706,21 @@ export async function executeTool(
           ]
         );
 
+        const createdAppointment = result.rows[0];
+        if (createdAppointment) {
+          appEvents.emit('appointment:created', {
+            appointmentId: createdAppointment.id,
+            clientId: createdAppointment.client_id,
+            companyId: createdAppointment.company_id,
+            serviceId: createdAppointment.service_id,
+            professionalId: createdAppointment.professional_id,
+          });
+        }
+
         return JSON.stringify({
           success: true,
           eventId: booking.eventId,
-          appointmentId: result.rows[0]?.id ?? null,
+          appointmentId: createdAppointment?.id ?? null,
           professionalId: scheduling.professional.id,
           serviceId: scheduling.service?.id ?? null,
         });
