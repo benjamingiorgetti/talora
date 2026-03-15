@@ -8,13 +8,12 @@ import type { Appointment, Company, Conversation, DashboardMetrics, WhatsAppInst
 import { ArrowRight, CalendarCheck2, CalendarDays, Clock3, MessageSquareText, Timer, Users } from "lucide-react";
 import { companyScopedFetcher, companyScopedKey } from "@/lib/api";
 import { Card, CardContent } from "@/components/ui/card";
-import { Button } from "@/components/ui/button";
 import { LoadingSpinner } from "@/components/ui/loading-spinner";
 import { PageEntrance } from "@/components/ui/page-entrance";
 import { AnimatedList, AnimatedItem } from "@/components/ui/animated-list";
 import { useAuth } from "@/lib/auth";
 import { cn } from "@/lib/utils";
-import { WorkspaceEmptyState, WorkspaceMetricCard, WorkspaceSectionHeader } from "@/components/workspace/chrome";
+import { WorkspaceMetricCard, WorkspaceSectionHeader } from "@/components/workspace/chrome";
 import { WorkspaceErrorState } from "@/components/workspace/error-state";
 
 type WorkspaceAppointment = Appointment & {
@@ -54,13 +53,6 @@ function formatBotActivity(isoDate: string | null | undefined): { label: string;
   return { label: `Ultima actividad hace ${Math.floor(diffH / 24)}d`, tone: "red" };
 }
 
-function formatSlot(value: string) {
-  return new Date(value).toLocaleTimeString("es-AR", {
-    hour: "2-digit",
-    minute: "2-digit",
-  });
-}
-
 export default function WorkspaceDashboardPage() {
   const pathname = usePathname();
   const router = useRouter();
@@ -96,13 +88,6 @@ export default function WorkspaceDashboardPage() {
     companyScopedFetcher<WhatsAppInstance[]>
   );
   const today = useMemo(() => new Date(), []);
-
-  const upcomingAppointments = useMemo(() => {
-    return (appointments ?? [])
-      .filter((appointment) => appointment.status !== "cancelled" && new Date(appointment.starts_at).getTime() >= today.getTime())
-      .sort((left, right) => new Date(left.starts_at).getTime() - new Date(right.starts_at).getTime())
-      .slice(0, 6);
-  }, [appointments, today]);
 
   const todayAppointments = useMemo(() => {
     return (appointments ?? []).filter(
@@ -173,9 +158,6 @@ export default function WorkspaceDashboardPage() {
       caption: "Clientes unicos con turno hoy.",
     },
   ];
-
-  const isFullyEmpty = todayAppointments.length === 0
-    && pausedConversations.length === 0;
 
   const operationalAlerts: Array<{
     key: string;
@@ -301,88 +283,17 @@ export default function WorkspaceDashboardPage() {
         </Card>
       ) : null}
 
-      <Card className="rounded-[28px] border-[#e6e7ec] bg-white shadow-none sm:rounded-[30px]">
-        <CardContent className="p-5 sm:p-6 lg:p-7">
-          <WorkspaceSectionHeader
-            eyebrow="Agenda"
-            title={isProfessional ? "Mis proximos turnos" : "Proximos turnos"}
-            description={
-              upcomingAppointments.length > 0
-                ? `${todayAppointments.length} hoy · ${upcomingAppointments.length} visibles desde ahora.`
-                : "No hay turnos programados por ahora."
-            }
-            action={
-              <Button asChild variant="outline" className="h-11 rounded-2xl border-[#dde1ea] px-4 hover:bg-[#f6f7fb]">
-                <Link href="/appointments">
-                  Ver turnos
-                  <ArrowRight className="ml-2 h-4 w-4" />
-                </Link>
-              </Button>
-            }
-          />
-
-          <div className="mt-6 space-y-3">
-            {upcomingAppointments.length > 0 ? (
-              upcomingAppointments.map((appointment) => (
-                <div
-                  key={appointment.id}
-                  className="rounded-[24px] border border-[#e6e7ec] bg-[linear-gradient(180deg,#ffffff_0%,#f8f9fc_100%)] p-4 sm:rounded-[28px]"
-                >
-                  <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-                    <div className="min-w-0">
-                      <div className="flex flex-wrap items-center gap-2">
-                        <p className="text-base font-semibold text-slate-950">{appointment.client_name}</p>
-                        <span className="rounded-full border border-[#dde1ea] bg-white px-2.5 py-1 text-xs font-semibold text-slate-600">
-                          {new Date(appointment.starts_at).toLocaleDateString("es-AR", {
-                            weekday: "short",
-                            day: "2-digit",
-                            month: "short",
-                          })}
-                        </span>
-                      </div>
-                      <p className="mt-2 text-sm text-slate-500">
-                        {appointment.service_name ?? "Turno"} · {appointment.professional_name ?? "Profesional"}
-                      </p>
-                    </div>
-
-                    <div className="rounded-[18px] border border-[#dde1ea] bg-white px-4 py-3 text-sm font-semibold text-slate-900">
-                      {formatSlot(appointment.starts_at)}
-                    </div>
-                  </div>
-                </div>
-              ))
-            ) : (
-              <WorkspaceEmptyState
-                className="px-4 py-10"
-                title={
-                  isFullyEmpty
-                    ? "Tu panel se va a llenar cuando empieces a operar."
-                    : isProfessional
-                      ? "No tenes turnos proximos."
-                      : "Sin turnos proximos."
-                }
-                description={
-                  isFullyEmpty
-                    ? "Conecta WhatsApp, configura tu agenda y deja que el bot atienda el primer turno."
-                    : isProfessional
-                      ? "Cuando el bot o tu admin agenden turnos para vos, van a aparecer aca."
-                      : "Cuando entren reservas, este panel va a mostrar lo siguiente que viene."
-                }
-                action={
-                  isFullyEmpty && !isProfessional ? (
-                    <Button asChild variant="outline" className="h-11 rounded-2xl border-[#dde1ea] px-4 hover:bg-[#f6f7fb]">
-                      <Link href={!company?.calendar_connected ? "/settings/professionals" : "/whatsapp"}>
-                        {!company?.calendar_connected ? "Configurar agenda" : "Conectar WhatsApp"}
-                        <ArrowRight className="ml-2 h-4 w-4" />
-                      </Link>
-                    </Button>
-                  ) : undefined
-                }
-              />
-            )}
-          </div>
-        </CardContent>
-      </Card>
+      <Link
+        href="/dashboard/crecimiento"
+        className="interactive-soft flex items-center justify-between rounded-[28px] border border-[#e6e7ec] bg-[linear-gradient(180deg,#ffffff_0%,#f8f9fc_100%)] p-5 sm:p-6"
+      >
+        <div>
+          <p className="text-[11px] uppercase tracking-[0.16em] text-slate-400">Crecimiento</p>
+          <p className="mt-1 text-lg font-semibold text-slate-950">Metricas de reactivacion</p>
+          <p className="mt-1 text-sm text-slate-500">Clientes recuperados, revenue atribuido y mas.</p>
+        </div>
+        <ArrowRight className="h-5 w-5 shrink-0 text-slate-400" />
+      </Link>
     </PageEntrance>
   );
 }

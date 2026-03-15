@@ -788,6 +788,59 @@ SET starts_at = starts_at + INTERVAL '3 hours',
     updated_at = NOW()
 WHERE source = 'bot'
   AND EXTRACT(EPOCH FROM (ends_at - starts_at)) / 60 > 120;
+
+-- Growth: Client Analytics
+CREATE TABLE IF NOT EXISTS client_analytics (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  client_id UUID NOT NULL REFERENCES clients(id) ON DELETE CASCADE,
+  company_id UUID NOT NULL REFERENCES companies(id) ON DELETE CASCADE,
+  total_appointments INT NOT NULL DEFAULT 0,
+  total_revenue NUMERIC(10,2) NOT NULL DEFAULT 0,
+  avg_frequency_days NUMERIC(6,1),
+  last_appointment_at TIMESTAMPTZ,
+  days_since_last INT,
+  days_overdue INT,
+  risk_score INT NOT NULL DEFAULT 0,
+  computed_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  UNIQUE(client_id)
+);
+CREATE INDEX IF NOT EXISTS idx_client_analytics_company_risk
+  ON client_analytics(company_id, risk_score DESC);
+
+-- Growth: Reactivation Messages
+CREATE TABLE IF NOT EXISTS reactivation_messages (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  company_id UUID NOT NULL REFERENCES companies(id) ON DELETE CASCADE,
+  client_id UUID NOT NULL REFERENCES clients(id) ON DELETE CASCADE,
+  professional_id UUID REFERENCES professionals(id),
+  message_text TEXT NOT NULL,
+  status VARCHAR(20) NOT NULL DEFAULT 'pending',
+  sent_at TIMESTAMPTZ,
+  converted_at TIMESTAMPTZ,
+  attributed_appointment_id UUID REFERENCES appointments(id),
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+CREATE INDEX IF NOT EXISTS idx_reactivation_company_status
+  ON reactivation_messages(company_id, status);
+CREATE INDEX IF NOT EXISTS idx_reactivation_client_sent
+  ON reactivation_messages(client_id, sent_at DESC);
+
+DO $$ BEGIN
+  ALTER TABLE reactivation_messages ADD CONSTRAINT chk_reactivation_status
+    CHECK (status IN ('pending', 'sent', 'converted', 'failed'));
+EXCEPTION WHEN duplicate_object THEN NULL;
+END $$;
+
+-- Growth: Company settings extension
+ALTER TABLE company_settings
+  ADD COLUMN IF NOT EXISTS reactivation_enabled BOOLEAN NOT NULL DEFAULT false,
+  ADD COLUMN IF NOT EXISTS reactivation_threshold_days INT NOT NULL DEFAULT 7,
+  ADD COLUMN IF NOT EXISTS reactivation_auto_send BOOLEAN NOT NULL DEFAULT false,
+  ADD COLUMN IF NOT EXISTS reactivation_message_template TEXT;
+
+-- Growth: Missing index for analytics query
+CREATE INDEX IF NOT EXISTS idx_appointments_client_id
+  ON appointments(client_id, status);
 `;
 
 async function run() {

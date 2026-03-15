@@ -54,12 +54,22 @@ _(vacío — nada en progreso activo)_
   - Qué ya existe: `sitemap.ts` y `robots.ts` funcionando.
   - Qué falta: `apps/frontend/src/app/manifest.ts` para PWA install y `apps/frontend/src/components/seo/json-ld.tsx` para rich results en search.
 
+- [ ] `ARCH-7 · Migrar booking locks y EventEmitter a PostgreSQL para multi-instancia`
+  - Resultado esperado: el backend puede correr en múltiples instancias sin race conditions en booking ni pérdida de eventos de attribution.
+  - Contexto: hoy los booking locks (`bookSlot()` in-memory Map) y el EventEmitter de `events.ts` son in-process. Si se escala a 2+ instancias del backend, los locks no se comparten y los eventos de attribution se pierden. Migrar a PostgreSQL advisory locks + LISTEN/NOTIFY.
+  - Prioridad: P3 (no urgente, single-instance es suficiente por ahora).
+
+- [ ] `GROWTH-2 · Follow-up post-turno automatico`
+  - Resultado esperado: Talora envía un "¿Cómo te fue con tu turno?" 24h después de cada appointment confirmado.
+  - Contexto: reutiliza la infra de reactivation (sendText, conversación, template). Quick win para fidelización. Requiere un scheduler o check periódico de appointments que terminaron hace 24h.
+  - Prioridad: P2 (feature post-Phase A de growth).
+
 ## Reglas de uso
 - `Done` solo se usa para trabajo validado con evidencia objetiva o prueba real.
 - `Doing` debe tener máximo 4 cards activas al mismo tiempo.
 
 ## Supuestos del MVP
-- El MVP sigue siendo solo `turnos`.
+- El MVP es `turnos` + `crecimiento` (reactivación de clientes inactivos).
 - Una empresa demo alcanza para validar el producto.
-- No se abre multi-sucursal ni campañas en esta etapa.
-- El objetivo inmediato es dejar un flujo real vendible, no sumar features nuevas.
+- No se abre multi-sucursal ni campañas masivas en esta etapa.
+- El objetivo inmediato es demostrar ROI medible: "Talora te recuperó X clientes = $Y en turnos".
