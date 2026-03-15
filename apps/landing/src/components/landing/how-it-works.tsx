@@ -15,7 +15,7 @@ export function HowItWorks() {
   const isInView = useInView(sectionRef, { once: true, margin: "-100px" });
 
   return (
-    <SectionWrapper id="como-funciona" className="bg-white">
+    <SectionWrapper id="como-funciona" className="bg-surface-cool">
       <FadeIn>
         <div className="mx-auto max-w-2xl text-center">
           <span className={`text-sm font-semibold ${howItWorks.badgeColor} uppercase tracking-wider`}>
@@ -32,7 +32,7 @@ export function HowItWorks() {
 
       <div
         ref={sectionRef}
-        className="mt-6 sm:mt-12 md:mt-16 grid gap-8 sm:gap-10 md:grid-cols-3 md:gap-6 relative"
+        className="mt-4 sm:mt-8 md:mt-10 grid gap-6 sm:gap-8 md:grid-cols-3 md:gap-4 relative"
       >
         {/* Animated connector line (desktop only) */}
         <div className="hidden md:block absolute top-[2.25rem] left-[20%] right-[20%]">
@@ -42,9 +42,9 @@ export function HowItWorks() {
               y1="2"
               x2="100"
               y2="2"
-              stroke="#E2E4EC"
-              strokeWidth="2"
-              strokeDasharray="6 4"
+              stroke="#C8CCD4"
+              strokeWidth="2.5"
+              strokeDasharray="4 3"
               initial={{ pathLength: 0, opacity: 0 }}
               animate={isInView ? { pathLength: 1, opacity: 1 } : { pathLength: 0, opacity: 0 }}
               transition={{ duration: 1.2, ease: [0.22, 1, 0.36, 1] }}
@@ -72,9 +72,9 @@ export function HowItWorks() {
                 initial={{ scale: 0, opacity: 0 }}
                 animate={isInView ? { scale: 1, opacity: 1 } : { scale: 0, opacity: 0 }}
                 transition={{ delay: stepDelay, duration: 0.4, ease: [0.22, 1, 0.36, 1] }}
-                className="relative z-10 flex h-12 w-12 sm:h-14 sm:w-14 md:h-[4.5rem] md:w-[4.5rem] items-center justify-center rounded-full bg-ink text-white ring-3 sm:ring-4 ring-white"
+                className="relative z-10 flex h-12 w-12 sm:h-14 sm:w-14 md:h-14 md:w-14 items-center justify-center rounded-full bg-ink text-white ring-3 sm:ring-4 ring-white"
               >
-                <Icon className="h-5 w-5 sm:h-6 sm:w-6 md:h-7 md:w-7" strokeWidth={1.5} />
+                <Icon className="h-5 w-5 sm:h-6 sm:w-6 md:h-6 md:w-6" strokeWidth={1.5} />
               </motion.div>
 
               {/* Step number badge */}
@@ -93,10 +93,10 @@ export function HowItWorks() {
                 animate={isInView ? { opacity: 1, y: 0 } : { opacity: 0, y: 16 }}
                 transition={{ delay: contentDelay + 0.1, duration: 0.5, ease: [0.22, 1, 0.36, 1] }}
               >
-                <h3 className="mt-3 font-display text-base sm:text-lg font-semibold text-text-strong">
+                <h3 className="mt-3 font-display text-base sm:text-lg font-bold text-ink">
                   {step.title}
                 </h3>
-                <p className="mt-2 max-w-[260px] sm:max-w-xs text-sm leading-relaxed text-gray-medium">
+                <p className="mt-2 max-w-[260px] sm:max-w-xs text-sm leading-relaxed text-gray-600">
                   {step.description}
                 </p>
               </motion.div>

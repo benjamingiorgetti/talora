@@ -1,84 +1,71 @@
 export const nav = {
   links: [
-    { label: "Beneficios", href: "#beneficios" },
+    { label: "Que hace", href: "#que-cambia" },
     { label: "Como funciona", href: "#como-funciona" },
     { label: "FAQ", href: "#faq" },
   ],
-  cta: "Agenda una reunion",
+  cta: "Agendar demo",
   ctaHref: "https://calendly.com/giorgettibenjamin/30min",
-  descriptor: "Turnos automaticos por WhatsApp",
+  descriptor: "Para peluquerias y salones de belleza",
 };
 
 export const hero = {
-  badge: "Turnos automaticos por WhatsApp",
+  badge: "Para peluquerias y salones de belleza",
   headline: {
-    before: "Mientras vos trabajas, los turnos ",
-    highlight: "se siguen agendando",
+    before: "Converti WhatsApp en el canal que ",
+    highlight: "llena tu agenda",
     after: ".",
   },
-  subheadline: "Talora responde y agenda turnos en tu WhatsApp automaticamente.",
-  ctaPrimary: "Ver como funciona",
-  ctaPrimaryHref: "#como-funciona",
-  ctaSecondary: "Agenda una reunion",
-  ctaSecondaryHref: "https://calendly.com/giorgettibenjamin/30min",
+  subheadline:
+    "Talora ayuda a peluquerias y salones de belleza a agendar turnos, reactivar clientas y vender mas sin sumar trabajo manual.",
+  ctaPrimary: "Agendar demo",
+  ctaPrimaryHref: "https://calendly.com/giorgettibenjamin/30min",
+  ctaSecondary: "Ver como funciona",
+  ctaSecondaryHref: "#como-funciona",
+  microcopy: [
+    "Funciona con varios profesionales",
+    "Se adapta a tus servicios y horarios",
+    "Atiende por WhatsApp 24/7",
+  ],
+  paraQuien: "Ideal para negocios de belleza con 2 a 10 profesionales que hoy ya manejan su agenda por WhatsApp.",
 };
 
-export const metrics = {
-  badge: "Resultados",
-  badgeColor: "text-emerald-600" as const,
-  title: "Nunca pierdas un turno por WhatsApp",
-  stats: [
-    { value: "<5s", label: "Tiempo de respuesta" },
-    { value: "24/7", label: "Sin pausas ni feriados" },
-    { value: "3hs", label: "Ahorradas por semana" },
-    { value: "0", label: "Mensajes sin responder" },
-  ],
-  niches: [
-    { name: "Peluqueria", icon: "Scissors" as const },
-    { name: "Tatuaje", icon: "Pen" as const },
-    { name: "Odontologia", icon: "Stethoscope" as const },
-    { name: "Estetica", icon: "Sparkles" as const },
-    { name: "Manicuria", icon: "Hand" as const },
-    { name: "Kinesiologia", icon: "Heart" as const },
-    { name: "Psicologia", icon: "Brain" as const },
-    { name: "Y mas...", icon: "Plus" as const },
+export const problem = {
+  badge: "El problema",
+  badgeColor: "text-rose-600" as const,
+  title: "Tu agenda no se vacia solo por falta de demanda.",
+  painPoints: [
+    "Clientas que preguntan y no reservan",
+    "Clientas que deberian volver y nadie contacta",
+    "Tiempo perdido respondiendo lo mismo una y otra vez",
   ],
 };
 
-export const benefits = {
-  badge: "Beneficios",
+export const queCambia = {
+  badge: "Que hace Talora",
   badgeColor: "text-sky-600" as const,
-  title: "Todo lo que Talora hace por vos",
-  subtitle:
-    "Responde los mensajes, ofrece horarios disponibles y confirma turnos automaticamente.",
+  title: "Tres formas en que Talora hace crecer tu agenda",
   items: [
     {
-      title: "WhatsApp",
-      description:
-        "Tus clientes escriben como siempre. El agente responde, consulta disponibilidad y confirma turnos automaticamente.",
-      icon: "MessageCircle" as const,
+      title: "Agenda automatica",
+      description: "Responde consultas, muestra horarios y reserva turnos sin depender del equipo.",
+      benefit: "Mas turnos confirmados, menos tiempo coordinando mensajes.",
+      icon: "CalendarCheck" as const,
       color: "mint" as const,
     },
     {
-      title: "Tu agente personalizado",
-      description:
-        "Atiende consultas las 24 horas, maneja reprogramaciones y responde preguntas frecuentes sin intervencion humana.",
-      icon: "Bot" as const,
-      color: "sky" as const,
-    },
-    {
-      title: "Calendario con recordatorios",
-      description:
-        "Cada turno se crea directo en Google Calendar. Recordatorios automaticos para que nadie falte.",
-      icon: "CalendarDays" as const,
-      color: "sand" as const,
-    },
-    {
-      title: "Cada profesional con su agenda",
-      description:
-        "Cada profesional tiene su propio calendario, servicios y horarios. Sin pisarse turnos.",
-      icon: "Users" as const,
+      title: "Reactivacion",
+      description: "Detecta clientas que hace semanas no vuelven y les escribe por WhatsApp.",
+      benefit: "Clientas recuperadas sin seguimiento manual.",
+      icon: "UserPlus" as const,
       color: "lilac" as const,
+    },
+    {
+      title: "Upsell inteligente",
+      description: "Sugiere tratamientos, brushing, color o servicios complementarios en el momento justo.",
+      benefit: "Mas ticket promedio por visita.",
+      icon: "Sparkles" as const,
+      color: "sand" as const,
     },
   ],
 };
@@ -86,85 +73,68 @@ export const benefits = {
 export const howItWorks = {
   badge: "Como funciona",
   badgeColor: "text-violet-600" as const,
-  title: "Como empezas",
-  subtitle: "Tres pasos para automatizar tus turnos.",
+  title: "Empezar es simple",
+  subtitle: "Tres pasos para llenar tu agenda por WhatsApp.",
   steps: [
     {
       number: "1",
-      title: "Conecta tu WhatsApp",
-      description: "Escanea un QR y tu numero queda vinculado. Sin APIs complejas, sin configuraciones tecnicas.",
+      title: "Conectas tu WhatsApp",
+      description:
+        "Talora se adapta a tu numero, tu negocio y tu forma de trabajar.",
     },
     {
       number: "2",
-      title: "Configura servicios y horarios",
-      description: "Define que servicios ofreces, cuanto duran, quienes los hacen y en que horarios.",
+      title: "Configuras servicios, horarios y profesionales",
+      description:
+        "Definis que ofrece cada persona y cuando tiene disponibilidad.",
     },
     {
       number: "3",
-      title: "Tus clientes agendan solos",
-      description: "El agente responde mensajes, consulta disponibilidad y agenda turnos. Vos solo trabajas.",
+      title: "Talora empieza a responder, agendar y seguir clientas",
+      description:
+        "Automatiza reservas, recordatorios y reactivacion desde el mismo chat.",
     },
   ],
 };
 
 export const faq = {
-  title: "Preguntas frecuentes",
+  title: "Preguntas que seguro te estas haciendo",
   items: [
     {
-      question: "Necesito instalar algo?",
+      question: "Talora sirve si tengo varios profesionales?",
       answer:
-        "No. Talora funciona desde la nube. Solo necesitas escanear un QR con tu WhatsApp Business y configurar tus servicios desde el panel web.",
+        "Si. Podes configurar profesionales, servicios y agendas por separado. Cada una tiene su propio calendario y horarios.",
     },
     {
-      question: "Funciona con WhatsApp Business?",
+      question: "Puedo definir que hace cada profesional?",
       answer:
-        "Si, funciona con WhatsApp Business. Conectas tu numero existente y el agente responde desde ahi. Tus clientes no notan diferencia.",
+        "Si. Cada profesional puede tener sus propios horarios y servicios: corte, color, brushing, tratamiento, lo que necesites.",
     },
     {
-      question: "Puedo tener varios profesionales?",
+      question: "Que pasa si una clienta pide algo fuera de lo normal?",
       answer:
-        "Si. Cada profesional tiene sus propios servicios, horarios y calendario de Google. Los clientes eligen con quien agendar.",
+        "Talora puede derivar la conversacion a un humano cuando detecta que no puede resolver el pedido. Nunca deja colgada a la clienta.",
     },
     {
-      question: "Que pasa si un cliente quiere reprogramar?",
+      question: "Sigue funcionando si ya uso WhatsApp todos los dias?",
       answer:
-        "El agente maneja reprogramaciones y cancelaciones automaticamente. El cliente lo pide por WhatsApp y el turno se actualiza en Calendar.",
-    },
-    {
-      question: "Cuanto tarda la configuracion inicial?",
-      answer:
-        "Menos de 10 minutos. Conectas WhatsApp, agregas tus servicios y profesionales, y el agente ya esta listo para atender.",
-    },
-    {
-      question: "Puedo personalizar las respuestas del agente?",
-      answer:
-        "Si. Desde el panel podes editar el tono, las instrucciones y las respuestas frecuentes del agente para que suene como tu negocio.",
-    },
-    {
-      question: "Que pasa si el agente no sabe responder algo?",
-      answer:
-        "El agente deriva la conversacion a un humano cuando detecta que no puede resolver el pedido. Nunca deja colgado al cliente.",
+        "Si. Justamente esta pensado para negocios que ya venden y agendan por WhatsApp, pero hoy lo hacen de forma manual.",
     },
   ],
 };
 
-export const waitlist = {
-  title: "Sumate a la lista de espera",
-  subtitle:
-    "Estamos abriendo acceso de a poco. Agenda una reunion y te mostramos como funciona.",
-  cta: "Quiero probar Talora",
-  ctaHref: "https://calendly.com/giorgettibenjamin/30min",
-  trust: ["Sin compromiso", "Setup en 5 minutos", "Soporte incluido"],
-  counter: "+30 negocios ya se anotaron",
-};
-
 export const finalCta = {
-  headline: "Empieza a automatizar tus turnos hoy",
+  headline:
+    "Si hoy tu agenda depende de contestar mensajes a mano, ya estas perdiendo turnos.",
   subheadline:
-    "Conecta WhatsApp, configura tus servicios y deja que la IA haga el resto.",
-  cta: "Agenda una reunion",
+    "Talora ayuda a peluquerias y salones de belleza a vender mas por WhatsApp sin sumar trabajo manual.",
+  cta: "Agendar demo",
   ctaHref: "https://calendly.com/giorgettibenjamin/30min",
-  trust: ["Setup en 5 minutos", "Soporte incluido", "Funciona con tu WhatsApp actual"],
+  trust: [
+    "Te mostramos como se adaptaria a tu negocio",
+    "Soporte incluido",
+    "Funciona con tu WhatsApp actual",
+  ],
 };
 
 export const footer = {
@@ -172,7 +142,7 @@ export const footer = {
     {
       title: "Producto",
       links: [
-        { label: "Beneficios", href: "#beneficios" },
+        { label: "Que hace", href: "#que-cambia" },
         { label: "Como funciona", href: "#como-funciona" },
         { label: "FAQ", href: "#faq" },
       ],
