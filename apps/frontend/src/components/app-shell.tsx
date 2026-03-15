@@ -36,6 +36,7 @@ import { pickPreferredCompanyId } from "@/lib/company";
 import { Button } from "@/components/ui/button";
 import { CompanySwitcherDialog } from "@/components/company-switcher-dialog";
 import { cn } from "@/lib/utils";
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { useWebSocket } from "@/hooks/useWebSocket";
 
 interface AppShellProps {
@@ -99,7 +100,7 @@ function NavLink({
   const Icon = item.icon;
   const isActive = navItemIsActive(pathname, item.href);
 
-  return (
+  const link = (
     <Link
       href={item.href}
       className={cn(
@@ -109,7 +110,6 @@ function NavLink({
           : "border-transparent text-slate-500 hover:border-[#e5e7ef] hover:bg-white hover:text-slate-950",
         collapsed && "justify-center px-2"
       )}
-      title={collapsed ? item.label : undefined}
     >
       <div
         className={cn(
@@ -124,6 +124,17 @@ function NavLink({
       {!collapsed && <span>{item.label}</span>}
     </Link>
   );
+
+  if (collapsed) {
+    return (
+      <Tooltip delayDuration={0}>
+        <TooltipTrigger asChild>{link}</TooltipTrigger>
+        <TooltipContent side="right" sideOffset={8}>{item.label}</TooltipContent>
+      </Tooltip>
+    );
+  }
+
+  return link;
 }
 
 function DropdownMenu({
@@ -177,13 +188,13 @@ function BrandLockup({
   return (
     <>
       {collapsed ? (
-        <div className="flex h-14 w-14 shrink-0 items-center justify-center rounded-[20px] border border-[#dfe2ea] bg-white shadow-[0_14px_28px_rgba(15,23,42,0.06)]">
+        <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-[14px] border border-[#dfe2ea] bg-white shadow-[0_8px_20px_rgba(15,23,42,0.05)]">
           <Image
             src="/talora-icon.png"
             alt="Talora"
-            width={34}
-            height={34}
-            className="h-8 w-8 object-contain"
+            width={22}
+            height={22}
+            className="h-5 w-5 object-contain"
           />
         </div>
       ) : (
@@ -493,11 +504,12 @@ export function AppShell({ children }: AppShellProps) {
       <div className="mx-auto flex h-dvh w-full max-w-[1680px] overflow-hidden gap-4 px-3 py-3 lg:px-6 lg:py-4">
         <aside
           className={cn(
-            "sticky top-4 hidden h-[calc(100dvh-2rem)] shrink-0 flex-col overflow-hidden rounded-[30px] border border-[#e2e4ec] bg-[linear-gradient(180deg,#ffffff_0%,#f7f8fb_100%)] p-4 shadow-[0_24px_64px_rgba(15,23,42,0.06)] lg:flex",
-            sidebarCollapsed ? "w-[92px]" : "w-[260px]"
+            "sticky top-4 hidden h-[calc(100dvh-2rem)] shrink-0 flex-col overflow-hidden rounded-[30px] border border-[#e2e4ec] bg-[linear-gradient(180deg,#ffffff_0%,#f7f8fb_100%)] p-4 shadow-[0_24px_64px_rgba(15,23,42,0.06)] transition-[width] duration-200 ease-in-out lg:flex",
+            sidebarCollapsed ? "w-[68px]" : "w-[260px]"
           )}
         >
-          <div className={cn("flex items-center", sidebarCollapsed ? "justify-center" : "justify-between gap-3")}>
+          <TooltipProvider delayDuration={0}>
+          <div className={cn("flex items-center", sidebarCollapsed ? "flex-col gap-2" : "justify-between gap-3")}>
             <Link
               href={resolveDefaultRoute(session, activeCompanyId)}
               className={cn("flex items-center", sidebarCollapsed ? "justify-center" : "gap-3")}
@@ -505,32 +517,37 @@ export function AppShell({ children }: AppShellProps) {
               <BrandLockup collapsed={sidebarCollapsed} />
             </Link>
 
-            {!sidebarCollapsed && (
-              <Button
-                variant="ghost"
-                size="icon"
-                aria-label="Colapsar sidebar"
-                onClick={() => setSidebarCollapsed(true)}
-                className="h-10 w-10 rounded-2xl border border-transparent text-slate-500 hover:border-[#e3e6ee] hover:bg-white hover:text-slate-900"
-              >
-                <ChevronLeft className="h-4 w-4" />
-              </Button>
-            )}
-          </div>
-
-          {sidebarCollapsed && (
             <Button
               variant="ghost"
               size="icon"
-              aria-label="Expandir sidebar"
-              onClick={() => setSidebarCollapsed(false)}
-              className="mt-4 h-11 w-11 self-center rounded-2xl border border-[#e3e6ee] bg-white text-slate-500 shadow-sm hover:bg-[#f6f7fb] hover:text-slate-900"
+              aria-label={sidebarCollapsed ? "Expandir sidebar" : "Colapsar sidebar"}
+              onClick={() => setSidebarCollapsed((prev) => !prev)}
+              className={cn(
+                "h-8 w-8 shrink-0 rounded-xl border text-slate-400 transition-colors hover:text-slate-900",
+                sidebarCollapsed
+                  ? "border-[#e3e6ee] bg-white shadow-sm hover:bg-[#f6f7fb]"
+                  : "border-transparent hover:border-[#e3e6ee] hover:bg-white"
+              )}
             >
-              <PanelLeft className="h-4 w-4" />
+              <ChevronLeft className={cn("h-3.5 w-3.5 transition-transform duration-200", sidebarCollapsed && "rotate-180")} />
             </Button>
-          )}
+          </div>
 
-          {!sidebarCollapsed && (
+          {sidebarCollapsed ? (
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <div className="mt-4 flex h-9 w-9 items-center justify-center self-center rounded-2xl border border-[#d8dce6] bg-white text-slate-700">
+                  {session.role === "superadmin" ? <Shield className="h-4 w-4" />
+                   : session.role === "professional" ? <UsersRound className="h-4 w-4" />
+                   : <Building2 className="h-4 w-4" />}
+                </div>
+              </TooltipTrigger>
+              <TooltipContent side="right" sideOffset={8}>
+                <p className="font-medium">{shellLabel}</p>
+                <p className="text-xs text-slate-500">{companyLabel}</p>
+              </TooltipContent>
+            </Tooltip>
+          ) : (
             <SidebarIdentityCard
               session={session}
               companyLabel={companyLabel}
@@ -552,19 +569,33 @@ export function AppShell({ children }: AppShellProps) {
           </div>
 
           <div className={cn("border-t border-[#e4e7ef] pt-4", sidebarCollapsed && "flex flex-col items-center")}>
-            <Button
-              variant="outline"
-              onClick={logout}
-              className={cn(
-                "h-11 rounded-2xl border-[#dde1ea] bg-white text-slate-700 hover:bg-[#f6f7fb]",
-                sidebarCollapsed ? "w-11 px-0" : "w-full justify-start px-4"
-              )}
-              aria-label="Cerrar sesión"
-            >
-              <LogOut className={cn("h-4 w-4", !sidebarCollapsed && "mr-2")} />
-              {!sidebarCollapsed && "Salir"}
-            </Button>
+            {sidebarCollapsed ? (
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <Button
+                    variant="outline"
+                    onClick={logout}
+                    className="h-9 w-9 rounded-xl border-[#dde1ea] bg-white px-0 text-slate-700 hover:bg-[#f6f7fb]"
+                    aria-label="Cerrar sesión"
+                  >
+                    <LogOut className="h-4 w-4" />
+                  </Button>
+                </TooltipTrigger>
+                <TooltipContent side="right" sideOffset={8}>Salir</TooltipContent>
+              </Tooltip>
+            ) : (
+              <Button
+                variant="outline"
+                onClick={logout}
+                className="h-11 w-full justify-start rounded-2xl border-[#dde1ea] bg-white px-4 text-slate-700 hover:bg-[#f6f7fb]"
+                aria-label="Cerrar sesión"
+              >
+                <LogOut className="mr-2 h-4 w-4" />
+                Salir
+              </Button>
+            )}
           </div>
+          </TooltipProvider>
         </aside>
 
         <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden rounded-[28px] border border-[#e2e4ec] bg-[linear-gradient(180deg,#ffffff_0%,#fafbfe_100%)] shadow-[0_24px_80px_rgba(15,23,42,0.07)] sm:rounded-[32px]">
