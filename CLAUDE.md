@@ -67,7 +67,7 @@ Auth: JWT with roles `superadmin | admin_empresa | professional`. Multi-tenant b
 
 ## Env Gotchas
 
-- Root `.env` needs `EVOLUTION_API_KEY`; must match `apps/backend/.env` and `docker-compose.yml`.
+- The single source of truth for env vars is `apps/backend/.env`. Do NOT use the root `.env.example` at runtime — it's only a reference template.
 - `WEBHOOK_BASE_URL=http://host.docker.internal:3001` — NOT localhost. Evolution container can't reach localhost.
 - `CORS_ORIGIN=http://localhost:3000`, `NEXT_PUBLIC_API_URL=http://localhost:3001`, `NEXT_PUBLIC_WS_URL=ws://localhost:3001`.
 - Docker Desktop must be running before `docker-compose up -d`.
