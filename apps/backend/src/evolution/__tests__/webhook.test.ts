@@ -489,6 +489,125 @@ describe('handleMessagesUpsert', () => {
 });
 
 // ---------------------------------------------------------------------------
+// Conversation-level serialization (regression: reset + hola race condition)
+// ---------------------------------------------------------------------------
+describe('handleMessagesUpsert — conversation serialization', () => {
+  beforeEach(() => {
+    mockQuery.mockReset();
+    mockBroadcast.mockReset();
+    mockHandleIncomingMessage.mockReset();
+    mockSendText.mockReset();
+    mockSendReaction.mockReset();
+    mockIsResetCommand.mockReset();
+    mockIsConversationInactive.mockReset();
+
+    mockIsConversationInactive.mockImplementation(() => false);
+    mockHandleIncomingMessage.mockImplementation(() => Promise.resolve());
+    mockSendText.mockImplementation(() => Promise.resolve({ key: { id: 'msg-sent-001' } }));
+    mockSendReaction.mockImplementation(() => Promise.resolve({ key: { id: 'msg-rxn-001' } }));
+  });
+
+  it('should serialize /reset then hola for the same phone — hola must unarchive', async () => {
+    const order: string[] = [];
+
+    // isResetCommand returns true for first call (/reset), false for second (hola)
+    let resetCallCount = 0;
+    mockIsResetCommand.mockImplementation(() => {
+      resetCallCount++;
+      return resetCallCount === 1;
+    });
+
+    // Make resetConversationMemory slow enough to expose the race condition
+    let resolveReset!: () => void;
+    const resetBlocked = new Promise<void>((resolve) => {
+      resolveReset = resolve;
+    });
+    mockResetConversationMemory.mockImplementation(async () => {
+      order.push('reset:start');
+      await resetBlocked;
+      order.push('reset:end');
+      return {
+        conversation: {
+          id: CONV_ID,
+          company_id: COMPANY_ID,
+          instance_id: INSTANCE_ID,
+          professional_id: null,
+          last_message_at: FIXED_NOW,
+          bot_paused: false,
+          archived_at: FIXED_NOW,
+          archive_reason: 'manual_reset',
+        },
+        systemMessage: {
+          id: 'sys-msg-001',
+          conversation_id: CONV_ID,
+          role: 'system',
+          content: 'Memoria reseteada.',
+          tool_calls: null,
+          tool_call_id: null,
+          created_at: FIXED_NOW,
+        },
+      };
+    });
+
+    mockHandleIncomingMessage.mockImplementation(async () => {
+      order.push('agent');
+    });
+
+    // Setup DB mocks — will be called twice (once per message), so set up enough rows
+    setupQueryMock(mockQuery, [
+      // First call (/reset)
+      ['whatsapp_instances WHERE evolution_instance_name', [instanceRow]],
+      ['bot_enabled', [{ bot_enabled: true }]],
+      ['FROM clients', []],
+      ['FROM professionals', [{ id: TEST_IDS.PROF_A }]],
+      ['FROM conversations', [{ id: CONV_ID, archived_at: null, last_message_at: FIXED_NOW }]],
+      ['INSERT INTO conversations', [conversationRow]],
+      // Second call (hola)
+      ['whatsapp_instances WHERE evolution_instance_name', [instanceRow]],
+      ['bot_enabled', [{ bot_enabled: true }]],
+      ['FROM clients', []],
+      ['FROM professionals', [{ id: TEST_IDS.PROF_A }]],
+      ['FROM conversations', [{ id: CONV_ID, archived_at: FIXED_NOW, last_message_at: FIXED_NOW }]],
+      ['INSERT INTO conversations', [{ ...conversationRow, archived_at: null, archive_reason: null }]],
+      ['INSERT INTO messages', [messageRow]],
+    ]);
+
+    const resetBody = makeWebhookBody({
+      data: {
+        key: { id: 'ev-reset-serial', remoteJid: `${PHONE}@s.whatsapp.net`, fromMe: false },
+        message: { conversation: '/reset' },
+        pushName: 'Test Client',
+      },
+    });
+
+    const holaBody = makeWebhookBody({
+      data: {
+        key: { id: 'ev-hola-serial', remoteJid: `${PHONE}@s.whatsapp.net`, fromMe: false },
+        message: { conversation: 'hola' },
+        pushName: 'Test Client',
+      },
+    });
+
+    // Fire both concurrently (simulating backend processing queued webhooks)
+    const first = handleMessagesUpsert(resetBody);
+    // Small delay to ensure reset starts first
+    await new Promise((r) => setTimeout(r, 10));
+    const second = handleMessagesUpsert(holaBody);
+
+    // Release the reset — with serialization, hola should only start AFTER reset finishes
+    resolveReset();
+
+    await Promise.all([first, second]);
+
+    // Reset must complete fully before hola's agent call
+    expect(order).toEqual(['reset:start', 'reset:end', 'agent']);
+
+    // Agent was called (hola was processed after reset)
+    expect(mockHandleIncomingMessage).toHaveBeenCalledTimes(1);
+  });
+});
+
+// ---------------------------------------------------------------------------
 // handleConnectionUpdate
 // ---------------------------------------------------------------------------
 describe('handleConnectionUpdate', () => {

@@ -16,8 +16,6 @@ const evolution = new EvolutionClient();
 
 const CALENDAR_TOOLS = new Set(['google_calendar_check', 'google_calendar_book', 'google_calendar_cancel', 'google_calendar_reprogram']);
 
-// Simple per-conversation lock to prevent race conditions on concurrent messages
-const conversationLocks = new Map<string, Promise<void>>();
 
 function normalizePhone(value: string | null | undefined): string {
   return (value ?? '').replace(/\D/g, '');
@@ -148,23 +146,14 @@ async function loadRecentBookingsSummary(
   return parts.join(' ');
 }
 
+// Serialization now happens at the webhook level (webhookLocks in webhook.ts)
+// to prevent race conditions across the entire message processing pipeline.
 export async function handleIncomingMessage(
   conversationId: string,
   instanceName: string,
   messageText: string
 ): Promise<void> {
-  const prev = conversationLocks.get(conversationId) ?? Promise.resolve();
-  const current = prev
-    .then(() => processMessage(conversationId, instanceName, messageText))
-    .catch((err) => logger.error('Error in conversation lock chain:', err))
-    .finally(() => {
-      // Only clean up if we're still the current promise (no new message queued)
-      if (conversationLocks.get(conversationId) === current) {
-        conversationLocks.delete(conversationId);
-      }
-    });
-  conversationLocks.set(conversationId, current);
-  await current;
+  await processMessage(conversationId, instanceName, messageText);
 }
 
 async function processMessage(

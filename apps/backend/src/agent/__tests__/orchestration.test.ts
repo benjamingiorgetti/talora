@@ -413,53 +413,6 @@ describe('handleIncomingMessage — no agent configured', () => {
 });
 
 // ---------------------------------------------------------------------------
-// Tests: conversation locking
+// Note: conversation-level serialization now lives in webhook.ts (webhookLocks).
+// The locking test has moved to evolution/__tests__/webhook.test.ts.
 // ---------------------------------------------------------------------------
-
-describe('handleIncomingMessage — conversation locking', () => {
-  it('should process two concurrent messages for the same conversation serially', async () => {
-    const order: string[] = [];
-
-    mockQuery.mockReset();
-    mockSendText.mockReset();
-    mockOpenAiCreate.mockReset();
-    setupDefaultDbResponses();
-
-    // Ensure we have a valid agent config
-    mockGetAgentConfig.mockImplementation(() =>
-      Promise.resolve({ agent: makeAgent(), sections: [], tools: [], variables: [] }),
-    );
-
-    let resolveFirst!: () => void;
-    const firstBlocked = new Promise<void>((resolve) => {
-      resolveFirst = resolve;
-    });
-
-    let callCount = 0;
-    mockOpenAiCreate.mockImplementation(async () => {
-      callCount++;
-      if (callCount === 1) {
-        // First call blocks until explicitly released
-        await firstBlocked;
-        order.push('first');
-      } else {
-        order.push('second');
-      }
-      return mockOpenAiResponse('ok');
-    });
-
-    const first = handleIncomingMessage(TEST_IDS.CONV_A, 'test-instance', 'msg1');
-    // Give the first call time to start and reach the blocked promise
-    await new Promise((r) => setTimeout(r, 20));
-
-    const second = handleIncomingMessage(TEST_IDS.CONV_A, 'test-instance', 'msg2');
-
-    // Release the first call — second should proceed after
-    resolveFirst();
-
-    await Promise.all([first, second]);
-
-    // 'first' must complete before 'second' starts
-    expect(order).toEqual(['first', 'second']);
-  });
-});
