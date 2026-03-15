@@ -68,7 +68,7 @@ export function PromptEditorTab() {
   if (isLoading) return <LoadingSpinner />;
 
   return (
-    <div className="flex flex-col gap-0" style={{ minHeight: "calc(100vh - 200px)" }}>
+    <div className="flex flex-col gap-0">
       {/* Top toolbar */}
       <div className="flex items-center justify-between mb-4">
         <div className="flex items-center gap-3">
@@ -122,7 +122,7 @@ export function PromptEditorTab() {
                 {/* Highlighted editor: backdrop div + transparent textarea overlay */}
                 <div
                   className="relative rounded-lg border border-border bg-card overflow-hidden"
-                  style={{ minHeight: "500px", height: "calc(100vh - 280px)" }}
+                  style={{ minHeight: "400px", maxHeight: "600px", height: "600px" }}
                 >
                   {/* Backdrop: renders highlighted text */}
                   <div
