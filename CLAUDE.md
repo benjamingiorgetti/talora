@@ -15,6 +15,14 @@ Cuando reporto un bug, NO arrancar a fixearlo directo. Orden:
 2. Lanzar subagentes para fixearlo
 3. Probar que pasa el test
 
+## Agentes y Paralelismo
+
+- Usar libremente todos los agentes y skills disponibles. Sin límites artificiales.
+- Si una tarea se beneficia de paralelismo, lanzar múltiples agentes en paralelo sin restricción de cantidad.
+- Usar la skill correcta para cada dominio: UI/UX → skills de UI/UX, backend → skills de backend, OAuth → agente de integraciones, etc. No esperar a que el usuario lo pida explícitamente.
+- Si el trabajo toca frontend, backend, integraciones, y UX al mismo tiempo, lanzar un agente por cada área en paralelo.
+- Priorizar velocidad y especialización: cada agente/skill existe para algo, usarlo.
+
 ## Principios de Trabajo
 
 1. No bajar la vara por usar LLMs. Si una feature no es claramente valiosa, no se shippea.
