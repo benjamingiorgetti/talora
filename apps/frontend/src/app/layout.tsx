@@ -1,12 +1,18 @@
 import type { Metadata } from "next";
-import { Plus_Jakarta_Sans } from "next/font/google";
+import { IBM_Plex_Sans, Fraunces } from "next/font/google";
 import "./globals.css";
 import { Providers } from "./providers";
 
-const plusJakarta = Plus_Jakarta_Sans({
+const ibmPlex = IBM_Plex_Sans({
   subsets: ["latin"],
   weight: ["400", "500", "600"],
-  variable: "--font-ui",
+  variable: "--font-body",
+});
+
+const fraunces = Fraunces({
+  subsets: ["latin"],
+  weight: ["500", "600", "700"],
+  variable: "--font-display",
 });
 
 const SITE_URL = "https://talora.vip";
@@ -57,7 +63,7 @@ export const metadata: Metadata = {
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
     <html lang="es" suppressHydrationWarning>
-      <body className={`${plusJakarta.variable} antialiased`} style={{ ["--font-display" as string]: "var(--font-ui)" }}>
+      <body className={`${ibmPlex.variable} ${fraunces.variable} antialiased`} style={{ ["--font-ui" as string]: "var(--font-body)" }}>
         <Providers>{children}</Providers>
       </body>
     </html>
