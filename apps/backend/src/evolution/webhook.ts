@@ -13,6 +13,25 @@ import type { WhatsAppInstance } from '@talora/shared';
 
 const evolution = new EvolutionClient();
 
+// Per-conversation lock to serialize entire webhook processing and prevent
+// race conditions when multiple messages arrive simultaneously (e.g. backend
+// was down and processes queued /reset + "hola" concurrently).
+const webhookLocks = new Map<string, Promise<void>>();
+
+function withConversationLock(lockKey: string, fn: () => Promise<void>): Promise<void> {
+  const prev = webhookLocks.get(lockKey) ?? Promise.resolve();
+  const current = prev
+    .then(fn)
+    .catch((err) => logger.error(`Error in webhook lock chain [${lockKey}]:`, err))
+    .finally(() => {
+      if (webhookLocks.get(lockKey) === current) {
+        webhookLocks.delete(lockKey);
+      }
+    });
+  webhookLocks.set(lockKey, current);
+  return current;
+}
+
 interface EvolutionWebhookBody {
   event: string;
   instance: string;
@@ -236,197 +255,202 @@ export async function handleMessagesUpsert(body: EvolutionWebhookBody) {
 
   const contactName = data.pushName || null;
 
-  // Find the instance in DB
-  const instanceResult = await pool.query<WhatsAppInstance>(
-    'SELECT * FROM whatsapp_instances WHERE evolution_instance_name = $1',
-    [instanceName]
-  );
+  // Serialize all DB-touching work for the same conversation to prevent race
+  // conditions (e.g. /reset + "hola" arriving simultaneously after downtime).
+  const lockKey = `${instanceName}:${phone}`;
+  await withConversationLock(lockKey, async () => {
+    // Find the instance in DB
+    const instanceResult = await pool.query<WhatsAppInstance>(
+      'SELECT * FROM whatsapp_instances WHERE evolution_instance_name = $1',
+      [instanceName]
+    );
 
-  if (instanceResult.rows.length === 0) {
-    logger.error(`Instance not found for name: ${instanceName}`);
-    return;
-  }
+    if (instanceResult.rows.length === 0) {
+      logger.error(`Instance not found for name: ${instanceName}`);
+      return;
+    }
 
-  const instance = instanceResult.rows[0];
+    const instance = instanceResult.rows[0];
 
-  // Check if bot is enabled for this company
-  const companyResult = await pool.query<{ bot_enabled: boolean }>(
-    'SELECT bot_enabled FROM companies WHERE id = $1',
-    [instance.company_id]
-  );
-  if (companyResult.rows[0]?.bot_enabled === false) {
-    logger.info(`Bot disabled for company ${instance.company_id}, ignoring message from ${phone}`);
-    return;
-  }
-
-  // Update known instances cache
-  knownInstances.add(instanceName);
-
-  const clientResult = await pool.query<{ professional_id: string | null }>(
-    `SELECT professional_id
-     FROM clients
-     WHERE company_id = $1 AND phone_number = $2
-     LIMIT 1`,
-    [instance.company_id, phone]
-  );
-  let resolvedProfessionalId = clientResult.rows[0]?.professional_id ?? null;
-
-  // Fallback: if no client-based professional, auto-assign when company has exactly 1 active professional
-  if (!resolvedProfessionalId) {
-    const proResult = await pool.query<{ id: string }>(
-      'SELECT id FROM professionals WHERE company_id = $1 AND is_active = true',
+    // Check if bot is enabled for this company
+    const companyResult = await pool.query<{ bot_enabled: boolean }>(
+      'SELECT bot_enabled FROM companies WHERE id = $1',
       [instance.company_id]
     );
-    if (proResult.rows.length === 1) {
-      resolvedProfessionalId = proResult.rows[0].id;
+    if (companyResult.rows[0]?.bot_enabled === false) {
+      logger.info(`Bot disabled for company ${instance.company_id}, ignoring message from ${phone}`);
+      return;
     }
-  }
 
-  const existingConversationResult = await pool.query<{
-    id: string;
-    archived_at: string | null;
-    last_message_at: string | null;
-  }>(
-    `SELECT id, archived_at, last_message_at
-     FROM conversations
-     WHERE instance_id = $1 AND phone_number = $2
-     LIMIT 1`,
-    [instance.id, phone]
-  );
-  const existingConversation = existingConversationResult.rows[0] ?? null;
-  const shouldResetForInactivity = existingConversation !== null && isConversationInactive(existingConversation.last_message_at);
+    // Update known instances cache
+    knownInstances.add(instanceName);
 
-  // INVARIANT: COALESCE preserves existing professional_id. A conversation's
-  // professional is set once (from the client lookup) and never silently
-  // overwritten by subsequent messages. Reassignment is an explicit admin action.
-  const convResult = await pool.query(
-    `INSERT INTO conversations (company_id, professional_id, instance_id, phone_number, contact_name, last_message_at)
-     VALUES ($1, $2, $3, $4, $5, NOW())
-     ON CONFLICT (instance_id, phone_number)
-     DO UPDATE SET professional_id = CASE
-                       WHEN conversations.professional_binding_suppressed THEN NULL
-                       ELSE COALESCE(conversations.professional_id, $2)
-                     END,
-                   contact_name = COALESCE($5, conversations.contact_name),
-                   archived_at = NULL,
-                   archive_reason = NULL,
-                   last_message_at = NOW(),
-                   updated_at = NOW()
-     RETURNING *`,
-    [instance.company_id, resolvedProfessionalId, instance.id, phone, contactName]
-  );
-
-  let conversation = convResult.rows[0];
-
-  if (shouldResetForInactivity) {
-    const refreshedConversation = await pool.query(
-      `UPDATE conversations
-       SET memory_reset_at = NOW(),
-           updated_at = NOW()
-       WHERE id = $1
-       RETURNING *`,
-      [conversation.id]
+    const clientResult = await pool.query<{ professional_id: string | null }>(
+      `SELECT professional_id
+       FROM clients
+       WHERE company_id = $1 AND phone_number = $2
+       LIMIT 1`,
+      [instance.company_id, phone]
     );
-    if (refreshedConversation.rows[0]) {
-      conversation = refreshedConversation.rows[0];
+    let resolvedProfessionalId = clientResult.rows[0]?.professional_id ?? null;
+
+    // Fallback: if no client-based professional, auto-assign when company has exactly 1 active professional
+    if (!resolvedProfessionalId) {
+      const proResult = await pool.query<{ id: string }>(
+        'SELECT id FROM professionals WHERE company_id = $1 AND is_active = true',
+        [instance.company_id]
+      );
+      if (proResult.rows.length === 1) {
+        resolvedProfessionalId = proResult.rows[0].id;
+      }
     }
-  }
 
-  if (isResetCommand(messageText)) {
-    const resetResult = await resetConversationMemory(conversation.id, conversation.company_id);
+    const existingConversationResult = await pool.query<{
+      id: string;
+      archived_at: string | null;
+      last_message_at: string | null;
+    }>(
+      `SELECT id, archived_at, last_message_at
+       FROM conversations
+       WHERE instance_id = $1 AND phone_number = $2
+       LIMIT 1`,
+      [instance.id, phone]
+    );
+    const existingConversation = existingConversationResult.rows[0] ?? null;
+    const shouldResetForInactivity = existingConversation !== null && isConversationInactive(existingConversation.last_message_at);
 
+    // INVARIANT: COALESCE preserves existing professional_id. A conversation's
+    // professional is set once (from the client lookup) and never silently
+    // overwritten by subsequent messages. Reassignment is an explicit admin action.
+    const convResult = await pool.query(
+      `INSERT INTO conversations (company_id, professional_id, instance_id, phone_number, contact_name, last_message_at)
+       VALUES ($1, $2, $3, $4, $5, NOW())
+       ON CONFLICT (instance_id, phone_number)
+       DO UPDATE SET professional_id = CASE
+                         WHEN conversations.professional_binding_suppressed THEN NULL
+                         ELSE COALESCE(conversations.professional_id, $2)
+                       END,
+                     contact_name = COALESCE($5, conversations.contact_name),
+                     archived_at = NULL,
+                     archive_reason = NULL,
+                     last_message_at = NOW(),
+                     updated_at = NOW()
+       RETURNING *`,
+      [instance.company_id, resolvedProfessionalId, instance.id, phone, contactName]
+    );
+
+    let conversation = convResult.rows[0];
+
+    if (shouldResetForInactivity) {
+      const refreshedConversation = await pool.query(
+        `UPDATE conversations
+         SET memory_reset_at = NOW(),
+             updated_at = NOW()
+         WHERE id = $1
+         RETURNING *`,
+        [conversation.id]
+      );
+      if (refreshedConversation.rows[0]) {
+        conversation = refreshedConversation.rows[0];
+      }
+    }
+
+    if (isResetCommand(messageText)) {
+      const resetResult = await resetConversationMemory(conversation.id, conversation.company_id);
+
+      broadcast({
+        type: 'conversation:updated',
+        payload: {
+          id: resetResult.conversation.id,
+          company_id: resetResult.conversation.company_id,
+          instance_id: resetResult.conversation.instance_id,
+          professional_id: resetResult.conversation.professional_id ?? null,
+          last_message_at: resetResult.conversation.last_message_at,
+          bot_paused: resetResult.conversation.bot_paused,
+          archived_at: resetResult.conversation.archived_at,
+          archive_reason: resetResult.conversation.archive_reason,
+        },
+      });
+
+      const message = resetResult.systemMessage;
+      broadcast({
+        type: 'message:new',
+        payload: {
+          id: message.id,
+          conversation_id: resetResult.conversation.id,
+          role: message.role,
+          content: message.content,
+          tool_calls: message.tool_calls ?? null,
+          tool_call_id: message.tool_call_id ?? null,
+          created_at: message.created_at,
+          company_id: resetResult.conversation.company_id,
+        },
+      });
+
+      try {
+        const messageKey = data.key?.id && data.key?.remoteJid
+          ? {
+              id: data.key.id as string,
+              remoteJid: data.key.remoteJid as string,
+              fromMe: Boolean(data.key.fromMe),
+            }
+          : null;
+        if (messageKey) {
+          await evolution.sendReaction(instanceName, messageKey, '✅');
+        }
+      } catch (err) {
+        logger.error(`Failed to react to reset command for ${phone}:`, err);
+      }
+      return;
+    }
+
+    // Save user message
+    const messageResult = await pool.query<{ id: string; created_at: string }>(
+      `INSERT INTO messages (conversation_id, role, content)
+       VALUES ($1, 'user', $2)
+       RETURNING id, created_at`,
+      [conversation.id, messageText]
+    );
+
+    // Broadcast conversation update and new message via WebSocket
     broadcast({
       type: 'conversation:updated',
       payload: {
-        id: resetResult.conversation.id,
-        company_id: resetResult.conversation.company_id,
-        instance_id: resetResult.conversation.instance_id,
-        professional_id: resetResult.conversation.professional_id ?? null,
-        last_message_at: resetResult.conversation.last_message_at,
-        bot_paused: resetResult.conversation.bot_paused,
-        archived_at: resetResult.conversation.archived_at,
-        archive_reason: resetResult.conversation.archive_reason,
-      },
-    });
-
-    const message = resetResult.systemMessage;
-    broadcast({
-      type: 'message:new',
-      payload: {
-        id: message.id,
-        conversation_id: resetResult.conversation.id,
-        role: message.role,
-        content: message.content,
-        tool_calls: message.tool_calls ?? null,
-        tool_call_id: message.tool_call_id ?? null,
-        created_at: message.created_at,
-        company_id: resetResult.conversation.company_id,
-      },
-    });
-
-    try {
-      const messageKey = data.key?.id && data.key?.remoteJid
-        ? {
-            id: data.key.id as string,
-            remoteJid: data.key.remoteJid as string,
-            fromMe: Boolean(data.key.fromMe),
-          }
-        : null;
-      if (messageKey) {
-        await evolution.sendReaction(instanceName, messageKey, '✅');
-      }
-    } catch (err) {
-      logger.error(`Failed to react to reset command for ${phone}:`, err);
-    }
-    return;
-  }
-
-  // Save user message
-  const messageResult = await pool.query<{ id: string; created_at: string }>(
-    `INSERT INTO messages (conversation_id, role, content)
-     VALUES ($1, 'user', $2)
-     RETURNING id, created_at`,
-    [conversation.id, messageText]
-  );
-
-  // Broadcast conversation update and new message via WebSocket
-  broadcast({
-    type: 'conversation:updated',
-    payload: {
-      id: conversation.id,
-      company_id: conversation.company_id,
-      instance_id: conversation.instance_id,
-      professional_id: conversation.professional_id ?? null,
-      last_message_at: conversation.last_message_at,
-      bot_paused: conversation.bot_paused,
-      archived_at: conversation.archived_at,
-      archive_reason: conversation.archive_reason,
-    },
-  });
-
-  if (messageResult.rows[0]) {
-    broadcast({
-      type: 'message:new',
-      payload: {
-        id: messageResult.rows[0].id,
-        conversation_id: conversation.id,
-        role: 'user',
-        content: messageText,
-        tool_calls: null,
-        tool_call_id: null,
-        created_at: messageResult.rows[0].created_at,
+        id: conversation.id,
         company_id: conversation.company_id,
+        instance_id: conversation.instance_id,
+        professional_id: conversation.professional_id ?? null,
+        last_message_at: conversation.last_message_at,
+        bot_paused: conversation.bot_paused,
+        archived_at: conversation.archived_at,
+        archive_reason: conversation.archive_reason,
       },
     });
-  }
 
-  if (conversation.bot_paused) {
-    logger.info(`Conversation ${conversation.id} is paused; skipping bot response`);
-    return;
-  }
+    if (messageResult.rows[0]) {
+      broadcast({
+        type: 'message:new',
+        payload: {
+          id: messageResult.rows[0].id,
+          conversation_id: conversation.id,
+          role: 'user',
+          content: messageText,
+          tool_calls: null,
+          tool_call_id: null,
+          created_at: messageResult.rows[0].created_at,
+          company_id: conversation.company_id,
+        },
+      });
+    }
 
-  // Handle incoming message with agent
-  await handleIncomingMessage(conversation.id, instanceName, messageText);
+    if (conversation.bot_paused) {
+      logger.info(`Conversation ${conversation.id} is paused; skipping bot response`);
+      return;
+    }
+
+    // Handle incoming message with agent
+    await handleIncomingMessage(conversation.id, instanceName, messageText);
+  });
 }
 
 export async function handleConnectionUpdate(body: EvolutionWebhookBody) {
