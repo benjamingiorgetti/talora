@@ -48,6 +48,10 @@ _(vacío — nada en progreso activo)_
   - Resultado esperado: el registro canónico de tools core funciona en conversación real y las tools custom siguen editables sin romper contratos internos.
   - Criterio de cierre: prueba manual de alta/edición/desactivación de tools core y custom sobre una empresa demo, con evidencia de que el runtime usa las core desde código.
 
+- [ ] `UX-1 · QA calendar toolbar en mobile con 4+ profesionales`
+  - Resultado esperado: validar que el toolbar compacto (week nav + filter pills) se comporta bien en pantallas chicas cuando hay muchos profesionales.
+  - Criterio de cierre: probado en viewport 375px con 4+ pills, sin overflow horizontal ni superposición con la navegación de semana.
+
 - [ ] `ARCH-6 · Definir estrategia para historial sin trazas`
   - Resultado esperado: las conversaciones viejas sin `agent_message_traces` tienen una política clara de compatibilidad.
   - Criterio de cierre: decisión explícita entre dejar estado degradado permanente, backfill parcial o reconstrucción limitada; UI y backend alineados con esa decisión.
