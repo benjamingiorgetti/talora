@@ -141,12 +141,10 @@ export function PromptEditorTab() {
                     value={localPrompt}
                     onChange={(e) => setLocalPrompt(e.target.value)}
                     onScroll={handleScroll}
-                    className="relative w-full h-full p-4 font-mono text-sm leading-relaxed resize-none bg-transparent outline-none whitespace-pre-wrap break-words"
+                    className="absolute inset-0 w-full h-full p-4 font-mono text-sm leading-relaxed resize-none bg-transparent outline-none whitespace-pre-wrap break-words"
                     style={{
                       color: "transparent",
                       caretColor: "hsl(var(--foreground))",
-                      minHeight: "500px",
-                      height: "calc(100vh - 280px)",
                     }}
                     spellCheck={false}
                     placeholder="Escribi tu prompt aca... Usa {{variables}} para insertar valores dinamicos."
