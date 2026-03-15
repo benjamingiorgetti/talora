@@ -155,14 +155,36 @@ describe('checkSlot', () => {
     expect((result.suggestions ?? []).length).toBeLessThanOrEqual(3);
   });
 
-  it('should propagate Google API errors without swallowing them', async () => {
+  it('should return structured error instead of throwing on Google API errors', async () => {
     mockFreebusyQuery.mockImplementation(() =>
       Promise.reject(new Error('Google API unavailable'))
     );
 
-    await expect(checkSlot(FIXED_DATE, DURATION)).rejects.toThrow(
-      'Google API unavailable'
+    const result = await checkSlot(FIXED_DATE, DURATION);
+    expect(result.available).toBe(false);
+    expect(result.error).toBeDefined();
+  });
+
+  it('should return structured error (not throw) for unauthorized_client', async () => {
+    mockFreebusyQuery.mockImplementation(() =>
+      Promise.reject(new Error('unauthorized_client'))
     );
+    const result = await checkSlot(FIXED_DATE, DURATION);
+    expect(result.available).toBe(false);
+    expect(result.error).toBeDefined();
+    expect(result.error).toMatch(/credenciales/i);
+  });
+
+  it('should return structured error for network failure', async () => {
+    mockFreebusyQuery.mockImplementation(() =>
+      Promise.reject(
+        Object.assign(new Error('connect ECONNREFUSED'), { code: 'ECONNREFUSED' })
+      )
+    );
+    const result = await checkSlot(FIXED_DATE, DURATION);
+    expect(result.available).toBe(false);
+    expect(result.error).toBeDefined();
+    expect(result.error).toMatch(/conectar/i);
   });
 });
 
@@ -208,6 +230,16 @@ describe('bookSlot', () => {
     expect(result.error).toBe('Slot not available');
     expect(Array.isArray(result.suggestions)).toBe(true);
     expect(mockEventsInsert).not.toHaveBeenCalled();
+  });
+
+  it('should propagate calendar error instead of hardcoded "Slot not available"', async () => {
+    mockFreebusyQuery.mockImplementation(() =>
+      Promise.reject(new Error('unauthorized_client'))
+    );
+    const result = await bookSlot('Test', FIXED_DATE, DURATION, 'desc');
+    expect(result.success).toBe(false);
+    expect(result.error).not.toBe('Slot not available');
+    expect(result.error).toMatch(/credenciales/i);
   });
 
   it('should serialize concurrent bookings on the same slot via the in-memory lock', async () => {
@@ -259,6 +291,16 @@ describe('createEvent', () => {
 
     expect(payload.requestBody.start.dateTime).toBe(expectedStart);
     expect(payload.requestBody.end.dateTime).toBe(expectedEnd);
+  });
+
+  it('should return structured error for unauthorized_client', async () => {
+    mockEventsInsert.mockImplementation(() =>
+      Promise.reject(new Error('unauthorized_client'))
+    );
+    const result = await createEvent('Test', FIXED_DATE, DURATION, 'desc');
+    expect(result.success).toBe(false);
+    expect(result.error).toBeDefined();
+    expect(result.error).toMatch(/credenciales/i);
   });
 
   it('should pass the correct custom calendarId to events.insert', async () => {
@@ -318,6 +360,15 @@ describe('deleteEvent', () => {
     expect(typeof result.error).toBe('string');
     expect(result.error).toMatch(/permission/i);
   });
+
+  it('should return structured error when getCalendarClient throws', async () => {
+    mockEventsDelete.mockImplementation(() =>
+      Promise.reject(new Error('unauthorized_client'))
+    );
+    const result = await deleteEvent('evt-auth-fail');
+    expect(result.success).toBe(false);
+    expect(result.error).toBeDefined();
+  });
 });
 
 // ---------------------------------------------------------------------------
@@ -343,6 +394,15 @@ describe('updateEvent', () => {
     expect(result.success).toBe(false);
     expect(typeof result.error).toBe('string');
   });
+
+  it('should return structured error when getCalendarClient throws', async () => {
+    mockEventsPatch.mockImplementation(() =>
+      Promise.reject(new Error('unauthorized_client'))
+    );
+    const result = await updateEvent('evt-auth-fail', FIXED_DATE, DURATION);
+    expect(result.success).toBe(false);
+    expect(result.error).toBeDefined();
+  });
 });
 
 // ---------------------------------------------------------------------------
@@ -353,8 +413,8 @@ describe('listEvents', () => {
   it('should return an empty array when the calendar has no events', async () => {
     const result = await listEvents(FIXED_DATE, '2025-06-15T18:00:00.000Z');
 
-    expect(Array.isArray(result)).toBe(true);
-    expect(result).toHaveLength(0);
+    expect(Array.isArray(result.events)).toBe(true);
+    expect(result.events).toHaveLength(0);
   });
 
   it('should map calendar items to the expected shape', async () => {
@@ -379,8 +439,8 @@ describe('listEvents', () => {
 
     const result = await listEvents(startTime, endTime);
 
-    expect(result).toHaveLength(1);
-    const [event] = result;
+    expect(result.events).toHaveLength(1);
+    const [event] = result.events;
     expect(event.id).toBe('evt-mapped-1');
     expect(event.summary).toBe('Mapped Event');
     expect(event.description).toBe('Event description');
@@ -424,7 +484,17 @@ describe('listEvents', () => {
       '2025-06-15T14:00:00.000Z'
     );
 
-    expect(result).toHaveLength(1);
-    expect(result[0].id).toBe('evt-valid');
+    expect(result.events).toHaveLength(1);
+    expect(result.events[0].id).toBe('evt-valid');
+  });
+
+  it('should return { events: [], error } on Google API error', async () => {
+    mockEventsList.mockImplementation(() =>
+      Promise.reject(new Error('unauthorized_client'))
+    );
+    const result = await listEvents(FIXED_DATE, '2025-06-15T18:00:00.000Z');
+    expect(result.events).toEqual([]);
+    expect(result.error).toBeDefined();
+    expect(result.error).toMatch(/credenciales/i);
   });
 });

@@ -36,6 +36,20 @@ _(vacío — nada en progreso activo)_
   - Resultado esperado: las conversaciones viejas sin `agent_message_traces` tienen una política clara de compatibilidad.
   - Criterio de cierre: decisión explícita entre dejar estado degradado permanente, backfill parcial o reconstrucción limitada; UI y backend alineados con esa decisión.
 
+- [ ] `QA-CAL · Testing end-to-end de tools de Google Calendar`
+  - Resultado esperado: las tools del agente conversacional que interactúan con Google Calendar funcionan correctamente en todos los escenarios reales.
+  - Casos a probar:
+    - [ ] **Check & Book base**: ¿la tool se ejecuta bien? ¿se crea el evento en Google Calendar?
+    - [ ] **Conflicto de horario**: ¿qué pasa si quiero reservar un turno a una hora que ya está ocupada?
+    - [ ] **Eliminación de turno**: ¿qué pasa si quiero eliminar un turno existente?
+    - [ ] **Reprogramación de turno**: ¿qué pasa si quiero reprogramar un turno a otro horario?
+  - Criterio de cierre: los 4 escenarios probados manualmente con resultado documentado (funciona / falla / no implementado).
+
+- [ ] `TOOL-1 · Wiring google_calendar_list como tool del agente`
+  - Resultado esperado: el agente conversacional puede listar eventos de Google Calendar para mostrar agenda al cliente.
+  - Contexto: `listEvents` ya existe en `calendar/operations.ts` y está testeada, pero no está registrada como tool. Requiere: registrar en `core-tool-registry.ts`, agregar case en `tool-executor.ts`, añadir a `CALENDAR_TOOLS` en `index.ts`. Definir parámetros (date range, professional), si necesita `resolveOrFail`, y defaults de rango.
+  - Criterio de cierre: tool registrada, case implementado, test en orchestration.
+
 - [ ] `SEO-1 · Completar manifest.ts y JSON-LD structured data`
   - Qué ya existe: `sitemap.ts` y `robots.ts` funcionando.
   - Qué falta: `apps/frontend/src/app/manifest.ts` para PWA install y `apps/frontend/src/components/seo/json-ld.tsx` para rich results en search.

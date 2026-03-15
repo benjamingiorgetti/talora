@@ -1,4 +1,5 @@
 import { getCalendarClient } from './client';
+import { classifyGoogleError } from './errors';
 import { config } from '../config';
 import { logger } from '../utils/logger';
 
@@ -40,7 +41,7 @@ export async function bookSlot(
     if (!availability.available) {
       return {
         success: false,
-        error: 'Slot not available',
+        error: availability.error ?? 'Slot not available',
         suggestions: availability.suggestions,
       };
     }
@@ -60,62 +61,68 @@ export async function checkSlot(
   durationMinutes: number,
   calendarId = DEFAULT_CALENDAR_ID,
   professionalId?: string | null
-): Promise<{ available: boolean; suggestions?: string[] }> {
-  const calendar = await getCalendarClient(professionalId);
+): Promise<{ available: boolean; suggestions?: string[]; error?: string }> {
+  try {
+    const calendar = await getCalendarClient(professionalId);
 
-  const start = new Date(date);
-  const end = new Date(start.getTime() + durationMinutes * 60 * 1000);
+    const start = new Date(date);
+    const end = new Date(start.getTime() + durationMinutes * 60 * 1000);
 
-  // toISOString() already produces UTC strings, so no timeZone hint needed
-  const freeBusyResponse = await calendar.freebusy.query({
-    requestBody: {
-      timeMin: start.toISOString(),
-      timeMax: end.toISOString(),
-      items: [{ id: calendarId }],
-    },
-  });
-
-  const busySlots = freeBusyResponse.data.calendars?.[calendarId]?.busy || [];
-  const isAvailable = busySlots.length === 0;
-
-  if (isAvailable) {
-    return { available: true };
-  }
-
-  // Find 3 nearby free slots
-  const suggestions: string[] = [];
-  const searchStart = new Date(start.getTime() - 3 * 60 * 60 * 1000); // 3 hours before
-  const searchEnd = new Date(start.getTime() + 6 * 60 * 60 * 1000); // 6 hours after
-
-  const extendedFreeBusy = await calendar.freebusy.query({
-    requestBody: {
-      timeMin: searchStart.toISOString(),
-      timeMax: searchEnd.toISOString(),
-      items: [{ id: calendarId }],
-    },
-  });
-
-  const allBusy = extendedFreeBusy.data.calendars?.[calendarId]?.busy || [];
-
-  // Check each 30-minute slot
-  let candidateTime = new Date(searchStart);
-  while (suggestions.length < 3 && candidateTime < searchEnd) {
-    const candidateEnd = new Date(candidateTime.getTime() + durationMinutes * 60 * 1000);
-
-    const conflicts = allBusy.some((busy) => {
-      const busyStart = new Date(busy.start!);
-      const busyEnd = new Date(busy.end!);
-      return candidateTime < busyEnd && candidateEnd > busyStart;
+    // toISOString() already produces UTC strings, so no timeZone hint needed
+    const freeBusyResponse = await calendar.freebusy.query({
+      requestBody: {
+        timeMin: start.toISOString(),
+        timeMax: end.toISOString(),
+        items: [{ id: calendarId }],
+      },
     });
 
-    if (!conflicts && candidateTime.getTime() !== start.getTime()) {
-      suggestions.push(candidateTime.toISOString());
+    const busySlots = freeBusyResponse.data.calendars?.[calendarId]?.busy || [];
+    const isAvailable = busySlots.length === 0;
+
+    if (isAvailable) {
+      return { available: true };
     }
 
-    candidateTime = new Date(candidateTime.getTime() + 30 * 60 * 1000);
-  }
+    // Find 3 nearby free slots
+    const suggestions: string[] = [];
+    const searchStart = new Date(start.getTime() - 3 * 60 * 60 * 1000); // 3 hours before
+    const searchEnd = new Date(start.getTime() + 6 * 60 * 60 * 1000); // 6 hours after
 
-  return { available: false, suggestions };
+    const extendedFreeBusy = await calendar.freebusy.query({
+      requestBody: {
+        timeMin: searchStart.toISOString(),
+        timeMax: searchEnd.toISOString(),
+        items: [{ id: calendarId }],
+      },
+    });
+
+    const allBusy = extendedFreeBusy.data.calendars?.[calendarId]?.busy || [];
+
+    // Check each 30-minute slot
+    let candidateTime = new Date(searchStart);
+    while (suggestions.length < 3 && candidateTime < searchEnd) {
+      const candidateEnd = new Date(candidateTime.getTime() + durationMinutes * 60 * 1000);
+
+      const conflicts = allBusy.some((busy) => {
+        const busyStart = new Date(busy.start!);
+        const busyEnd = new Date(busy.end!);
+        return candidateTime < busyEnd && candidateEnd > busyStart;
+      });
+
+      if (!conflicts && candidateTime.getTime() !== start.getTime()) {
+        suggestions.push(candidateTime.toISOString());
+      }
+
+      candidateTime = new Date(candidateTime.getTime() + 30 * 60 * 1000);
+    }
+
+    return { available: false, suggestions };
+  } catch (err) {
+    const info = classifyGoogleError(err);
+    logger.error(`checkSlot: Google Calendar error [${info.code}]:`, err);
+    return { available: false, error: info.message };
+  }
 }
 
 export async function createEvent(
@@ -125,28 +132,34 @@ export async function createEvent(
   description: string,
   calendarId = DEFAULT_CALENDAR_ID,
   professionalId?: string | null
-): Promise<{ success: boolean; eventId?: string }> {
-  const calendar = await getCalendarClient(professionalId);
+): Promise<{ success: boolean; eventId?: string; error?: string }> {
+  try {
+    const calendar = await getCalendarClient(professionalId);
 
-  const start = new Date(date);
-  const end = new Date(start.getTime() + durationMinutes * 60 * 1000);
+    const start = new Date(date);
+    const end = new Date(start.getTime() + durationMinutes * 60 * 1000);
 
-  const event = await calendar.events.insert({
-    calendarId,
-    requestBody: {
-      summary: name,
-      description,
-      // UTC ISO strings — no timeZone hint needed
-      start: {
-        dateTime: start.toISOString(),
+    const event = await calendar.events.insert({
+      calendarId,
+      requestBody: {
+        summary: name,
+        description,
+        // UTC ISO strings — no timeZone hint needed
+        start: {
+          dateTime: start.toISOString(),
+        },
+        end: {
+          dateTime: end.toISOString(),
+        },
       },
-      end: {
-        dateTime: end.toISOString(),
-      },
-    },
-  });
+    });
 
-  return { success: true, eventId: event.data.id || undefined };
+    return { success: true, eventId: event.data.id || undefined };
+  } catch (err) {
+    const info = classifyGoogleError(err);
+    logger.error(`createEvent: Google Calendar error [${info.code}]:`, err);
+    return { success: false, error: info.message };
+  }
 }
 
 export async function deleteEvent(
@@ -154,26 +167,23 @@ export async function deleteEvent(
   calendarId = DEFAULT_CALENDAR_ID,
   professionalId?: string | null
 ): Promise<{ success: boolean; error?: string }> {
-  const calendar = await getCalendarClient(professionalId);
-
   try {
-    await calendar.events.delete({
-      calendarId,
-      eventId,
-    });
+    const calendar = await getCalendarClient(professionalId);
+    await calendar.events.delete({ calendarId, eventId });
     return { success: true };
   } catch (err: unknown) {
     const status = (err as { code?: number }).code;
     if (status === 404) {
       logger.warn(`deleteEvent: event ${eventId} already deleted (404)`);
-      return { success: true }; // Idempotent — already gone
+      return { success: true };
     }
     if (status === 403) {
       logger.error(`deleteEvent: no permission to delete event ${eventId} (403)`);
       return { success: false, error: 'No permission to delete this event' };
     }
-    logger.error(`deleteEvent: unexpected error for event ${eventId}:`, err);
-    return { success: false, error: 'Failed to delete event' };
+    const info = classifyGoogleError(err);
+    logger.error(`deleteEvent: Google Calendar error [${info.code}] for event ${eventId}:`, err);
+    return { success: false, error: info.message };
   }
 }
 
@@ -186,11 +196,10 @@ export async function updateEvent(
   summary?: string,
   description?: string
 ): Promise<{ success: boolean; error?: string }> {
-  const calendar = await getCalendarClient(professionalId);
-  const start = new Date(date);
-  const end = new Date(start.getTime() + durationMinutes * 60 * 1000);
-
   try {
+    const calendar = await getCalendarClient(professionalId);
+    const start = new Date(date);
+    const end = new Date(start.getTime() + durationMinutes * 60 * 1000);
     await calendar.events.patch({
       calendarId,
       eventId,
@@ -203,8 +212,9 @@ export async function updateEvent(
     });
     return { success: true };
   } catch (err) {
-    logger.error(`updateEvent: unexpected error for event ${eventId}:`, err);
-    return { success: false, error: 'Failed to update event' };
+    const info = classifyGoogleError(err);
+    logger.error(`updateEvent: Google Calendar error [${info.code}] for event ${eventId}:`, err);
+    return { success: false, error: info.message };
   }
 }
 
@@ -213,23 +223,31 @@ export async function listEvents(
   end: string,
   calendarId = DEFAULT_CALENDAR_ID,
   professionalId?: string | null
-): Promise<Array<{ id: string; summary: string; description: string; starts_at: string; ends_at: string }>> {
-  const calendar = await getCalendarClient(professionalId);
-  const result = await calendar.events.list({
-    calendarId,
-    timeMin: new Date(start).toISOString(),
-    timeMax: new Date(end).toISOString(),
-    singleEvents: true,
-    orderBy: 'startTime',
-  });
+): Promise<{ events: Array<{ id: string; summary: string; description: string; starts_at: string; ends_at: string }>; error?: string }> {
+  try {
+    const calendar = await getCalendarClient(professionalId);
+    const result = await calendar.events.list({
+      calendarId,
+      timeMin: new Date(start).toISOString(),
+      timeMax: new Date(end).toISOString(),
+      singleEvents: true,
+      orderBy: 'startTime',
+    });
 
-  return (result.data.items ?? [])
-    .filter((item) => item.id && item.start?.dateTime && item.end?.dateTime)
-    .map((item) => ({
-      id: item.id!,
-      summary: item.summary ?? '',
-      description: item.description ?? '',
-      starts_at: item.start!.dateTime!,
-      ends_at: item.end!.dateTime!,
-    }));
+    const events = (result.data.items ?? [])
+      .filter((item) => item.id && item.start?.dateTime && item.end?.dateTime)
+      .map((item) => ({
+        id: item.id!,
+        summary: item.summary ?? '',
+        description: item.description ?? '',
+        starts_at: item.start!.dateTime!,
+        ends_at: item.end!.dateTime!,
+      }));
+
+    return { events };
+  } catch (err) {
+    const info = classifyGoogleError(err);
+    logger.error(`listEvents: Google Calendar error [${info.code}]:`, err);
+    return { events: [], error: info.message };
+  }
 }
