@@ -16,11 +16,6 @@ Use `CLAUDE.md` for project memory. This file defines how an agent should work i
 - Before running the app, verify env files exist and required values are populated.
 - **Bug fixes must start with a test.** Write a failing test that reproduces the bug, then fix it and prove the test passes. If no test harness exists for that area, state the gap explicitly.
 - When debugging, check in this order: env vars, service health, logs, then code.
-- Parallelize only when the scope justifies it:
-  - Frontend only: 1 agent
-  - Backend only: 1 agent
-  - Confirmed full-stack: up to 2 agents
-  - Unclear scope: 1 explorer first
 - Default to planning for work that touches 3 or more files.
 
 ## Codebase Rules
