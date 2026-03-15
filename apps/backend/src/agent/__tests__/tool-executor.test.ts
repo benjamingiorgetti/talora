@@ -446,6 +446,122 @@ describe('professional resolution: tools resolve from hints when contextProfessi
   });
 });
 
+// ──────────────────────────────────────────────────────────
+// Timezone: starts_at must be normalized to ISO UTC before INSERT
+// ──────────────────────────────────────────────────────────
+
+describe('timezone: starts_at normalization', () => {
+  beforeEach(() => mockQuery.mockReset());
+
+  it('google_calendar_book normalizes timezone-naive date to UTC ISO for starts_at', async () => {
+    const juliProf = fakeProfessional(PROF_A);
+    juliProf.name = 'Juli';
+    const corteService = {
+      id: 'svc-corte',
+      company_id: COMPANY_A,
+      name: 'Corte',
+      duration_minutes: 20,
+      professional_id: PROF_A,
+      is_active: true,
+      aliases: [],
+      price: 0,
+      created_at: '2026-01-01',
+      updated_at: '2026-01-01',
+    };
+
+    setupQueryMock([
+      ['FROM professionals', [juliProf]],
+      ['FROM services', [corteService]],
+      ['UPDATE conversations SET professional_id', []],
+      ['INSERT INTO appointments', [{ id: 'appt-new' }]],
+      ['FROM agents WHERE', [{ id: 'agent-1' }]],
+      ['INSERT INTO clients', [{ id: 'client-1' }]],
+    ]);
+
+    await executeTool(
+      'google_calendar_book',
+      {
+        date: '2026-03-16T15:00:00',  // No Z suffix — timezone-naive
+        name: 'Benjamin',
+        professionalName: 'Juli',
+        serviceName: 'corte',
+      },
+      makeContext({ professionalId: null })
+    );
+
+    // Find the INSERT INTO appointments call
+    const calls = mockQuery.mock.calls as unknown[][];
+    const insertCall = calls.find(
+      (call) => typeof call[0] === 'string' && (call[0] as string).includes('INSERT INTO appointments')
+    );
+    expect(insertCall).toBeDefined();
+
+    const params = insertCall![1] as string[];
+    const startsAt = params[8];  // $9 = starts_at
+    const endsAt = params[9];    // $10 = ends_at
+
+    // Both must be proper ISO UTC strings ending with Z
+    expect(startsAt).toMatch(/Z$/);
+    expect(endsAt).toMatch(/Z$/);
+
+    // Duration should be exactly 20 minutes (service duration)
+    const durationMs = new Date(endsAt).getTime() - new Date(startsAt).getTime();
+    expect(durationMs).toBe(20 * 60 * 1000);
+  });
+
+  it('google_calendar_reprogram normalizes timezone-naive date to UTC ISO for starts_at', async () => {
+    const juliProf = fakeProfessional(PROF_A);
+    juliProf.name = 'Juli';
+    const appt = fakeAppointment(PROF_A);
+    const corteService = {
+      id: 'svc-corte',
+      company_id: COMPANY_A,
+      name: 'Corte',
+      duration_minutes: 20,
+      professional_id: PROF_A,
+      is_active: true,
+      aliases: [],
+    };
+
+    setupQueryMock([
+      ['FROM professionals', [juliProf]],
+      ['FROM services', [corteService]],
+      ['UPDATE conversations SET professional_id', []],
+      ['FROM appointments WHERE', [appt]],
+      ['UPDATE appointments', []],
+    ]);
+
+    await executeTool(
+      'google_calendar_reprogram',
+      {
+        appointmentId: APPT_ID,
+        startsAt: '2026-03-17T15:00:00',  // No Z suffix
+        professionalName: 'Juli',
+        serviceName: 'corte',
+      },
+      makeContext({ professionalId: null })
+    );
+
+    // Find the UPDATE appointments call
+    const calls = mockQuery.mock.calls as unknown[][];
+    const updateCall = calls.find(
+      (call) => typeof call[0] === 'string' && (call[0] as string).includes('UPDATE appointments')
+      && (call[0] as string).includes('starts_at')
+    );
+    expect(updateCall).toBeDefined();
+
+    const params = updateCall![1] as string[];
+    const startsAtParam = params[2];  // $3 = starts_at
+    const endsAtParam = params[3];    // $4 = ends_at
+
+    expect(startsAtParam).toMatch(/Z$/);
+    expect(endsAtParam).toMatch(/Z$/);
+
+    const durationMs = new Date(endsAtParam).getTime() - new Date(startsAtParam).getTime();
+    expect(durationMs).toBe(20 * 60 * 1000);
+  });
+});
+
 describe('resolveAppointmentByReference: SQL contains professional_id filter', () => {
   beforeEach(() => mockQuery.mockReset());
 
