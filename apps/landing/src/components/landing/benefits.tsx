@@ -5,7 +5,7 @@ import { MessageCircle, Bot, CalendarDays, Users } from "lucide-react";
 import { SectionWrapper } from "@/components/shared/section-wrapper";
 import { FadeIn } from "@/components/shared/fade-in";
 import { benefits } from "@/lib/content";
-import { slideFromLeft, slideFromRightSpring, staggerContainer } from "@/lib/animations";
+import { fadeUp, staggerContainer } from "@/lib/animations";
 
 // ─── Mini Mockups ────────────────────────────────────────────────────────────
 
@@ -132,7 +132,7 @@ function ProfessionalsMiniMockup() {
 function CardWhatsApp({ title, description }: { title: string; description: string }) {
   return (
     <motion.div
-      variants={slideFromLeft}
+      variants={fadeUp}
       className="group relative overflow-hidden rounded-2xl border-l-4 border-[#25D366]/60 bg-gradient-to-br from-[#F0FFF4]/70 to-white border border-[#E2E4EC]/40 shadow-sm transition-all duration-200 card-interactive"
     >
       <div className="relative px-5 pt-5 pb-0 sm:px-6 sm:pt-6">
@@ -160,7 +160,7 @@ function CardWhatsApp({ title, description }: { title: string; description: stri
 function CardAgent({ title, description }: { title: string; description: string }) {
   return (
     <motion.div
-      variants={slideFromRightSpring}
+      variants={fadeUp}
       className="group relative overflow-hidden rounded-2xl bg-gradient-to-br from-sky-50/70 to-white border border-[#E2E4EC]/40 shadow-sm transition-all duration-200 card-interactive"
     >
       <div className="relative p-5 sm:p-6 md:p-8 flex flex-col h-full">
@@ -196,7 +196,7 @@ function CardAgent({ title, description }: { title: string; description: string 
 function CardCalendar({ title, description }: { title: string; description: string }) {
   return (
     <motion.div
-      variants={slideFromLeft}
+      variants={fadeUp}
       className="group relative overflow-hidden rounded-2xl bg-white border border-[#E2E4EC]/60 shadow-sm transition-all duration-200 card-interactive"
       style={{
         backgroundImage:
@@ -240,7 +240,7 @@ function CardProfessionals({ title, description }: { title: string; description:
 
   return (
     <motion.div
-      variants={slideFromRightSpring}
+      variants={fadeUp}
       className="group relative overflow-hidden rounded-2xl bg-gradient-to-br from-lilac/20 to-white border border-[#E2E4EC]/60 shadow-sm p-5 sm:p-6 md:p-8 transition-all duration-200 card-interactive"
     >
       <div className="flex items-center mb-5">

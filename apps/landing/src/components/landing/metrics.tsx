@@ -77,7 +77,7 @@ export function Metrics() {
           <motion.div
             key={stat.label}
             variants={fadeUp}
-            className="flex flex-col items-center rounded-2xl bg-white/60 backdrop-blur-xl border border-white/70 shadow-lg shadow-black/[0.04] px-3 py-4 sm:px-4 sm:py-6 text-center"
+            className="flex flex-col items-center rounded-2xl bg-white/90 md:bg-white/60 md:backdrop-blur-xl border border-white/70 shadow-lg shadow-black/[0.04] px-3 py-4 sm:px-4 sm:py-6 text-center"
           >
             <span className="text-2xl sm:text-3xl md:text-4xl font-bold tracking-tight text-ink">
               <TypewriterValue value={stat.value} inView={isInView} />
@@ -104,7 +104,7 @@ export function Metrics() {
               key={niche.name}
               variants={fadeUp}
               whileHover={{ scale: 1.05 }}
-              className="flex items-center gap-2 rounded-full bg-white/50 backdrop-blur-lg border border-white/60 shadow-sm px-3 py-1.5 sm:px-4 sm:py-2 transition-shadow duration-200 hover:shadow-md cursor-default"
+              className="flex items-center gap-2 rounded-full bg-white/80 md:bg-white/50 md:backdrop-blur-lg border border-white/60 shadow-sm px-3 py-1.5 sm:px-4 sm:py-2 transition-shadow duration-200 hover:shadow-md cursor-default"
             >
               <Icon size={16} className="text-ink/70 shrink-0" />
               <span className="text-xs sm:text-sm font-medium text-ink">{niche.name}</span>

@@ -57,7 +57,7 @@ export function Navbar() {
       {/* Fixed wrapper — no bg/border here; those live on the inner pill */}
       <header
         className={cn(
-          "fixed top-0 inset-x-0 z-50 transition-transform duration-500 ease-[cubic-bezier(0.4,0,0.2,1)]",
+          "fixed top-0 inset-x-0 z-50 transition-transform duration-300 ease-[cubic-bezier(0.4,0,0.2,1)]",
           hidden ? "-translate-y-[150%]" : "translate-y-0"
         )}
       >
@@ -68,10 +68,10 @@ export function Navbar() {
         */}
         <div
           className={cn(
-            "transition-all duration-500 ease-[cubic-bezier(0.4,0,0.2,1)]",
+            "transition-all duration-300 ease-[cubic-bezier(0.4,0,0.2,1)]",
             scrolled
-              ? // Pill state
-                "mx-auto max-w-[620px] mt-3 rounded-full h-12 px-6 backdrop-blur-xl bg-white/85 shadow-lg border border-white/60"
+              ? // Pill state — no backdrop-blur on mobile (causes flicker on iOS Safari)
+                "mx-auto max-w-[620px] mt-3 rounded-full h-12 px-6 bg-white/95 md:backdrop-blur-xl md:bg-white/85 shadow-lg border border-white/60"
               : // Full-width transparent state
                 "mx-auto max-w-[1200px] h-16 px-4 sm:px-6"
           )}
@@ -91,7 +91,7 @@ export function Navbar() {
                 width={26}
                 height={26}
                 className={cn(
-                  "transition-all duration-500",
+                  "transition-all duration-300",
                   scrolled ? "block" : "block sm:hidden"
                 )}
               />
@@ -100,7 +100,7 @@ export function Navbar() {
                 alt="Talora"
                 height={30}
                 className={cn(
-                  "h-8 w-auto transition-all duration-500",
+                  "h-8 w-auto transition-all duration-300",
                   scrolled ? "hidden" : "hidden sm:block"
                 )}
               />
@@ -142,7 +142,7 @@ export function Navbar() {
               <Button
                 size="sm"
                 className={cn(
-                  "animate-subtle-pulse transition-all duration-500",
+                  "animate-subtle-pulse transition-all duration-300",
                   scrolled && "h-8 text-xs px-4"
                 )}
                 asChild
@@ -173,7 +173,7 @@ export function Navbar() {
               className={cn(
                 "md:hidden overflow-hidden mt-2",
                 scrolled
-                  ? "mx-auto max-w-[620px] rounded-2xl backdrop-blur-xl bg-white/90 border border-white/60"
+                  ? "mx-auto max-w-[620px] rounded-2xl bg-white border border-white/60"
                   : "mx-4 rounded-2xl bg-white border border-[#E2E4EC]/60 shadow-lg"
               )}
               style={{
