@@ -7,7 +7,9 @@
     "start": "bun src/index.ts",
     "migrate": "bun src/db/migrate.ts",
     "typecheck": "tsc --noEmit",
-    "test": "DATABASE_URL=postgresql://test:test@localhost/test JWT_SECRET=test-secret ADMIN_EMAIL=test@test.com ADMIN_PASSWORD=test EVOLUTION_API_URL=http://localhost:8080 EVOLUTION_API_KEY=test-key bun test"
+    "test": "bash run-tests.sh",
+    "test:single": "DATABASE_URL=postgresql://test:test@localhost/test JWT_SECRET=test-secret ADMIN_EMAIL=test@test.com ADMIN_PASSWORD=test EVOLUTION_API_URL=http://localhost:8080 EVOLUTION_API_KEY=test-key bun test",
+    "test:coverage": "DATABASE_URL=postgresql://test:test@localhost/test JWT_SECRET=test-secret ADMIN_EMAIL=test@test.com ADMIN_PASSWORD=test EVOLUTION_API_URL=http://localhost:8080 EVOLUTION_API_KEY=test-key bun test --coverage"
   },
   "dependencies": {
     "@talora/shared": "workspace:*",

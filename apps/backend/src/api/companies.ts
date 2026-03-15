@@ -62,6 +62,25 @@ companiesRouter.get('/current', authMiddleware, requireCompanyScope, async (req,
   }
 });
 
+companiesRouter.put('/current/bot', authMiddleware, requireSuperadmin, requireCompanyScope, async (req, res) => {
+  try {
+    const companyId = getRequestCompanyId(req)!;
+    const { bot_enabled } = req.body;
+    if (typeof bot_enabled !== 'boolean') {
+      res.status(400).json({ error: 'bot_enabled must be a boolean' });
+      return;
+    }
+    await pool.query(
+      'UPDATE companies SET bot_enabled = $1, updated_at = NOW() WHERE id = $2',
+      [bot_enabled, companyId]
+    );
+    res.json({ data: { bot_enabled } });
+  } catch (err) {
+    logger.error('Error toggling bot:', err);
+    res.status(500).json({ error: 'Failed to toggle bot' });
+  }
+});
+
 companiesRouter.post('/', authMiddleware, requireSuperadmin, validateBody(createCompanySchema), async (req, res) => {
   const {
     name,

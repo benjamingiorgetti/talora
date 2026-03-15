@@ -5,11 +5,13 @@ import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import useSWR from "swr";
 import type { Appointment, Company, Conversation, DashboardMetrics, WhatsAppInstance } from "@talora/shared";
-import { ArrowRight, CalendarCheck2, CalendarDays, Clock3, MessageSquareText, Sparkles } from "lucide-react";
+import { ArrowRight, CalendarCheck2, CalendarDays, Clock3, MessageSquareText, Timer, Users } from "lucide-react";
 import { companyScopedFetcher, companyScopedKey } from "@/lib/api";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { LoadingSpinner } from "@/components/ui/loading-spinner";
+import { PageEntrance } from "@/components/ui/page-entrance";
+import { AnimatedList, AnimatedItem } from "@/components/ui/animated-list";
 import { useAuth } from "@/lib/auth";
 import { cn } from "@/lib/utils";
 import { WorkspaceEmptyState, WorkspaceMetricCard, WorkspaceSectionHeader } from "@/components/workspace/chrome";
@@ -31,6 +33,25 @@ function isSameDay(value: string, target: Date) {
     date.getMonth() === target.getMonth() &&
     date.getDate() === target.getDate()
   );
+}
+
+function formatTimeSaved(minutes: number) {
+  if (minutes <= 0) return "0m";
+  if (minutes < 60) return `${minutes}m`;
+  const h = Math.floor(minutes / 60);
+  const m = minutes % 60;
+  return m > 0 ? `${h}h ${m}m` : `${h}h`;
+}
+
+function formatBotActivity(isoDate: string | null | undefined): { label: string; tone: "green" | "yellow" | "red" } {
+  if (!isoDate) return { label: "Sin actividad registrada", tone: "red" };
+  const diffMs = Date.now() - new Date(isoDate).getTime();
+  const diffMin = Math.floor(diffMs / 60_000);
+  if (diffMin < 1) return { label: "Activo hace instantes", tone: "green" };
+  if (diffMin < 60) return { label: `Activo hace ${diffMin} min`, tone: diffMin < 30 ? "green" : "yellow" };
+  const diffH = Math.floor(diffMin / 60);
+  if (diffH < 24) return { label: `Ultima actividad hace ${diffH}h`, tone: diffH < 2 ? "yellow" : "red" };
+  return { label: `Ultima actividad hace ${Math.floor(diffH / 24)}d`, tone: "red" };
 }
 
 function formatSlot(value: string) {
@@ -120,6 +141,8 @@ export default function WorkspaceDashboardPage() {
     return <LoadingSpinner className="min-h-[70vh]" />;
   }
 
+  const uniqueClientsToday = new Set(todayAppointments.map((a) => a.client_name)).size;
+
   const dashboardMetrics = [
     {
       label: isProfessional ? "Mis turnos de hoy" : "Turnos de hoy",
@@ -136,13 +159,23 @@ export default function WorkspaceDashboardPage() {
       caption: "Casos que piden revision humana.",
     },
     {
-      label: "Resolucion automatica",
-      value: formatMetric(metrics?.automation_rate ?? 0, "%"),
+      label: "Tiempo ahorrado",
+      value: formatTimeSaved(metrics?.estimated_time_saved_minutes ?? 0),
+      tone: "neutral" as const,
+      icon: Timer,
+      caption: "Estimado por gestion automatizada.",
+    },
+    {
+      label: "Clientes atendidos hoy",
+      value: formatMetric(uniqueClientsToday),
       tone: "mint" as const,
-      icon: Sparkles,
-      caption: "Operacion resuelta sin intervencion.",
+      icon: Users,
+      caption: "Clientes unicos con turno hoy.",
     },
   ];
+
+  const isFullyEmpty = todayAppointments.length === 0
+    && pausedConversations.length === 0;
 
   const operationalAlerts: Array<{
     key: string;
@@ -194,20 +227,35 @@ export default function WorkspaceDashboardPage() {
           : null,
       ].filter((item): item is NonNullable<typeof item> => item !== null);
 
+  const botActivity = formatBotActivity(metrics?.last_bot_activity_at);
+  const botDotColor = botActivity.tone === "green"
+    ? "bg-emerald-500"
+    : botActivity.tone === "yellow"
+      ? "bg-amber-400"
+      : "bg-red-400";
+
   return (
-    <div className="mx-auto max-w-[1080px] space-y-6">
-      <section className="grid gap-3 sm:gap-4 md:grid-cols-3">
+    <PageEntrance className="mx-auto min-h-0 flex-1 overflow-y-auto max-w-[1080px] space-y-6">
+      {!isProfessional && (
+        <div className="flex items-center gap-2 text-sm text-slate-500">
+          <span className={cn("h-2 w-2 rounded-full", botDotColor)} />
+          <span>{botActivity.label}</span>
+        </div>
+      )}
+
+      <AnimatedList className="grid gap-3 sm:gap-4 md:grid-cols-2 xl:grid-cols-4">
         {dashboardMetrics.map((metric) => (
-          <WorkspaceMetricCard
-            key={metric.label}
-            label={metric.label}
-            value={metric.value}
-            caption={metric.caption}
-            icon={metric.icon}
-            tone={metric.tone}
-          />
+          <AnimatedItem key={metric.label}>
+            <WorkspaceMetricCard
+              label={metric.label}
+              value={metric.value}
+              caption={metric.caption}
+              icon={metric.icon}
+              tone={metric.tone}
+            />
+          </AnimatedItem>
         ))}
-      </section>
+      </AnimatedList>
 
       {operationalAlerts.length > 0 ? (
         <Card className="rounded-[28px] border-[#e6e7ec] bg-white shadow-none sm:rounded-[30px]">
@@ -306,17 +354,35 @@ export default function WorkspaceDashboardPage() {
             ) : (
               <WorkspaceEmptyState
                 className="px-4 py-10"
-                title={isProfessional ? "No tenes turnos proximos." : "Sin turnos proximos."}
+                title={
+                  isFullyEmpty
+                    ? "Tu panel se va a llenar cuando empieces a operar."
+                    : isProfessional
+                      ? "No tenes turnos proximos."
+                      : "Sin turnos proximos."
+                }
                 description={
-                  isProfessional
-                    ? "Cuando el bot o tu admin agenden turnos para vos, van a aparecer aca."
-                    : "Cuando entren reservas, este panel va a mostrar lo siguiente que viene."
+                  isFullyEmpty
+                    ? "Conecta WhatsApp, configura tu agenda y deja que el bot atienda el primer turno."
+                    : isProfessional
+                      ? "Cuando el bot o tu admin agenden turnos para vos, van a aparecer aca."
+                      : "Cuando entren reservas, este panel va a mostrar lo siguiente que viene."
+                }
+                action={
+                  isFullyEmpty && !isProfessional ? (
+                    <Button asChild variant="outline" className="h-11 rounded-2xl border-[#dde1ea] px-4 hover:bg-[#f6f7fb]">
+                      <Link href={!company?.calendar_connected ? "/settings/professionals" : "/whatsapp"}>
+                        {!company?.calendar_connected ? "Configurar agenda" : "Conectar WhatsApp"}
+                        <ArrowRight className="ml-2 h-4 w-4" />
+                      </Link>
+                    </Button>
+                  ) : undefined
                 }
               />
             )}
           </div>
         </CardContent>
       </Card>
-    </div>
+    </PageEntrance>
   );
 }

@@ -179,7 +179,7 @@ UPDATE agents SET model = 'gpt-4o-mini' WHERE model = 'claude-opus-4-6';
 
 -- Seed default prompt sections (fix for empty sections)
 INSERT INTO prompt_sections (agent_id, title, content, "order")
-SELECT a.id, 'Identidad', 'Sos el asistente virtual de un estudio de tatuajes. Fecha y hora actual: {{fechaHoraActual}}', 0
+SELECT a.id, 'Identidad', 'Sos el asistente virtual. Fecha y hora actual: {{fechaHoraActual}}', 0
 FROM agents a WHERE a.name = 'Illuminato Assistant'
   AND NOT EXISTS (SELECT 1 FROM prompt_sections WHERE agent_id = a.id)
 LIMIT 1;
@@ -299,6 +299,16 @@ ALTER TABLE agents ADD COLUMN IF NOT EXISTS system_prompt TEXT NOT NULL DEFAULT 
 
 -- Add memory_reset_at for 48h per-client memory window
 ALTER TABLE conversations ADD COLUMN IF NOT EXISTS memory_reset_at TIMESTAMPTZ;
+
+-- Clean tattoo references from prompt_sections BEFORE rebuilding system_prompt
+UPDATE prompt_sections
+SET content = regexp_replace(
+  content,
+  '(de )?(un )?estudio de tatuajes',
+  'la empresa',
+  'gi'
+)
+WHERE content ILIKE '%estudio de tatuajes%';
 
 -- Migrate existing sections into system_prompt (include title as ## heading)
 UPDATE agents SET system_prompt = COALESCE(
@@ -678,6 +688,68 @@ END $$;
 
 CREATE INDEX IF NOT EXISTS idx_conversations_active_by_company
   ON conversations(company_id, archived_at, last_message_at DESC);
+
+-- ARCH-1: Enforce one agent per company.
+-- Remove duplicates keeping the oldest agent, then add a unique constraint.
+DELETE FROM agents a
+USING agents b
+WHERE a.company_id = b.company_id
+  AND a.created_at > b.created_at;
+
+CREATE UNIQUE INDEX IF NOT EXISTS idx_agents_unique_company
+  ON agents(company_id);
+
+DO $$ BEGIN
+  ALTER TABLE appointments DROP CONSTRAINT IF EXISTS chk_appointment_status;
+  ALTER TABLE appointments ADD CONSTRAINT chk_appointment_status
+    CHECK (status IN ('confirmed', 'cancelled', 'rescheduled', 'draft'));
+END $$;
+
+-- Company settings table
+CREATE TABLE IF NOT EXISTS company_settings (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  company_id UUID NOT NULL UNIQUE REFERENCES companies(id) ON DELETE CASCADE,
+  opening_hour TEXT NOT NULL DEFAULT '09:00',
+  closing_hour TEXT NOT NULL DEFAULT '18:00',
+  working_days INT[] NOT NULL DEFAULT '{1,2,3,4,5}',
+  show_prices BOOLEAN NOT NULL DEFAULT false,
+  timezone TEXT NOT NULL DEFAULT 'America/Argentina/Buenos_Aires',
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+-- Bot enabled flag per company
+ALTER TABLE companies ADD COLUMN IF NOT EXISTS bot_enabled BOOLEAN NOT NULL DEFAULT true;
+
+-- MVP-5: Clean tattoo-only references from existing data
+-- Step 1: Clean prompt_sections
+UPDATE prompt_sections
+SET content = regexp_replace(
+  content,
+  '(de )?(un )?estudio de tatuajes',
+  'la empresa',
+  'gi'
+)
+WHERE content ILIKE '%estudio de tatuajes%';
+
+-- Step 2: Clean system_prompt directly (catches manually edited prompts)
+UPDATE agents
+SET system_prompt = regexp_replace(
+  system_prompt,
+  'Sos el asistente (virtual )?(de (un )?)?estudio de tatuajes\.?',
+  'Sos el asistente de WhatsApp de ' || COALESCE((SELECT name FROM companies WHERE id = agents.company_id), 'tu empresa') || '.',
+  'gi'
+)
+WHERE system_prompt ILIKE '%estudio de tatuajes%';
+
+-- Step 3: Re-sync system_prompt from cleaned sections for agents that still have tattoo refs
+UPDATE agents SET system_prompt = COALESCE(
+  (SELECT string_agg('## ' || ps.title || E'\n' || ps.content, E'\n\n' ORDER BY ps."order")
+   FROM prompt_sections ps
+   WHERE ps.agent_id = agents.id AND ps.is_active = true),
+  system_prompt
+)
+WHERE system_prompt ILIKE '%tatuaje%';
 
 ALTER TABLE companies ADD COLUMN IF NOT EXISTS escalation_number TEXT;
 

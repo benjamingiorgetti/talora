@@ -11,6 +11,7 @@ export interface Company {
   whatsapp_number: string | null;
   escalation_number: string | null;
   calendar_connected: boolean;
+  bot_enabled: boolean;
   created_at: string;
   updated_at: string;
 }
@@ -219,7 +220,7 @@ export interface Appointment {
   google_event_id: string | null;
   starts_at: string;
   ends_at: string;
-  status: 'confirmed' | 'cancelled' | 'rescheduled';
+  status: 'confirmed' | 'cancelled' | 'rescheduled' | 'draft';
   source: 'bot' | 'manual' | 'google_calendar';
   title: string;
   notes: string;
@@ -239,6 +240,7 @@ export interface DashboardMetrics {
   automation_rate: number;
   confirmation_rate: number;
   estimated_time_saved_minutes: number;
+  last_bot_activity_at: string | null;
 }
 
 // --- Test Sessions ---
@@ -299,6 +301,19 @@ export interface Client {
   updated_at?: string;
 }
 
+// --- Company Settings ---
+export interface CompanySettings {
+  id: string;
+  company_id: string;
+  opening_hour: string;
+  closing_hour: string;
+  working_days: number[];
+  show_prices: boolean;
+  timezone: string;
+  created_at: string;
+  updated_at: string;
+}
+
 // --- Bot Config ---
 export interface BotConfig {
   id: string;
@@ -330,5 +345,7 @@ export type WsEvent =
   | { type: 'conversation:updated'; payload: Pick<Conversation, 'id' | 'company_id' | 'instance_id' | 'professional_id' | 'last_message_at' | 'bot_paused' | 'archived_at' | 'archive_reason'> }
   | { type: 'message:new'; payload: Message & { company_id?: string } }
   | { type: 'appointment:created'; payload: AppointmentWsPayload }
+  | { type: 'appointment:confirmed'; payload: AppointmentWsPayload }
   | { type: 'appointment:rescheduled'; payload: AppointmentWsPayload }
-  | { type: 'appointment:cancelled'; payload: AppointmentWsPayload };
+  | { type: 'appointment:cancelled'; payload: AppointmentWsPayload }
+  | { type: 'appointment:confirmed'; payload: AppointmentWsPayload };

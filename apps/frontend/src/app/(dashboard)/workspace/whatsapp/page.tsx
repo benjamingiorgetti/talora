@@ -190,7 +190,7 @@ export default function WorkspaceWhatsAppPage() {
   }
 
   return (
-    <div className="flex min-h-0 flex-1 flex-col">
+    <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
       <Card className="overflow-hidden rounded-[28px] border-[#e6e7ec] bg-white shadow-none sm:rounded-[32px] lg:flex-1 lg:min-h-0">
         <CardContent className="grid min-h-[680px] grid-cols-1 p-0 lg:h-full lg:min-h-0 lg:grid-cols-[320px_minmax(0,1fr)] xl:grid-cols-[340px_minmax(0,1fr)]">
           <aside className="border-b border-[#e6e7ec] bg-[linear-gradient(180deg,#fbfbfd_0%,#f5f6fa_100%)] lg:flex lg:min-h-0 lg:flex-col lg:border-b-0 lg:border-r">

@@ -23,7 +23,7 @@ function normalizePhone(value: string | null | undefined): string {
   return (value ?? '').replace(/\D/g, '');
 }
 
-function safeJsonParse(value: string): Record<string, unknown> | string {
+export function safeJsonParse(value: string): Record<string, unknown> | string {
   try {
     const parsed = JSON.parse(value) as unknown;
     if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) {
@@ -36,7 +36,7 @@ function safeJsonParse(value: string): Record<string, unknown> | string {
   return value;
 }
 
-function buildAgentToolTrace(
+export function buildAgentToolTrace(
   toolCallId: string,
   name: string,
   input: Record<string, unknown>,

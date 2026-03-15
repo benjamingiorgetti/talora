@@ -19,8 +19,8 @@ export function Navbar() {
   useEffect(() => {
     const onScroll = () => {
       const currentY = window.scrollY;
-      setScrolled(currentY > 16);
-      if (currentY > 60) {
+      setScrolled(currentY > 40);
+      if (currentY > 80) {
         setHidden(currentY > lastScrollY.current);
       } else {
         setHidden(false);
@@ -50,119 +50,162 @@ export function Navbar() {
   }, []);
 
   return (
-    <header
-      className={cn(
-        "sticky top-0 z-50 border-b backdrop-blur-md transition-all duration-300",
-        hidden ? "-translate-y-full" : "translate-y-0",
-        scrolled
-          ? "border-[#E2E4EC] bg-white/90 shadow-sm"
-          : "border-transparent bg-white/60"
-      )}
-    >
-      <div
+    <>
+      {/* Document-flow spacer so content below doesn't jump under the fixed header */}
+      <div className="h-16" aria-hidden="true" />
+
+      {/* Fixed wrapper — no bg/border here; those live on the inner pill */}
+      <header
         className={cn(
-          "container mx-auto flex max-w-[1200px] items-center justify-between px-4 sm:px-6 transition-all duration-300",
-          scrolled ? "h-14" : "h-16"
+          "fixed top-0 inset-x-0 z-50 transition-transform duration-500 ease-[cubic-bezier(0.4,0,0.2,1)]",
+          hidden ? "-translate-y-[150%]" : "translate-y-0"
         )}
       >
-        {/* Logo */}
-        <a href="/" className="flex items-center gap-2">
-          {/* Icon only on mobile, full logo on sm+ */}
-          <img
-            src="/images/icono-negro.png"
-            alt="Talora"
-            width={28}
-            height={28}
-            className="block sm:hidden"
-          />
-          <img
-            src="/images/logo-talora.png"
-            alt="Talora"
-            height={32}
-            className="hidden sm:block h-8 w-auto"
-          />
-          <span className="hidden sm:inline text-xs text-gray-medium font-medium">{nav.descriptor}</span>
-        </a>
-
-        {/* Desktop nav */}
-        <nav className="hidden md:flex items-center gap-8">
-          {nav.links.map((link) => {
-            const isActive = activeSection === link.href.replace("#", "");
-            return (
-              <a
-                key={link.href}
-                href={link.href}
+        {/*
+          Inner container morphs between two states:
+            - at-top:   full-width, transparent, no border, h-16
+            - scrolled: centered pill, frosted glass, rounded-full, h-12, mt-3
+        */}
+        <div
+          className={cn(
+            "transition-all duration-500 ease-[cubic-bezier(0.4,0,0.2,1)]",
+            scrolled
+              ? // Pill state
+                "mx-auto max-w-[620px] mt-3 rounded-full h-12 px-6 backdrop-blur-xl bg-white/85 shadow-lg border border-white/60"
+              : // Full-width transparent state
+                "mx-auto max-w-[1200px] h-16 px-4 sm:px-6"
+          )}
+          style={
+            scrolled
+              ? { boxShadow: "0 8px 32px 0 rgba(28,29,34,0.10), 0 1.5px 4px 0 rgba(28,29,34,0.07)" }
+              : undefined
+          }
+        >
+          <div className="flex h-full items-center justify-between">
+            {/* Logo */}
+            <a href="/" className="flex items-center gap-2 shrink-0">
+              {/* Icon only on mobile (or when in pill — pill is small) */}
+              <img
+                src="/images/icono-negro.png"
+                alt="Talora"
+                width={26}
+                height={26}
                 className={cn(
-                  "relative text-sm transition-colors py-1",
-                  isActive ? "text-ink" : "text-gray-medium hover:text-ink"
+                  "transition-all duration-500",
+                  scrolled ? "block" : "block sm:hidden"
                 )}
-              >
-                {link.label}
-                {/* Underline from center */}
-                <span
-                  className={cn(
-                    "absolute bottom-0 left-1/2 h-[2px] bg-ink rounded-full transition-all duration-300 -translate-x-1/2",
-                    isActive ? "w-full" : "w-0 group-hover:w-full"
-                  )}
-                />
-                {/* Hover underline for non-active */}
-                {!isActive && (
-                  <span className="absolute bottom-0 left-1/2 h-[2px] bg-ink/40 rounded-full transition-all duration-300 -translate-x-1/2 w-0 hover-underline" />
+              />
+              <img
+                src="/images/logo-talora.png"
+                alt="Talora"
+                height={30}
+                className={cn(
+                  "h-8 w-auto transition-all duration-500",
+                  scrolled ? "hidden" : "hidden sm:block"
                 )}
-              </a>
-            );
-          })}
-        </nav>
+              />
+              {!scrolled && (
+                <span className="hidden sm:inline text-xs text-gray-medium font-medium">
+                  {nav.descriptor}
+                </span>
+              )}
+            </a>
 
-        {/* Desktop CTA */}
-        <div className="hidden md:block">
-          <Button size="sm" className="animate-subtle-pulse" asChild>
-            <a href={nav.ctaHref}>{nav.cta}</a>
-          </Button>
+            {/* Desktop nav */}
+            <nav className="hidden md:flex items-center gap-6">
+              {nav.links.map((link) => {
+                const isActive = activeSection === link.href.replace("#", "");
+                return (
+                  <a
+                    key={link.href}
+                    href={link.href}
+                    className={cn(
+                      "relative text-sm transition-colors py-1",
+                      isActive ? "text-ink" : "text-gray-medium hover:text-ink"
+                    )}
+                  >
+                    {link.label}
+                    {/* Active underline */}
+                    <span
+                      className={cn(
+                        "absolute bottom-0 left-1/2 h-[2px] bg-ink rounded-full transition-all duration-300 -translate-x-1/2",
+                        isActive ? "w-full" : "w-0"
+                      )}
+                    />
+                  </a>
+                );
+              })}
+            </nav>
+
+            {/* Desktop CTA */}
+            <div className="hidden md:block shrink-0">
+              <Button
+                size="sm"
+                className={cn(
+                  "animate-subtle-pulse transition-all duration-500",
+                  scrolled && "h-8 text-xs px-4"
+                )}
+                asChild
+              >
+                <a href={nav.ctaHref}>{nav.cta}</a>
+              </Button>
+            </div>
+
+            {/* Mobile toggle */}
+            <button
+              className="md:hidden p-1.5 text-ink"
+              onClick={() => setOpen(!open)}
+              aria-label={open ? "Cerrar menu" : "Abrir menu"}
+            >
+              {open ? <X size={18} /> : <Menu size={18} />}
+            </button>
+          </div>
         </div>
 
-        {/* Mobile toggle */}
-        <button
-          className="md:hidden p-2 text-ink"
-          onClick={() => setOpen(!open)}
-          aria-label={open ? "Cerrar menu" : "Abrir menu"}
-        >
-          {open ? <X size={20} /> : <Menu size={20} />}
-        </button>
-      </div>
-
-      {/* Mobile menu */}
-      <AnimatePresence>
-        {open && (
-          <motion.div
-            initial={{ opacity: 0, height: 0 }}
-            animate={{ opacity: 1, height: "auto" }}
-            exit={{ opacity: 0, height: 0 }}
-            className="md:hidden overflow-hidden border-t border-[#E2E4EC]/60 bg-white"
-          >
-            <nav className="flex flex-col gap-1 px-4 py-3 sm:px-6 sm:py-4">
-              {nav.links.map((link) => (
-                <a
-                  key={link.href}
-                  href={link.href}
-                  onClick={() => setOpen(false)}
-                  className={cn(
-                    "rounded-lg px-3 py-3 text-sm text-gray-medium",
-                    "hover:bg-surface-cool hover:text-ink transition-colors"
-                  )}
-                >
-                  {link.label}
-                </a>
-              ))}
-              <div className="pt-2">
-                <Button className="w-full" size="default" asChild>
-                  <a href={nav.ctaHref}>{nav.cta}</a>
-                </Button>
-              </div>
-            </nav>
-          </motion.div>
-        )}
-      </AnimatePresence>
-    </header>
+        {/* Mobile dropdown — appears below the pill/bar with matching rounded styling */}
+        <AnimatePresence>
+          {open && (
+            <motion.div
+              initial={{ opacity: 0, y: -8, scale: 0.97 }}
+              animate={{ opacity: 1, y: 0, scale: 1 }}
+              exit={{ opacity: 0, y: -8, scale: 0.97 }}
+              transition={{ duration: 0.22, ease: [0.4, 0, 0.2, 1] }}
+              className={cn(
+                "md:hidden overflow-hidden mt-2",
+                scrolled
+                  ? "mx-auto max-w-[620px] rounded-2xl backdrop-blur-xl bg-white/90 border border-white/60"
+                  : "mx-4 rounded-2xl bg-white border border-[#E2E4EC]/60 shadow-lg"
+              )}
+              style={{
+                boxShadow: "0 8px 32px 0 rgba(28,29,34,0.10)",
+              }}
+            >
+              <nav className="flex flex-col gap-1 px-4 py-3">
+                {nav.links.map((link) => (
+                  <a
+                    key={link.href}
+                    href={link.href}
+                    onClick={() => setOpen(false)}
+                    className={cn(
+                      "rounded-xl px-3 py-3 text-sm text-gray-medium",
+                      "hover:bg-surface-cool hover:text-ink transition-colors"
+                    )}
+                  >
+                    {link.label}
+                  </a>
+                ))}
+                <div className="pt-2 pb-1">
+                  <Button className="w-full" size="default" asChild>
+                    <a href={nav.ctaHref} onClick={() => setOpen(false)}>
+                      {nav.cta}
+                    </a>
+                  </Button>
+                </div>
+              </nav>
+            </motion.div>
+          )}
+        </AnimatePresence>
+      </header>
+    </>
   );
 }

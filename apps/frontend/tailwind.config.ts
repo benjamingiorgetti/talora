@@ -64,10 +64,20 @@ const config: Config = {
           from: { height: "var(--radix-accordion-content-height)" },
           to: { height: "0" },
         },
+        "status-pulse": {
+          "0%, 100%": { opacity: "1" },
+          "50%": { opacity: "0.55" },
+        },
+        "gentle-float": {
+          "0%, 100%": { transform: "translateY(0)" },
+          "50%": { transform: "translateY(-3px)" },
+        },
       },
       animation: {
         "accordion-down": "accordion-down 0.2s ease-out",
         "accordion-up": "accordion-up 0.2s ease-out",
+        "status-pulse": "status-pulse 2.4s ease-in-out infinite",
+        "gentle-float": "gentle-float 3s ease-in-out infinite",
       },
     },
   },
