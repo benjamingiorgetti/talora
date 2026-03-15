@@ -12,7 +12,7 @@ import { faq } from "@/lib/content";
 
 export function FAQ() {
   return (
-    <SectionWrapper id="faq" className="bg-surface-cool">
+    <SectionWrapper id="faq" className="bg-white">
       <FadeIn>
         <h2 className="mx-auto max-w-2xl text-center font-display text-section-mobile md:text-section font-semibold text-text-strong">
           {faq.title}
@@ -24,10 +24,10 @@ export function FAQ() {
           <Accordion type="single" collapsible className="w-full">
             {faq.items.map((item, i) => (
               <AccordionItem key={i} value={`item-${i}`}>
-                <AccordionTrigger className="text-left text-sm sm:text-base text-text-strong hover:text-ink transition-colors">
+                <AccordionTrigger className="text-left text-sm sm:text-base font-medium text-ink hover:text-ink/80 transition-colors">
                   {item.question}
                 </AccordionTrigger>
-                <AccordionContent className="text-gray-medium">{item.answer}</AccordionContent>
+                <AccordionContent className="text-gray-600">{item.answer}</AccordionContent>
               </AccordionItem>
             ))}
           </Accordion>

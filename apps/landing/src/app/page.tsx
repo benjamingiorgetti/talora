@@ -1,6 +1,7 @@
 import { Navbar } from "@/components/landing/navbar";
 import { Hero } from "@/components/landing/hero";
-import { Benefits } from "@/components/landing/benefits";
+import { Problem } from "@/components/landing/problem";
+import { QueCambia } from "@/components/landing/que-cambia";
 import { HowItWorks } from "@/components/landing/how-it-works";
 import { FAQ } from "@/components/landing/faq";
 import { FinalCTA } from "@/components/landing/final-cta";
@@ -11,7 +12,8 @@ export default function LandingPage() {
     <main>
       <Navbar />
       <Hero />
-      <Benefits />
+      <Problem />
+      <QueCambia />
       <HowItWorks />
       <FAQ />
       <FinalCTA />

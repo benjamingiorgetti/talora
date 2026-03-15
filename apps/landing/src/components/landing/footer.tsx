@@ -3,17 +3,17 @@ import { footer } from "@/lib/content";
 export function Footer() {
   return (
     <footer className="border-t border-[#E2E4EC] bg-white">
-      <div className="container mx-auto max-w-[1200px] px-4 sm:px-6 py-10 sm:py-12 md:py-16">
+      <div className="container mx-auto max-w-[1200px] px-4 sm:px-6 py-12 sm:py-16 md:py-20">
         <div className="grid gap-6 sm:grid-cols-2 sm:gap-8 md:grid-cols-4 md:gap-10">
           {/* Brand */}
           <div>
             <img
               src="/images/logo-talora.png"
               alt="Talora"
-              height={24}
-              className="h-6 w-auto"
+              height={56}
+              className="h-14 w-auto"
             />
-            <p className="mt-2 text-sm text-gray-medium leading-relaxed">
+            <p className="mt-4 text-sm text-gray-medium leading-relaxed">
               Automatiza turnos con WhatsApp e inteligencia artificial.
             </p>
           </div>
