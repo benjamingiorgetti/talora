@@ -429,7 +429,17 @@ async function resolveSchedulingContext(
   }
 
   if (!professional) {
-    throw new Error('No se pudo determinar el profesional para esta operación. La conversación no tiene un profesional asignado.');
+    return {
+      professional: null as never,
+      service: null,
+      durationMinutes: 0,
+      calendarId: '',
+      issue: {
+        error: 'No se pudo determinar el profesional para esta operación.',
+        needsProfessionalSelection: true,
+        professionalOptions: [],
+      },
+    };
   }
 
   // Bind professional to conversation on first resolution
@@ -457,6 +467,48 @@ async function resolveSchedulingContext(
     durationMinutes,
     calendarId: calendarIdOverride ?? professional.calendar_id ?? '',
   };
+}
+
+function pickHints(toolInput: Record<string, unknown>): Record<string, string | null> {
+  return {
+    professionalName: asString(toolInput.professionalName) ?? asString(toolInput.professional_name) ?? null,
+    professionalId: asString(toolInput.professionalId) ?? asString(toolInput.professional_id) ?? null,
+  };
+}
+
+type ResolveOrFailResult =
+  | { ok: true; scheduling: { professional: Professional; service: Service | null; durationMinutes: number; calendarId: string } }
+  | { ok: false; errorJson: string };
+
+async function resolveOrFail(
+  companyId: string,
+  toolInput: Record<string, unknown>,
+  contextProfessionalId?: string | null,
+  conversationId?: string | null,
+): Promise<ResolveOrFailResult> {
+  const scheduling = await resolveSchedulingContext(companyId, toolInput, contextProfessionalId, conversationId);
+  if (scheduling.issue) {
+    logger.warn('Professional resolution failed', {
+      contextProfessionalId: contextProfessionalId ?? null,
+      hints: pickHints(toolInput),
+      issue: scheduling.issue.error,
+    });
+    return { ok: false, errorJson: JSON.stringify(scheduling.issue) };
+  }
+  if (!scheduling.calendarId) {
+    logger.warn('Professional has no calendar configured', {
+      professionalId: scheduling.professional.id,
+      professionalName: scheduling.professional.name,
+    });
+    return {
+      ok: false,
+      errorJson: JSON.stringify({
+        error: `El profesional "${scheduling.professional.name}" no tiene un calendario de Google configurado. El administrador debe conectar Google Calendar desde Configurar > Profesionales.`,
+        needsCalendarSetup: true,
+      }),
+    };
+  }
+  return { ok: true, scheduling };
 }
 
 async function getPrimaryAgentId(companyId: string): Promise<string> {
@@ -570,27 +622,14 @@ export async function executeTool(
           return JSON.stringify(result);
         }
 
-        const scheduling = await resolveSchedulingContext(context.companyId, toolInput, context.professionalId, context.conversationId);
-        if (scheduling.issue) {
-          return JSON.stringify(scheduling.issue);
-        }
-        if (!scheduling.calendarId) {
-          return JSON.stringify({
-            error: `El profesional "${scheduling.professional.name}" no tiene un calendario de Google configurado. El administrador debe conectar Google Calendar desde Configurar > Profesionales.`,
-            needsCalendarSetup: true,
-          });
-        }
+        const resolved = await resolveOrFail(context.companyId, toolInput, context.professionalId, context.conversationId);
+        if (!resolved.ok) return resolved.errorJson;
+        const { scheduling } = resolved;
         const result = await checkSlot(date, scheduling.durationMinutes, scheduling.calendarId, scheduling.professional.id);
         return JSON.stringify(result);
       }
 
       case 'google_calendar_book': {
-        if (context.companyId && !context.professionalId) {
-          return JSON.stringify({
-            error: 'No hay profesional asignado a esta conversación. No se pueden gestionar turnos automáticamente. Contactar al administrador para asignar un profesional.',
-          });
-        }
-
         const date = asString(toolInput.date) ?? asString(toolInput.startsAt) ?? asString(toolInput.starts_at);
         if (!date) {
           return JSON.stringify({ error: 'date is required' });
@@ -609,16 +648,10 @@ export async function executeTool(
           return JSON.stringify(result);
         }
 
-        const scheduling = await resolveSchedulingContext(context.companyId, toolInput, context.professionalId, context.conversationId);
-        if (scheduling.issue) {
-          return JSON.stringify(scheduling.issue);
-        }
-        if (!scheduling.calendarId) {
-          return JSON.stringify({
-            error: `El profesional "${scheduling.professional.name}" no tiene un calendario de Google configurado. El administrador debe conectar Google Calendar desde Configurar > Profesionales.`,
-            needsCalendarSetup: true,
-          });
-        }
+        const resolved = await resolveOrFail(context.companyId, toolInput, context.professionalId, context.conversationId);
+        if (!resolved.ok) return resolved.errorJson;
+        const { scheduling } = resolved;
+
         const title = scheduling.service ? `${name} - ${scheduling.service.name}` : name;
         const fullDescription = [
           scheduling.service?.description,
@@ -681,19 +714,8 @@ export async function executeTool(
       }
 
       case 'google_calendar_reprogram': {
-        if (context.companyId && !context.professionalId) {
-          return JSON.stringify({
-            error: 'No hay profesional asignado a esta conversación. No se pueden gestionar turnos automáticamente. Contactar al administrador para asignar un profesional.',
-          });
-        }
-
         if (!context.companyId) {
           return JSON.stringify({ error: 'Company context required for reprogramming' });
-        }
-
-        const appointment = await resolveAppointmentByReference(context.companyId, toolInput, context.professionalId);
-        if (!appointment) {
-          return JSON.stringify({ error: 'Appointment not found' });
         }
 
         const startsAt = asString(toolInput.startsAt) ?? asString(toolInput.starts_at) ?? asString(toolInput.date);
@@ -701,34 +723,17 @@ export async function executeTool(
           return JSON.stringify({ error: 'startsAt is required' });
         }
 
-        const professionalId =
-          asString(toolInput.professionalId) ??
-          asString(toolInput.professional_id) ??
-          appointment.professional_id;
-        const serviceId =
-          asString(toolInput.serviceId) ??
-          asString(toolInput.service_id) ??
-          appointment.service_id;
+        // Resolve professional first (replaces the early guard)
+        const resolved = await resolveOrFail(context.companyId, toolInput, context.professionalId, context.conversationId);
+        if (!resolved.ok) return resolved.errorJson;
+        const { scheduling } = resolved;
 
-        if (!professionalId) {
-          return JSON.stringify({ error: 'professionalId is required' });
+        // Find the appointment using the resolved professional for scope filtering
+        const appointment = await resolveAppointmentByReference(context.companyId, toolInput, scheduling.professional.id);
+        if (!appointment) {
+          return JSON.stringify({ error: 'Appointment not found' });
         }
 
-        const scheduling = await resolveSchedulingContext(context.companyId, {
-          ...toolInput,
-          professionalId,
-          serviceId,
-          durationMinutes: getAppointmentDurationMinutes(appointment),
-        }, context.professionalId, context.conversationId);
-        if (scheduling.issue) {
-          return JSON.stringify(scheduling.issue);
-        }
-        if (!scheduling.calendarId) {
-          return JSON.stringify({
-            error: `El profesional "${scheduling.professional.name}" no tiene un calendario de Google configurado. El administrador debe conectar Google Calendar desde Configurar > Profesionales.`,
-            needsCalendarSetup: true,
-          });
-        }
         const nextNotes = asString(toolInput.notes) ?? appointment.notes;
         const nextTitle = scheduling.service ? `${appointment.client_name} - ${scheduling.service.name}` : appointment.title;
 
@@ -785,12 +790,6 @@ export async function executeTool(
       }
 
       case 'google_calendar_cancel': {
-        if (context.companyId && !context.professionalId) {
-          return JSON.stringify({
-            error: 'No hay profesional asignado a esta conversación. No se pueden gestionar turnos automáticamente. Contactar al administrador para asignar un profesional.',
-          });
-        }
-
         const eventId = asString(toolInput.eventId) ?? asString(toolInput.event_id);
 
         if (!context.companyId) {
@@ -799,17 +798,18 @@ export async function executeTool(
           return JSON.stringify(result);
         }
 
-        const appointment = await resolveAppointmentByReference(context.companyId, toolInput, context.professionalId);
+        // Resolve professional first (replaces the early guard)
+        const resolved = await resolveOrFail(context.companyId, toolInput, context.professionalId, context.conversationId);
+        if (!resolved.ok) return resolved.errorJson;
+        const { scheduling } = resolved;
+
+        const appointment = await resolveAppointmentByReference(context.companyId, toolInput, scheduling.professional.id);
         if (!appointment) {
           return JSON.stringify({ error: 'Appointment not found' });
         }
 
-        if (appointment.google_event_id && appointment.professional_id) {
-          const professional = await getProfessional(context.companyId, appointment.professional_id);
-          if (!professional) {
-            return JSON.stringify({ error: 'Professional not found' });
-          }
-          const result = await deleteEvent(appointment.google_event_id, professional.calendar_id, professional.id);
+        if (appointment.google_event_id) {
+          const result = await deleteEvent(appointment.google_event_id, scheduling.calendarId, scheduling.professional.id);
           if (!result.success) {
             return JSON.stringify(result);
           }

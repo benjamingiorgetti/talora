@@ -203,7 +203,7 @@ async function processMessage(
     );
     if (convResult.rows.length === 0) return;
     const conversation = convResult.rows[0];
-    const professionalId: string | null = conversation.professional_id ?? null;
+    let professionalId: string | null = conversation.professional_id ?? null;
 
     // Auto-reset memory if conversation inactive for 48h
     const MEMORY_WINDOW_MS = 48 * 60 * 60 * 1000;
@@ -457,6 +457,17 @@ async function processMessage(
             [conversationId, result, tc.id]
           );
           toolMessages.push({ role: 'tool', tool_call_id: tc.id, content: result });
+
+          // Re-read professional_id in case a tool bound it to the conversation
+          if (!professionalId) {
+            const refreshed = await pool.query<{ professional_id: string | null }>(
+              'SELECT professional_id FROM conversations WHERE id = $1',
+              [conversationId]
+            );
+            if (refreshed.rows[0]?.professional_id) {
+              professionalId = refreshed.rows[0].professional_id;
+            }
+          }
         }
       } else {
         // Parallel execution for non-calendar tools
