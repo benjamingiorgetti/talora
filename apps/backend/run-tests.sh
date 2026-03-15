@@ -11,6 +11,7 @@ export ADMIN_EMAIL=test@test.com
 export ADMIN_PASSWORD=test
 export EVOLUTION_API_URL=http://localhost:8080
 export EVOLUTION_API_KEY=test-key
+export OPENAI_API_KEY=test-key
 
 PASS=0
 FAIL=0

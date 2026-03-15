@@ -11,8 +11,12 @@ mock.module('../../db/pool', () => ({
 mock.module('../../calendar/operations', () => ({
   checkSlot: mock(() => Promise.resolve({ available: true })),
   bookSlot: mock(() => Promise.resolve({ success: true, eventId: 'evt-1' })),
+  createEvent: mock(() => Promise.resolve({ success: true, eventId: 'evt-2' })),
   deleteEvent: mock(() => Promise.resolve({ success: true })),
   updateEvent: mock(() => Promise.resolve({ success: true })),
+}));
+mock.module('../../evolution/client', () => ({
+  EvolutionClient: mock(() => ({ sendText: mock(() => Promise.resolve()) })),
 }));
 mock.module('../../utils/url-validator', () => ({
   validateWebhookUrl: mock(() => Promise.resolve()),
