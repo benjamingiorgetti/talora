@@ -94,6 +94,16 @@ export function getDurationLabel(startsAt: string, endsAt: string) {
   return `${durationMinutes} min`;
 }
 
+export function formatTimeRange(startsAt: string, endsAt: string): string {
+  const fmt = (iso: string) =>
+    new Date(iso).toLocaleTimeString("es-AR", {
+      hour: "2-digit",
+      minute: "2-digit",
+      hour12: false,
+    });
+  return `${fmt(startsAt)} – ${fmt(endsAt)}`;
+}
+
 export type CalendarDay = {
   date: Date;
   key: string;

@@ -44,12 +44,18 @@ const emptyForm = {
 };
 
 function formatDaySlot(value: string) {
-  return new Date(value).toLocaleString("es-AR", {
-    day: "2-digit",
-    month: "2-digit",
-    hour: "2-digit",
-    minute: "2-digit",
-  });
+  const d = new Date(value);
+  const weekday = d.toLocaleDateString("es-AR", { weekday: "short" });
+  const day = d.getDate();
+  const month = d.toLocaleDateString("es-AR", { month: "short" });
+  const time = d.toLocaleTimeString("es-AR", { hour: "2-digit", minute: "2-digit", hour12: false });
+  return `${weekday.charAt(0).toUpperCase() + weekday.slice(1)} ${day} ${month}, ${time}`;
+}
+
+function formatSource(source: string): string {
+  if (source === "manual") return "Carga manual";
+  if (source === "bot") return "WhatsApp";
+  return "Google Calendar";
 }
 
 function formatDateInput(value: string) {
@@ -285,7 +291,7 @@ export default function WorkspaceAppointmentsPage() {
                         <p className="text-[11px] uppercase tracking-[0.16em] text-slate-400">Fecha</p>
                         <p className="mt-2 text-sm font-semibold text-slate-950">{formatDaySlot(appointment.starts_at)}</p>
                         <p className="mt-1 text-sm text-slate-500">
-                          {appointment.source === "manual" ? "Carga manual" : appointment.source === "bot" ? "Bot" : "Google Calendar"}
+                          {formatSource(appointment.source)}
                         </p>
                       </div>
                       <div className="rounded-[20px] border border-[#e2e4ec] bg-white px-4 py-3">
@@ -344,7 +350,7 @@ export default function WorkspaceAppointmentsPage() {
                           {formatDaySlot(appointment.starts_at)}
                         </p>
                         <p className="mt-1 text-sm text-slate-500">
-                          {appointment.source === "manual" ? "Carga manual" : appointment.source === "bot" ? "Bot" : "Google Calendar"}
+                          {formatSource(appointment.source)}
                         </p>
                       </TableCell>
                       <TableCell className="w-[18%]">

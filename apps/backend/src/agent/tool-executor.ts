@@ -678,6 +678,7 @@ export async function executeTool(
           context.phoneNumber ?? '',
           name
         );
+        const startsAt = new Date(date).toISOString();
         const endsAt = new Date(new Date(date).getTime() + scheduling.durationMinutes * 60 * 1000).toISOString();
         const appointmentStatus = context.isTestContext ? 'draft' : 'confirmed';
 
@@ -696,7 +697,7 @@ export async function executeTool(
             normalizePhone(context.phoneNumber),
             name,
             booking.eventId ?? null,
-            date,
+            startsAt,
             endsAt,
             appointmentStatus,
             title,
@@ -762,6 +763,7 @@ export async function executeTool(
           }
         }
 
+        const startsAtNormalized = new Date(startsAt).toISOString();
         const endsAt = new Date(new Date(startsAt).getTime() + scheduling.durationMinutes * 60 * 1000).toISOString();
         await pool.query(
           `UPDATE appointments
@@ -777,7 +779,7 @@ export async function executeTool(
           [
             scheduling.professional.id,
             scheduling.service?.id ?? null,
-            startsAt,
+            startsAtNormalized,
             endsAt,
             nextTitle,
             nextNotes,

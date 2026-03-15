@@ -777,6 +777,17 @@ FROM agents a
 WHERE NOT EXISTS (
   SELECT 1 FROM tools t WHERE t.agent_id = a.id AND t.name = 'escalate'
 );
+
+-- Fix bot appointments where starts_at was stored without UTC normalization.
+-- The bug: timezone-naive dates were inserted as-is, so PostgreSQL treated them as UTC.
+-- Meanwhile ends_at was correctly normalized via new Date().toISOString().
+-- This caused a 3-hour offset (Argentina = UTC-3) making durations appear as 200+ min.
+-- Fix: shift starts_at forward by 3 hours for affected bot appointments.
+UPDATE appointments
+SET starts_at = starts_at + INTERVAL '3 hours',
+    updated_at = NOW()
+WHERE source = 'bot'
+  AND EXTRACT(EPOCH FROM (ends_at - starts_at)) / 60 > 120;
 `;
 
 async function run() {
