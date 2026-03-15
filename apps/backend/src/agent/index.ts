@@ -3,7 +3,7 @@ import { pool } from '../db/pool';
 import { config } from '../config';
 import { EvolutionClient } from '../evolution/client';
 import { executeTool } from './tool-executor';
-import { buildSystemPrompt } from './prompt-builder';
+import { buildSystemPrompt, formatFriendlyDateTime } from './prompt-builder';
 
 import { getAgentConfig } from '../cache/agent-cache';
 import { logger } from '../utils/logger';
@@ -135,7 +135,7 @@ async function loadRecentBookingsSummary(
   const formatBooking = (booking: { service_name: string | null; professional_name: string | null; starts_at: string }) => {
     const service = booking.service_name ?? 'servicio sin nombre';
     const withProfessional = booking.professional_name ? `${service} con ${booking.professional_name}` : service;
-    const when = new Date(booking.starts_at).toLocaleString('es-AR', { timeZone: config.timezone });
+    const when = formatFriendlyDateTime(new Date(booking.starts_at), config.timezone);
     return `${withProfessional} (${when})`;
   };
 

@@ -9,12 +9,29 @@ export interface PromptBuildContext {
   variableOverrides?: Record<string, string>;
 }
 
+export function formatFriendlyDateTime(date: Date, timezone: string): string {
+  const datePart = date.toLocaleDateString('es-AR', {
+    timeZone: timezone,
+    weekday: 'long',
+    day: 'numeric',
+    month: 'long',
+    year: 'numeric',
+  });
+  const timePart = date.toLocaleTimeString('es-AR', {
+    timeZone: timezone,
+    hour: '2-digit',
+    minute: '2-digit',
+    hour12: false,
+  });
+  return `${datePart}, ${timePart}`;
+}
+
 /**
  * Compute the resolved values for system variables (fechaHoraActual, etc.)
  * based on the current time and conversation context.
  */
 export function getSystemVariableValues(ctx: Pick<PromptBuildContext, 'conversation' | 'agentId' | 'timezone'>): Record<string, string> {
-  const now = new Date().toLocaleString('es-AR', { timeZone: ctx.timezone });
+  const now = formatFriendlyDateTime(new Date(), ctx.timezone);
   const contactName = ctx.conversation?.contact_name || 'Cliente';
   const phoneNumber = ctx.conversation?.phone_number || '';
   return {
