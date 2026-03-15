@@ -179,7 +179,7 @@ UPDATE agents SET model = 'gpt-4o-mini' WHERE model = 'claude-opus-4-6';
 
 -- Seed default prompt sections (fix for empty sections)
 INSERT INTO prompt_sections (agent_id, title, content, "order")
-SELECT a.id, 'Identidad', 'Sos el asistente virtual de un estudio de tatuajes. Fecha y hora actual: {{fechaHoraActual}}', 0
+SELECT a.id, 'Identidad', 'Sos el asistente virtual. Fecha y hora actual: {{fechaHoraActual}}', 0
 FROM agents a WHERE a.name = 'Illuminato Assistant'
   AND NOT EXISTS (SELECT 1 FROM prompt_sections WHERE agent_id = a.id)
 LIMIT 1;
@@ -299,6 +299,16 @@ ALTER TABLE agents ADD COLUMN IF NOT EXISTS system_prompt TEXT NOT NULL DEFAULT 
 
 -- Add memory_reset_at for 48h per-client memory window
 ALTER TABLE conversations ADD COLUMN IF NOT EXISTS memory_reset_at TIMESTAMPTZ;
+
+-- Clean tattoo references from prompt_sections BEFORE rebuilding system_prompt
+UPDATE prompt_sections
+SET content = regexp_replace(
+  content,
+  '(de )?(un )?estudio de tatuajes',
+  'la empresa',
+  'gi'
+)
+WHERE content ILIKE '%estudio de tatuajes%';
 
 -- Migrate existing sections into system_prompt (include title as ## heading)
 UPDATE agents SET system_prompt = COALESCE(
@@ -710,6 +720,36 @@ CREATE TABLE IF NOT EXISTS company_settings (
 
 -- Bot enabled flag per company
 ALTER TABLE companies ADD COLUMN IF NOT EXISTS bot_enabled BOOLEAN NOT NULL DEFAULT true;
+
+-- MVP-5: Clean tattoo-only references from existing data
+-- Step 1: Clean prompt_sections
+UPDATE prompt_sections
+SET content = regexp_replace(
+  content,
+  '(de )?(un )?estudio de tatuajes',
+  'la empresa',
+  'gi'
+)
+WHERE content ILIKE '%estudio de tatuajes%';
+
+-- Step 2: Clean system_prompt directly (catches manually edited prompts)
+UPDATE agents
+SET system_prompt = regexp_replace(
+  system_prompt,
+  'Sos el asistente (virtual )?(de (un )?)?estudio de tatuajes\.?',
+  'Sos el asistente de WhatsApp de ' || COALESCE((SELECT name FROM companies WHERE id = agents.company_id), 'tu empresa') || '.',
+  'gi'
+)
+WHERE system_prompt ILIKE '%estudio de tatuajes%';
+
+-- Step 3: Re-sync system_prompt from cleaned sections for agents that still have tattoo refs
+UPDATE agents SET system_prompt = COALESCE(
+  (SELECT string_agg('## ' || ps.title || E'\n' || ps.content, E'\n\n' ORDER BY ps."order")
+   FROM prompt_sections ps
+   WHERE ps.agent_id = agents.id AND ps.is_active = true),
+  system_prompt
+)
+WHERE system_prompt ILIKE '%tatuaje%';
 `;
 
 async function run() {
