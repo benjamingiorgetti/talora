@@ -2,6 +2,18 @@
 
 All notable changes to this project will be documented in this file.
 
+## [1.0.3.0] - 2026-03-16
+
+### Added
+- Client analytics KPI cards on detail view: último turno, ticket promedio, frecuencia, total turnos, revenue total, mensajes enviados, tasa de respuesta, tasa de conversión
+- `GET /clients/:id/analytics` endpoint combining `client_analytics`, preferred day of week, and per-client reactivation stats
+- `ClientDetailAnalytics` shared type in `@talora/shared`
+- 9 unit tests for the analytics endpoint (0/1/3+ appointments, DOW mapping, division safety, auth scoping)
+
+### Fixed
+- CRM/Growth view now shows ALL active clients, not just those with 2+ appointments — rewrote `computeClientAnalytics()` to start from `clients` table with LEFT JOIN to appointments
+- Backlog cleanup: moved AGENT-1, AGENT-2, QA-CAL to Done (verified in code); removed obsolete MVP-4/6/7/8/9a/11; reordered by priority
+
 ## [1.0.2.0] - 2026-03-16
 
 ### Added
