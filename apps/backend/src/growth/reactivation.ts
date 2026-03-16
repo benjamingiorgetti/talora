@@ -133,18 +133,19 @@ export async function sendReactivationMessage(
   // 7. Find or create conversation
   let conversation: Conversation | null = null;
 
+  // Look for any conversation (active or archived) — unarchive if needed
   const existingConv = await pool.query<Conversation>(
-    `SELECT * FROM conversations WHERE company_id = $1 AND phone_number = $2 AND archived_at IS NULL LIMIT 1`,
+    `SELECT * FROM conversations WHERE company_id = $1 AND phone_number = $2 ORDER BY archived_at IS NULL DESC, last_message_at DESC LIMIT 1`,
     [companyId, client.phone_number]
   );
 
   if (existingConv.rows[0]) {
     conversation = existingConv.rows[0];
     await pool.query(
-      `UPDATE conversations SET last_message_at = NOW(), updated_at = NOW() WHERE id = $1`,
+      `UPDATE conversations SET last_message_at = NOW(), updated_at = NOW(), archived_at = NULL, archive_reason = NULL WHERE id = $1`,
       [conversation.id]
     );
-    conversation = { ...conversation, last_message_at: new Date().toISOString() };
+    conversation = { ...conversation, last_message_at: new Date().toISOString(), archived_at: null };
   } else {
     // Need instance_id from whatsapp_instances
     const instanceIdResult = await pool.query<{ id: string }>(

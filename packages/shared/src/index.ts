@@ -351,6 +351,7 @@ export interface ReactivationMessage {
   professional_id?: string;
   message_text: string;
   status: 'pending' | 'sent' | 'converted' | 'failed';
+  trigger_type?: 'reactivation' | 'slot_fill';
   sent_at?: string;
   converted_at?: string;
   attributed_appointment_id?: string;
