@@ -51,6 +51,10 @@ export const config = {
   agentTimeoutMs: parseInt(optionalEnv('AGENT_TIMEOUT_MS', '120000')),        // 2 min
   toolTimeoutMs: parseInt(optionalEnv('TOOL_TIMEOUT_MS', '60000')),           // 1 min
   wsHeartbeatIntervalMs: parseInt(optionalEnv('WS_HEARTBEAT_INTERVAL_MS', '30000')),
+
+  // Message buffer: debounce agent invocations when user sends multiple messages
+  messageBufferDelayMs: parseInt(optionalEnv('MESSAGE_BUFFER_DELAY_MS', '10000')),       // 10s debounce
+  messageBufferMaxWindowMs: parseInt(optionalEnv('MESSAGE_BUFFER_MAX_WINDOW_MS', '30000')), // 30s max wait
 };
 
 // --- Startup validation warnings ---
