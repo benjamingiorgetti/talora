@@ -12,6 +12,7 @@ import {
   ExternalLink,
   Link2,
   Loader2,
+  Plus,
   RefreshCw,
   Users2,
 } from "lucide-react";
@@ -21,6 +22,15 @@ import { useAuth } from "@/lib/auth";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
+import {
+  Dialog,
+  DialogContent,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
 import { LoadingSpinner } from "@/components/ui/loading-spinner";
 import { WorkspaceEmptyState, WorkspaceMetricCard, WorkspaceSectionHeader } from "@/components/workspace/chrome";
 
@@ -54,6 +64,9 @@ export function ProfessionalsSettingsPage() {
   const searchParams = useSearchParams();
   const { activeCompanyId, session, token } = useAuth();
   const [disconnectingId, setDisconnectingId] = useState<string | null>(null);
+  const [showCreateDialog, setShowCreateDialog] = useState(false);
+  const [creating, setCreating] = useState(false);
+  const [draft, setDraft] = useState({ name: "", specialty: "", calendar_id: "primary" });
 
   const {
     data: professionals,
@@ -151,6 +164,31 @@ export function ProfessionalsSettingsPage() {
     }
   };
 
+  const handleCreate = async () => {
+    if (!draft.name.trim()) {
+      toast.error("El nombre es obligatorio.");
+      return;
+    }
+    setCreating(true);
+    try {
+      await api.post("/professionals", {
+        name: draft.name.trim(),
+        specialty: draft.specialty.trim() || "",
+        calendar_id: draft.calendar_id.trim() || "primary",
+        is_active: true,
+      });
+      await mutateProfessionals();
+      await mutateGoogleCalendars();
+      setShowCreateDialog(false);
+      setDraft({ name: "", specialty: "", calendar_id: "primary" });
+      toast.success("Profesional creado.");
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "No se pudo crear el profesional.");
+    } finally {
+      setCreating(false);
+    }
+  };
+
   const activeProfessionals = professionals.filter((professional) => professional.is_active !== false);
   const isProfessionalSession = session?.role === "professional";
 
@@ -162,17 +200,28 @@ export function ProfessionalsSettingsPage() {
             eyebrow="Google Calendar"
             title={isProfessionalSession ? "Tu agenda" : "Google por profesional"}
           />
-          <Button
-            variant="outline"
-            onClick={() => {
-              void mutateGoogleCalendars();
-              void mutateProfessionals();
-            }}
-            className="h-11 rounded-2xl border-[#d9dfeb] bg-white px-4 hover:bg-[#f5f7fc]"
-          >
-            <RefreshCw className="mr-2 h-4 w-4" />
-            Actualizar estado
-          </Button>
+          <div className="flex gap-2">
+            {!isProfessionalSession && (
+              <Button
+                onClick={() => setShowCreateDialog(true)}
+                className="h-11 rounded-2xl px-4"
+              >
+                <Plus className="mr-2 h-4 w-4" />
+                Nuevo profesional
+              </Button>
+            )}
+            <Button
+              variant="outline"
+              onClick={() => {
+                void mutateGoogleCalendars();
+                void mutateProfessionals();
+              }}
+              className="h-11 rounded-2xl border-[#d9dfeb] bg-white px-4 hover:bg-[#f5f7fc]"
+            >
+              <RefreshCw className="mr-2 h-4 w-4" />
+              Actualizar estado
+            </Button>
+          </div>
         </div>
 
         <div className="mt-6 grid gap-3 md:grid-cols-2 xl:grid-cols-4">
@@ -294,6 +343,58 @@ export function ProfessionalsSettingsPage() {
           })}
         </div>
       )}
+
+      <Dialog open={showCreateDialog} onOpenChange={setShowCreateDialog}>
+        <DialogContent className="rounded-[28px] sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>Nuevo profesional</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4 py-2">
+            <div className="space-y-2">
+              <Label htmlFor="prof-name">Nombre *</Label>
+              <Input
+                id="prof-name"
+                placeholder="Ej: Juli"
+                value={draft.name}
+                onChange={(e) => setDraft((d) => ({ ...d, name: e.target.value }))}
+                className="rounded-2xl border-[#dfe4ee]"
+              />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="prof-specialty">Especialidad</Label>
+              <Input
+                id="prof-specialty"
+                placeholder="Ej: Blackwork"
+                value={draft.specialty}
+                onChange={(e) => setDraft((d) => ({ ...d, specialty: e.target.value }))}
+                className="rounded-2xl border-[#dfe4ee]"
+              />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="prof-calendar">Calendar ID</Label>
+              <Input
+                id="prof-calendar"
+                placeholder="primary"
+                value={draft.calendar_id}
+                onChange={(e) => setDraft((d) => ({ ...d, calendar_id: e.target.value }))}
+                className="rounded-2xl border-[#dfe4ee]"
+              />
+              <p className="text-xs text-slate-400">
+                Dejalo en &quot;primary&quot; si vas a conectar Google Calendar despues.
+              </p>
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setShowCreateDialog(false)} className="rounded-2xl">
+              Cancelar
+            </Button>
+            <Button onClick={() => void handleCreate()} disabled={creating} className="rounded-2xl">
+              {creating && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+              Crear profesional
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
