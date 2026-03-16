@@ -71,6 +71,11 @@ _(vacío — nada en progreso activo)_
   - Contexto: hoy el LLM no tiene visibilidad de los appointments existentes del cliente. Si pide cancelar, el bot no sabe qué appointment cancelar y pregunta servicio/profesional innecesariamente. Inyectar `recent_appointments` (filtrado por phone_number) en el system prompt del prompt-builder resolverría esto.
   - Criterio de cierre: el prompt incluye appointments activos del cliente, y el bot puede responder "tu turno del martes a las 14hs" sin que el cliente lo especifique.
 
+- [ ] `UX-CAL-1 · Dim past day pills in week strip`
+  - Resultado esperado: los pills de días pasados en el week strip se ven visualmente "completados" (más apagados o con checkmark), consistente con el tratamiento de turnos pasados.
+  - Contexto: los appointment rows ya tienen tratamiento temporal (past/now/future), pero los day pills no reflejan esto. Completar la coherencia visual del calendario.
+  - Prioridad: P3 (polish, no bloquea nada).
+
 - [ ] `AGENT-2 · Reprogram: extraer servicio del appointment existente`
   - Resultado esperado: `google_calendar_reprogram` puede funcionar sin resolución de servicio si el appointment ya existe.
   - Contexto: mismo patrón que el fix de cancel — si el appointment ya tiene service_id, se puede extraer duration y title sin pasar por resolveOrFail. Hoy funciona porque el LLM generalmente pasa hints de servicio, pero puede fallar igual que cancel.

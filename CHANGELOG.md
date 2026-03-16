@@ -2,6 +2,23 @@
 
 All notable changes to this project will be documented in this file.
 
+## [1.0.3.0] - 2026-03-16
+
+### Added
+- Calendar temporal awareness: past appointments dimmed (opacity + gray tones), current appointment highlighted with "Ahora" badge and pulse animation
+- `getAppointmentTimeState` utility with unit tests (past/now/future detection)
+- Vercel Analytics integration on landing page
+- Auto-copy `.env` from canonical repo in `/launch` skill for Conductor worktrees
+
+### Changed
+- Reuse existing `status-pulse` animation instead of duplicating keyframes
+- Updated CLAUDE.md with worktree `.env` documentation
+
+### Removed
+- 16 custom agent definitions (replaced by gstack agents)
+- 14 non-essential skills (architecture-review, audit, debug, integrate, plan-deep, preflight, refactor, rename, retro, setup-browser-cookies, status, test-bug, todo, ultra-think)
+- `.agent/` directory (duplicate of `.agents/`)
+
 ## [1.0.2.0] - 2026-03-16
 
 ### Added
