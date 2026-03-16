@@ -4,7 +4,8 @@ import { logger } from '../utils/logger';
 import { authMiddleware, getRequestCompanyId, requireCompanyScope } from './middleware';
 import { getAtRiskClients } from '../growth/analytics';
 import { sendReactivationMessage } from '../growth/reactivation';
-import type { ClientAnalytics, ReactivationMessage, GrowthStats, ReactivationSettings } from '@talora/shared';
+import type { ClientAnalytics, ReactivationMessage, GrowthStats, ReactivationSettings, SlotFillSettings } from '@talora/shared';
+import { listPendingOpportunities, sendOpportunityCandidate, dismissOpportunity } from '../growth/slot-fill-actions';
 
 export const growthRouter = Router();
 
@@ -250,12 +251,16 @@ growthRouter.get('/settings', async (req, res) => {
   const companyId = getRequestCompanyId(req)!;
 
   try {
-    const result = await pool.query<ReactivationSettings>(
+    const result = await pool.query<ReactivationSettings & SlotFillSettings>(
       `SELECT
         reactivation_enabled,
         reactivation_threshold_days,
         reactivation_auto_send,
-        reactivation_message_template
+        reactivation_message_template,
+        slot_fill_enabled,
+        slot_fill_manual_review,
+        slot_fill_max_candidates,
+        slot_fill_message_template
        FROM company_settings
        WHERE company_id = $1`,
       [companyId]
@@ -268,7 +273,11 @@ growthRouter.get('/settings', async (req, res) => {
           reactivation_threshold_days: 7,
           reactivation_auto_send: false,
           reactivation_message_template: null,
-        } as ReactivationSettings,
+          slot_fill_enabled: false,
+          slot_fill_manual_review: true,
+          slot_fill_max_candidates: 3,
+          slot_fill_message_template: null,
+        } as ReactivationSettings & SlotFillSettings,
       });
       return;
     }
@@ -295,33 +304,53 @@ growthRouter.put('/settings', async (req, res) => {
       reactivation_threshold_days,
       reactivation_auto_send,
       reactivation_message_template,
-    } = req.body as Partial<ReactivationSettings>;
+      slot_fill_enabled,
+      slot_fill_manual_review,
+      slot_fill_max_candidates,
+      slot_fill_message_template,
+    } = req.body as Partial<ReactivationSettings & SlotFillSettings>;
 
-    const result = await pool.query<ReactivationSettings>(
+    const result = await pool.query<ReactivationSettings & SlotFillSettings>(
       `INSERT INTO company_settings (
         company_id,
         reactivation_enabled,
         reactivation_threshold_days,
         reactivation_auto_send,
-        reactivation_message_template
-      ) VALUES ($1, $2, $3, $4, $5)
+        reactivation_message_template,
+        slot_fill_enabled,
+        slot_fill_manual_review,
+        slot_fill_max_candidates,
+        slot_fill_message_template
+      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
       ON CONFLICT (company_id) DO UPDATE SET
         reactivation_enabled = COALESCE($2, company_settings.reactivation_enabled),
         reactivation_threshold_days = COALESCE($3, company_settings.reactivation_threshold_days),
         reactivation_auto_send = COALESCE($4, company_settings.reactivation_auto_send),
         reactivation_message_template = COALESCE($5, company_settings.reactivation_message_template),
+        slot_fill_enabled = COALESCE($6, company_settings.slot_fill_enabled),
+        slot_fill_manual_review = COALESCE($7, company_settings.slot_fill_manual_review),
+        slot_fill_max_candidates = COALESCE($8, company_settings.slot_fill_max_candidates),
+        slot_fill_message_template = COALESCE($9, company_settings.slot_fill_message_template),
         updated_at = NOW()
       RETURNING
         reactivation_enabled,
         reactivation_threshold_days,
         reactivation_auto_send,
-        reactivation_message_template`,
+        reactivation_message_template,
+        slot_fill_enabled,
+        slot_fill_manual_review,
+        slot_fill_max_candidates,
+        slot_fill_message_template`,
       [
         companyId,
         reactivation_enabled ?? false,
         reactivation_threshold_days ?? 7,
         reactivation_auto_send ?? false,
         reactivation_message_template ?? null,
+        slot_fill_enabled ?? false,
+        slot_fill_manual_review ?? true,
+        slot_fill_max_candidates ?? 3,
+        slot_fill_message_template ?? null,
       ]
     );
 
@@ -329,5 +358,63 @@ growthRouter.put('/settings', async (req, res) => {
   } catch (err) {
     logger.error('Error updating reactivation settings:', err);
     res.status(500).json({ error: 'Failed to update reactivation settings' });
+  }
+});
+
+// ---------------------------------------------------------------------------
+// Slot Fill: Manual Review Endpoints
+// ---------------------------------------------------------------------------
+
+// GET /slot-fill/opportunities — list pending slot fill opportunities
+growthRouter.get('/slot-fill/opportunities', async (req, res) => {
+  const companyId = getRequestCompanyId(req)!;
+
+  try {
+    const page = typeof req.query.page === 'string' ? parseInt(req.query.page, 10) || 1 : 1;
+    const limit = typeof req.query.limit === 'string' ? parseInt(req.query.limit, 10) || 10 : 10;
+
+    const result = await listPendingOpportunities(companyId, { page, limit });
+    res.json(result);
+  } catch (err) {
+    logger.error('Error listing slot fill opportunities:', err);
+    res.status(500).json({ error: 'Failed to list slot fill opportunities' });
+  }
+});
+
+// POST /slot-fill/opportunities/:id/send — send message to a candidate
+growthRouter.post('/slot-fill/opportunities/:id/send', async (req, res) => {
+  const companyId = getRequestCompanyId(req)!;
+  const { candidateId, messageText } = req.body as { candidateId: string; messageText?: string };
+
+  if (!candidateId) {
+    res.status(400).json({ error: 'candidateId is required' });
+    return;
+  }
+
+  try {
+    const result = await sendOpportunityCandidate(companyId, req.params.id, candidateId, messageText);
+
+    if (!result.success) {
+      res.status(result.status).json({ error: result.error });
+      return;
+    }
+
+    res.json({ data: { reactivationId: result.reactivationId } });
+  } catch (err) {
+    logger.error('Error sending slot fill message:', err);
+    res.status(500).json({ error: 'Failed to send slot fill message' });
+  }
+});
+
+// POST /slot-fill/opportunities/:id/dismiss — dismiss an opportunity
+growthRouter.post('/slot-fill/opportunities/:id/dismiss', async (req, res) => {
+  const companyId = getRequestCompanyId(req)!;
+
+  try {
+    await dismissOpportunity(companyId, req.params.id);
+    res.json({ data: { dismissed: true } });
+  } catch (err) {
+    logger.error('Error dismissing slot fill opportunity:', err);
+    res.status(500).json({ error: 'Failed to dismiss slot fill opportunity' });
   }
 });

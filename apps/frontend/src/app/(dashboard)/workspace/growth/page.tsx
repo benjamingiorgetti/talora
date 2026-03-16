@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import useSWR from "swr";
-import type { ClientAnalytics } from "@talora/shared";
+import type { ClientAnalytics, SlotFillOpportunity } from "@talora/shared";
 import {
   Phone,
   RefreshCw,
@@ -25,6 +25,8 @@ import { PageEntrance } from "@/components/ui/page-entrance";
 import { Textarea } from "@/components/ui/textarea";
 import { useAuth } from "@/lib/auth";
 import { cn } from "@/lib/utils";
+import { SlotFillOpportunityCard } from "./slot-fill-opportunity-card";
+import { SlotFillSendModal } from "./slot-fill-send-modal";
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 
@@ -291,6 +293,11 @@ export default function GrowthPage() {
   const [modalOpen, setModalOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
   const [refreshing, setRefreshing] = useState(false);
+  const [slotFillTarget, setSlotFillTarget] = useState<{
+    opportunityId: string;
+    candidateId: string;
+    clientName: string;
+  } | null>(null);
 
   // ── Data fetching ──────────────────────────────────────────────────────────
 
@@ -302,6 +309,16 @@ export default function GrowthPage() {
     companyScopedKey("/growth/at-risk?include_active=true&refresh=false&limit=200", activeCompanyId),
     companyScopedFetcher<ClientAnalytics[]>
   );
+
+  const {
+    data: opportunitiesData,
+    mutate: mutateOpportunities,
+  } = useSWR(
+    companyScopedKey("/growth/slot-fill/opportunities?limit=10", activeCompanyId),
+    companyScopedFetcher<{ data: SlotFillOpportunity[]; total: number }>
+  );
+
+  const opportunities = opportunitiesData?.data ?? [];
 
   // ── Handlers (all declared before useEffect and early returns) ─────────────
 
@@ -330,6 +347,20 @@ export default function GrowthPage() {
 
   const handleSent = () => {
     void mutateClients();
+  };
+
+  const handleSlotFillSend = (opportunityId: string, candidateId: string, clientName: string) => {
+    setSlotFillTarget({ opportunityId, candidateId, clientName });
+  };
+
+  const handleSlotFillDismiss = async (opportunityId: string) => {
+    try {
+      await api.post(`/growth/slot-fill/opportunities/${opportunityId}/dismiss`, {});
+      toast.success("Oportunidad descartada");
+      void mutateOpportunities();
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "No se pudo descartar.");
+    }
   };
 
   // ── Derived data ───────────────────────────────────────────────────────────
@@ -377,6 +408,28 @@ export default function GrowthPage() {
           </Button>
         </div>
 
+        {/* Slot fill opportunities */}
+        {opportunities.length > 0 && (
+          <section>
+            <h3 className="text-[11px] uppercase tracking-[0.16em] text-slate-400 mb-3 flex items-center gap-2">
+              Slots liberados
+              <span className="rounded-full bg-amber-50 border border-amber-200 px-2 py-0.5 text-[10px] font-semibold text-amber-700 normal-case tracking-normal">
+                {opportunities.length}
+              </span>
+            </h3>
+            <div className="flex gap-4 overflow-x-auto pb-3 -mx-3 px-3 sm:-mx-4 sm:px-4 md:-mx-6 md:px-6 lg:-mx-8 lg:px-8">
+              {opportunities.map((opp) => (
+                <SlotFillOpportunityCard
+                  key={opp.id}
+                  opportunity={opp}
+                  onSend={handleSlotFillSend}
+                  onDismiss={(id) => void handleSlotFillDismiss(id)}
+                />
+              ))}
+            </div>
+          </section>
+        )}
+
         {/* Kanban board */}
         <div className="flex gap-4 overflow-x-auto pb-4 -mx-3 px-3 sm:-mx-4 sm:px-4 md:-mx-6 md:px-6 lg:-mx-8 lg:px-8">
           {columns.map((column) => (
@@ -395,6 +448,18 @@ export default function GrowthPage() {
         open={modalOpen}
         onClose={handleModalClose}
         onSent={handleSent}
+      />
+
+      <SlotFillSendModal
+        opportunityId={slotFillTarget?.opportunityId ?? null}
+        candidateId={slotFillTarget?.candidateId ?? null}
+        clientName={slotFillTarget?.clientName ?? ""}
+        open={!!slotFillTarget}
+        onClose={() => setSlotFillTarget(null)}
+        onSent={() => {
+          setSlotFillTarget(null);
+          void mutateOpportunities();
+        }}
       />
     </>
   );

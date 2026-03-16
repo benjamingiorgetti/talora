@@ -4,6 +4,21 @@ All notable changes to this project will be documented in this file.
 
 ## [1.0.5.0] - 2026-03-16
 
+### Added
+- Slot fill v2: manual review workflow replacing auto-send — cancellations create opportunities with ranked candidates for admin review before messaging
+- `slot_fill_opportunities` and `slot_fill_candidates` DB tables with status constraints and indexes
+- Candidate selector engine (`slot-fill-selector.ts`) scoring clients by service match, professional match, recency, day-of-week preference, and time-of-day preference
+- Manual review actions (`slot-fill-actions.ts`): list pending opportunities, send to candidate, dismiss opportunity
+- Atomic candidate claiming with `WHERE status = 'pending' RETURNING id` to prevent duplicate WhatsApp messages on concurrent requests
+- Rollback on send failure to restore candidate to pending state
+- 3 new API endpoints: `GET /slot-fill/opportunities`, `POST /slot-fill/opportunities/:id/send`, `POST /slot-fill/opportunities/:id/dismiss`
+- WebSocket broadcast on new slot fill opportunity creation
+- Slot fill settings (enabled, manual_review, max_candidates, message_template) in company_settings
+- Frontend opportunity cards with horizontal scroll, candidate list, and send/dismiss actions
+- Send modal with editable message text before confirming WhatsApp delivery
+- Shared types: `SlotFillOpportunity`, `SlotFillCandidate`, `SlotFillSettings`, `SlotFillOpportunityStatus`, `SlotFillCandidateStatus`
+- Comprehensive tests for selector, actions, listener, and API endpoints
+
 ### Changed
 - Redesigned services settings page: split monolithic component into `ServiceEditorSheet`, `ServicesFilters`, and `ServicesList`
 - Replaced inline editing cards with side-panel Sheet for create/edit/delete flows
@@ -11,6 +26,11 @@ All notable changes to this project will be documented in this file.
 - Added sorting by name, price, and duration
 - Moved CSV import preview into a modal Dialog instead of inline card
 - Created reusable `Sheet` UI component based on Radix Dialog primitives
+- Slot fill listener now creates opportunity records instead of auto-sending messages
+- Removed `ClientDetailAnalytics` type from shared (moved to inline in client analytics endpoint)
+
+### Fixed
+- Duplicate `appointment:confirmed` entry in WsEvent union type replaced with `slot_fill:new_opportunity`
 
 ## [1.0.4.0] - 2026-03-16
 

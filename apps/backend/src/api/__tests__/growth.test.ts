@@ -65,6 +65,21 @@ const mockSendReactivationMessage = mock(() =>
 );
 mock.module('../../growth/reactivation', () => ({
   sendReactivationMessage: mockSendReactivationMessage,
+  generateReactivationMessage: mock(() => 'generated message'),
+}));
+
+const mockListPendingOpportunities = mock(() =>
+  Promise.resolve({ data: [], total: 0, page: 1, limit: 10 })
+);
+const mockSendOpportunityCandidate = mock(() =>
+  Promise.resolve({ success: true, reactivationId: 'sf-react-id' })
+);
+const mockDismissOpportunity = mock(() => Promise.resolve());
+
+mock.module('../../growth/slot-fill-actions', () => ({
+  listPendingOpportunities: mockListPendingOpportunities,
+  sendOpportunityCandidate: mockSendOpportunityCandidate,
+  dismissOpportunity: mockDismissOpportunity,
 }));
 
 // ---------------------------------------------------------------------------
@@ -144,6 +159,16 @@ beforeEach(() => {
   mockSendReactivationMessage.mockImplementation(() =>
     Promise.resolve({ success: true, reactivationId: 'react-id' })
   );
+  mockListPendingOpportunities.mockReset();
+  mockListPendingOpportunities.mockImplementation(() =>
+    Promise.resolve({ data: [], total: 0, page: 1, limit: 10 })
+  );
+  mockSendOpportunityCandidate.mockReset();
+  mockSendOpportunityCandidate.mockImplementation(() =>
+    Promise.resolve({ success: true, reactivationId: 'sf-react-id' })
+  );
+  mockDismissOpportunity.mockReset();
+  mockDismissOpportunity.mockImplementation(() => Promise.resolve());
 });
 
 // ---------------------------------------------------------------------------
@@ -574,6 +599,131 @@ describe('PUT /growth/settings', () => {
 });
 
 // ---------------------------------------------------------------------------
+// GET /growth/slot-fill/opportunities
+// ---------------------------------------------------------------------------
+
+describe('GET /growth/slot-fill/opportunities', () => {
+  it('should return pending opportunities', async () => {
+    const mockData = {
+      data: [{ id: 'opp-1', service_name: 'Corte', status: 'pending', candidates: [] }],
+      total: 1,
+      page: 1,
+      limit: 10,
+    };
+    mockListPendingOpportunities.mockImplementation(() => Promise.resolve(mockData));
+
+    const res = await fetch(`${baseUrl}/growth/slot-fill/opportunities`);
+    const body = await res.json();
+
+    expect(res.status).toBe(200);
+    expect(body.data).toHaveLength(1);
+    expect(body.total).toBe(1);
+    expect(mockListPendingOpportunities).toHaveBeenCalledTimes(1);
+    const callArgs = mockListPendingOpportunities.mock.calls[0] as unknown[];
+    expect(callArgs[0]).toBe(TEST_COMPANY_ID);
+  });
+
+  it('should pass page and limit params', async () => {
+    await fetch(`${baseUrl}/growth/slot-fill/opportunities?page=2&limit=5`);
+
+    const callArgs = mockListPendingOpportunities.mock.calls[0] as unknown[];
+    const opts = callArgs[1] as { page: number; limit: number };
+    expect(opts.page).toBe(2);
+    expect(opts.limit).toBe(5);
+  });
+
+  it('should return 500 when list throws', async () => {
+    mockListPendingOpportunities.mockImplementation(() => { throw new Error('DB error'); });
+
+    const res = await fetch(`${baseUrl}/growth/slot-fill/opportunities`);
+    expect(res.status).toBe(500);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// POST /growth/slot-fill/opportunities/:id/send
+// ---------------------------------------------------------------------------
+
+describe('POST /growth/slot-fill/opportunities/:id/send', () => {
+  it('should send message to candidate and return reactivationId', async () => {
+    const res = await fetch(`${baseUrl}/growth/slot-fill/opportunities/opp-1/send`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ candidateId: 'cand-1', messageText: 'Hola!' }),
+    });
+    const body = await res.json();
+
+    expect(res.status).toBe(200);
+    expect(body.data.reactivationId).toBe('sf-react-id');
+    expect(mockSendOpportunityCandidate).toHaveBeenCalledTimes(1);
+    const callArgs = mockSendOpportunityCandidate.mock.calls[0] as unknown[];
+    expect(callArgs[0]).toBe(TEST_COMPANY_ID);
+    expect(callArgs[1]).toBe('opp-1');
+    expect(callArgs[2]).toBe('cand-1');
+    expect(callArgs[3]).toBe('Hola!');
+  });
+
+  it('should return 400 when candidateId is missing', async () => {
+    const res = await fetch(`${baseUrl}/growth/slot-fill/opportunities/opp-1/send`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({}),
+    });
+    const body = await res.json();
+
+    expect(res.status).toBe(400);
+    expect(body.error).toContain('candidateId');
+  });
+
+  it('should forward error status from sendOpportunityCandidate', async () => {
+    mockSendOpportunityCandidate.mockImplementation(() =>
+      Promise.resolve({ success: false, error: 'Slot has already passed', status: 410 })
+    );
+
+    const res = await fetch(`${baseUrl}/growth/slot-fill/opportunities/opp-1/send`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ candidateId: 'cand-1' }),
+    });
+    const body = await res.json();
+
+    expect(res.status).toBe(410);
+    expect(body.error).toContain('already passed');
+  });
+});
+
+// ---------------------------------------------------------------------------
+// POST /growth/slot-fill/opportunities/:id/dismiss
+// ---------------------------------------------------------------------------
+
+describe('POST /growth/slot-fill/opportunities/:id/dismiss', () => {
+  it('should dismiss opportunity', async () => {
+    const res = await fetch(`${baseUrl}/growth/slot-fill/opportunities/opp-1/dismiss`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+    });
+    const body = await res.json();
+
+    expect(res.status).toBe(200);
+    expect(body.data.dismissed).toBe(true);
+    expect(mockDismissOpportunity).toHaveBeenCalledTimes(1);
+    const callArgs = mockDismissOpportunity.mock.calls[0] as unknown[];
+    expect(callArgs[0]).toBe(TEST_COMPANY_ID);
+    expect(callArgs[1]).toBe('opp-1');
+  });
+
+  it('should return 500 when dismiss throws', async () => {
+    mockDismissOpportunity.mockImplementation(() => { throw new Error('DB error'); });
+
+    const res = await fetch(`${baseUrl}/growth/slot-fill/opportunities/opp-1/dismiss`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+    });
+    expect(res.status).toBe(500);
+  });
+});
+
+// ---------------------------------------------------------------------------
 // Auth: all endpoints return 401 without auth
 // ---------------------------------------------------------------------------
 
@@ -587,6 +737,9 @@ describe('Auth enforcement', () => {
     { method: 'GET', path: '/growth/stats' },
     { method: 'GET', path: '/growth/settings' },
     { method: 'PUT', path: '/growth/settings' },
+    { method: 'GET', path: '/growth/slot-fill/opportunities' },
+    { method: 'POST', path: '/growth/slot-fill/opportunities/opp-1/send' },
+    { method: 'POST', path: '/growth/slot-fill/opportunities/opp-1/dismiss' },
   ];
 
   for (const { method, path } of endpoints) {

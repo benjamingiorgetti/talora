@@ -872,6 +872,64 @@ END $$;
 
 CREATE INDEX IF NOT EXISTS idx_reactivation_client_trigger_sent
   ON reactivation_messages(client_id, trigger_type, sent_at DESC);
+
+-- Slot Fill v1: Opportunities table
+CREATE TABLE IF NOT EXISTS slot_fill_opportunities (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  company_id UUID NOT NULL REFERENCES companies(id) ON DELETE CASCADE,
+  appointment_id UUID NOT NULL REFERENCES appointments(id) ON DELETE CASCADE,
+  service_id UUID NOT NULL REFERENCES services(id) ON DELETE SET NULL,
+  professional_id UUID REFERENCES professionals(id) ON DELETE SET NULL,
+  slot_starts_at TIMESTAMPTZ NOT NULL,
+  slot_ends_at TIMESTAMPTZ,
+  service_name TEXT NOT NULL DEFAULT '',
+  professional_name TEXT NOT NULL DEFAULT '',
+  status VARCHAR(20) NOT NULL DEFAULT 'pending',
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+DO $$ BEGIN
+  ALTER TABLE slot_fill_opportunities ADD CONSTRAINT chk_slot_fill_opportunity_status
+    CHECK (status IN ('pending', 'reviewed', 'dismissed', 'expired'));
+EXCEPTION WHEN duplicate_object THEN NULL;
+END $$;
+
+CREATE INDEX IF NOT EXISTS idx_slot_fill_opportunities_company_status
+  ON slot_fill_opportunities(company_id, status, created_at DESC);
+
+CREATE INDEX IF NOT EXISTS idx_slot_fill_opportunities_appointment
+  ON slot_fill_opportunities(appointment_id);
+
+-- Slot Fill v1: Candidates table
+CREATE TABLE IF NOT EXISTS slot_fill_candidates (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  opportunity_id UUID NOT NULL REFERENCES slot_fill_opportunities(id) ON DELETE CASCADE,
+  client_id UUID NOT NULL REFERENCES clients(id) ON DELETE CASCADE,
+  score INT NOT NULL DEFAULT 0,
+  match_reasons TEXT[] NOT NULL DEFAULT '{}',
+  status VARCHAR(20) NOT NULL DEFAULT 'pending',
+  reactivation_message_id UUID REFERENCES reactivation_messages(id) ON DELETE SET NULL,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+DO $$ BEGIN
+  ALTER TABLE slot_fill_candidates ADD CONSTRAINT chk_slot_fill_candidate_status
+    CHECK (status IN ('pending', 'sent', 'skipped'));
+EXCEPTION WHEN duplicate_object THEN NULL;
+END $$;
+
+CREATE INDEX IF NOT EXISTS idx_slot_fill_candidates_opportunity
+  ON slot_fill_candidates(opportunity_id, score DESC);
+
+CREATE UNIQUE INDEX IF NOT EXISTS idx_slot_fill_candidates_opportunity_client
+  ON slot_fill_candidates(opportunity_id, client_id);
+
+-- Slot Fill v1: Additional company settings
+ALTER TABLE company_settings
+  ADD COLUMN IF NOT EXISTS slot_fill_manual_review BOOLEAN NOT NULL DEFAULT true,
+  ADD COLUMN IF NOT EXISTS slot_fill_max_candidates INT NOT NULL DEFAULT 3;
 `;
 
 async function run() {
