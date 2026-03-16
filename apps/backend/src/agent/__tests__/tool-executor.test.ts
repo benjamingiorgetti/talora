@@ -12,6 +12,7 @@ mock.module('../../calendar/operations', () => ({
   createEvent: mock(() => Promise.resolve({ success: true, eventId: 'evt-2' })),
   deleteEvent: mock(() => Promise.resolve({ success: true })),
   updateEvent: mock(() => Promise.resolve({ success: true })),
+  listEvents: mock(() => Promise.resolve({ events: [] })),
 }));
 mock.module('../../utils/url-validator', () => ({
   validateWebhookUrl: mock(() => Promise.resolve()),
@@ -142,9 +143,15 @@ describe('professional resolution: unassigned conversations attempt resolution, 
     expect(parsed.technical_detail).toBeUndefined();
   });
 
-  it('google_calendar_cancel returns resolution error (not early guard message) when no professionals exist', async () => {
+  it('google_calendar_cancel still works when professional resolution fails — looks up appointment directly', async () => {
+    const appt = fakeAppointment(PROF_A);
+    const prof = fakeProfessional(PROF_A);
+
     setupQueryMock([
-      ['FROM professionals', []],
+      ['FROM professionals', []],  // professional resolution fails (none found)
+      ['FROM appointments WHERE', [appt]], // but appointment lookup succeeds (no prof filter)
+      ['FROM professionals WHERE id =', [prof]], // getProfessional for calendar creds
+      ['UPDATE appointments', []],
     ]);
 
     const result = await executeTool(
@@ -153,9 +160,8 @@ describe('professional resolution: unassigned conversations attempt resolution, 
       makeContext({ professionalId: null })
     );
     const parsed = JSON.parse(result);
-    expect(parsed.error).toBeDefined();
-    expect(parsed.error).not.toBe('No hay profesional asignado a esta conversación. No se pueden gestionar turnos automáticamente. Contactar al administrador para asignar un profesional.');
-    expect(parsed.technical_detail).toBeUndefined();
+    expect(parsed.success).toBe(true);
+    expect(parsed.appointmentId).toBe(APPT_ID);
   });
 });
 
@@ -226,20 +232,9 @@ describe('cancel: professional ownership on appointment lookup', () => {
 
   it('returns "not found" when appointment belongs to a different professional', async () => {
     const prof = fakeProfessional(PROF_A);
-    const corteService = {
-      id: 'svc-corte',
-      company_id: COMPANY_A,
-      name: 'Corte',
-      duration_minutes: 30,
-      professional_id: PROF_A,
-      is_active: true,
-      aliases: [],
-    };
 
     setupQueryMock([
       ['FROM professionals WHERE id =', [prof]],
-      ['FROM services', [corteService]],
-      ['UPDATE conversations SET professional_id', []],
       // resolveAppointmentByReference: no match because professional_id doesn't match
       ['FROM appointments WHERE', []],
     ]);
@@ -259,9 +254,8 @@ describe('cancel: professional ownership on appointment lookup', () => {
 
     setupQueryMock([
       ['FROM professionals WHERE id =', [prof]],
-      ['FROM services', []],
-      ['UPDATE conversations SET professional_id', []],
       ['FROM appointments WHERE', [appt]],
+      ['UPDATE appointments', []],
     ]);
 
     const result = await executeTool(
@@ -428,9 +422,8 @@ describe('professional resolution: tools resolve from hints when contextProfessi
 
     setupQueryMock([
       ['FROM professionals', [juliProf]],
-      ['FROM services', []],
-      ['UPDATE conversations SET professional_id', []],
       ['FROM appointments WHERE', [appt]],
+      ['UPDATE appointments', []],
     ]);
 
     const result = await executeTool(
@@ -442,7 +435,7 @@ describe('professional resolution: tools resolve from hints when contextProfessi
       makeContext({ professionalId: null })
     );
     const parsed = JSON.parse(result);
-    expect(parsed.error).not.toBe('No hay profesional asignado a esta conversación. No se pueden gestionar turnos automáticamente. Contactar al administrador para asignar un profesional.');
+    expect(parsed.success).toBe(true);
   });
 });
 
@@ -565,22 +558,11 @@ describe('timezone: starts_at normalization', () => {
 describe('resolveAppointmentByReference: SQL contains professional_id filter', () => {
   beforeEach(() => mockQuery.mockReset());
 
-  it('includes professional_id in SQL when professionalId is provided', async () => {
+  it('includes professional_id in SQL when professionalId is resolved', async () => {
     const prof = fakeProfessional(PROF_A);
-    const corteService = {
-      id: 'svc-corte',
-      company_id: COMPANY_A,
-      name: 'Corte',
-      duration_minutes: 30,
-      professional_id: PROF_A,
-      is_active: true,
-      aliases: [],
-    };
 
     setupQueryMock([
       ['FROM professionals WHERE id =', [prof]],
-      ['FROM services', [corteService]],
-      ['UPDATE conversations SET professional_id', []],
       ['FROM appointments WHERE', []],
     ]);
 
@@ -600,5 +582,125 @@ describe('resolveAppointmentByReference: SQL contains professional_id filter', (
     expect(sql).toContain('professional_id');
     const params = appointmentCall![1] as unknown[];
     expect(params).toContain(PROF_A);
+  });
+});
+
+// ──────────────────────────────────────────────────────────
+// Bug fix: cancel must NOT require service selection
+// ──────────────────────────────────────────────────────────
+
+describe('cancel: does not require service selection', () => {
+  beforeEach(() => mockQuery.mockReset());
+
+  it('cancels by appointmentId without serviceName — no service selection error', async () => {
+    const prof = fakeProfessional(PROF_A);
+    const appt = fakeAppointment(PROF_A);
+
+    setupQueryMock([
+      ['FROM professionals WHERE id =', [prof]],
+      ['FROM appointments WHERE', [appt]],
+      ['UPDATE appointments', []],
+    ]);
+
+    const result = await executeTool(
+      'google_calendar_cancel',
+      { appointmentId: APPT_ID },
+      makeContext({ professionalId: PROF_A })
+    );
+    const parsed = JSON.parse(result);
+    expect(parsed.needsServiceSelection).toBeUndefined();
+    expect(parsed.success).toBe(true);
+    expect(parsed.appointmentId).toBe(APPT_ID);
+  });
+
+  it('cancels by eventId without serviceName — no service selection error', async () => {
+    const prof = fakeProfessional(PROF_A);
+    const appt = fakeAppointment(PROF_A);
+
+    setupQueryMock([
+      ['FROM professionals WHERE id =', [prof]],
+      ['FROM appointments WHERE', [appt]],
+      ['UPDATE appointments', []],
+    ]);
+
+    const result = await executeTool(
+      'google_calendar_cancel',
+      { eventId: EVENT_ID },
+      makeContext({ professionalId: PROF_A })
+    );
+    const parsed = JSON.parse(result);
+    expect(parsed.needsServiceSelection).toBeUndefined();
+    expect(parsed.success).toBe(true);
+  });
+
+  it('cancels appointment even when multiple services exist (no ambiguity prompt)', async () => {
+    const prof = fakeProfessional(PROF_A);
+    const appt = fakeAppointment(PROF_A);
+
+    setupQueryMock([
+      ['FROM professionals WHERE id =', [prof]],
+      ['FROM appointments WHERE', [appt]],
+      ['UPDATE appointments', []],
+    ]);
+
+    // No serviceName, no serviceId — should still cancel without asking
+    const result = await executeTool(
+      'google_calendar_cancel',
+      { appointmentId: APPT_ID },
+      makeContext({ professionalId: PROF_A })
+    );
+    const parsed = JSON.parse(result);
+    expect(parsed.serviceOptions).toBeUndefined();
+    expect(parsed.success).toBe(true);
+  });
+});
+
+// ──────────────────────────────────────────────────────────
+// Bug fix: list enriches events with Talora appointmentId
+// ──────────────────────────────────────────────────────────
+
+describe('list: enriches events with appointmentId from DB', () => {
+  beforeEach(() => mockQuery.mockReset());
+
+  it('returns appointmentId when google_event_id matches an appointment', async () => {
+    const prof = fakeProfessional(PROF_A);
+    const corteService = {
+      id: 'svc-corte',
+      company_id: COMPANY_A,
+      name: 'Corte',
+      duration_minutes: 20,
+      professional_id: PROF_A,
+      is_active: true,
+      aliases: [],
+    };
+
+    setupQueryMock([
+      ['FROM professionals WHERE id =', [prof]],
+      ['FROM services', [corteService]],
+      ['UPDATE conversations SET professional_id', []],
+      // Cross-reference query for enrichment
+      ['google_event_id IN', [
+        { id: APPT_ID, google_event_id: 'gcal-evt-1' },
+      ]],
+    ]);
+
+    // Mock listEvents to return an event with a google_event_id
+    const { listEvents } = await import('../../calendar/operations');
+    (listEvents as ReturnType<typeof mock>).mockImplementation(() =>
+      Promise.resolve({
+        events: [
+          { id: 'gcal-evt-1', summary: 'Corte con Juli', description: '', starts_at: '2026-03-16T10:00:00-03:00', ends_at: '2026-03-16T10:30:00-03:00' },
+        ],
+      })
+    );
+
+    const result = await executeTool(
+      'google_calendar_list',
+      { startDate: '2026-03-16T00:00:00Z', endDate: '2026-03-17T00:00:00Z' },
+      makeContext({ professionalId: PROF_A })
+    );
+    const parsed = JSON.parse(result);
+    expect(parsed.events).toBeDefined();
+    expect(parsed.events[0].appointmentId).toBe(APPT_ID);
   });
 });

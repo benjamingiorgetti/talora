@@ -1,5 +1,11 @@
 # Talora Backlog
 
+## Done
+- [x] `TOOL-1 · Wiring google_calendar_list como tool del agente`
+  - Tool registrada en `core-tool-registry.ts`, case en `tool-executor.ts`, agregada a `CALENDAR_TOOLS`.
+  - Usa `resolveOrFail` para resolver profesional/servicio/calendario.
+  - 18/18 tests pasan. Typecheck limpio.
+
 ## Doing
 _(vacío — nada en progreso activo)_
 
@@ -45,10 +51,6 @@ _(vacío — nada en progreso activo)_
     - [ ] **Reprogramación de turno**: ¿qué pasa si quiero reprogramar un turno a otro horario?
   - Criterio de cierre: los 4 escenarios probados manualmente con resultado documentado (funciona / falla / no implementado).
 
-- [ ] `TOOL-1 · Wiring google_calendar_list como tool del agente`
-  - Resultado esperado: el agente conversacional puede listar eventos de Google Calendar para mostrar agenda al cliente.
-  - Contexto: `listEvents` ya existe en `calendar/operations.ts` y está testeada, pero no está registrada como tool. Requiere: registrar en `core-tool-registry.ts`, agregar case en `tool-executor.ts`, añadir a `CALENDAR_TOOLS` en `index.ts`. Definir parámetros (date range, professional), si necesita `resolveOrFail`, y defaults de rango.
-  - Criterio de cierre: tool registrada, case implementado, test en orchestration.
 
 - [ ] `SEO-1 · Completar manifest.ts y JSON-LD structured data`
   - Qué ya existe: `sitemap.ts` y `robots.ts` funcionando.

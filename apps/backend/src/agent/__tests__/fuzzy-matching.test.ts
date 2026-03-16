@@ -14,6 +14,7 @@ mock.module('../../calendar/operations', () => ({
   createEvent: mock(() => Promise.resolve({ success: true, eventId: 'evt-2' })),
   deleteEvent: mock(() => Promise.resolve({ success: true })),
   updateEvent: mock(() => Promise.resolve({ success: true })),
+  listEvents: mock(() => Promise.resolve({ events: [] })),
 }));
 mock.module('../../evolution/client', () => ({
   EvolutionClient: mock(() => ({ sendText: mock(() => Promise.resolve()) })),

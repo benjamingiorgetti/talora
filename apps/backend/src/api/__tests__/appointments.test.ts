@@ -29,12 +29,15 @@ const mockCreateEvent = mock(() => Promise.resolve({ success: true, eventId: 'gc
 const mockDeleteEvent = mock(() => Promise.resolve({ success: true }));
 const mockUpdateEvent = mock(() => Promise.resolve({ success: true }));
 
+const mockListEvents = mock(() => Promise.resolve({ events: [] }));
+
 mock.module('../../calendar/operations', () => ({
   bookSlot: mockBookSlot,
   checkSlot: mockCheckSlot,
   createEvent: mockCreateEvent,
   deleteEvent: mockDeleteEvent,
   updateEvent: mockUpdateEvent,
+  listEvents: mockListEvents,
 }));
 
 mock.module('../../config', () => ({

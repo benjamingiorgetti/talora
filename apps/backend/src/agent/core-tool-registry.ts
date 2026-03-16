@@ -67,6 +67,21 @@ export const CORE_TOOL_DEFINITIONS: CoreToolDefinition[] = [
     implementation: 'google_calendar_cancel',
   },
   {
+    name: 'google_calendar_list',
+    description: 'Lista los turnos agendados en Google Calendar para un rango de fechas. Útil para mostrar la agenda del profesional al cliente.',
+    parameters: {
+      type: 'object',
+      properties: {
+        startDate: { type: 'string', description: 'Fecha ISO de inicio del rango a consultar.' },
+        endDate: { type: 'string', description: 'Fecha ISO de fin del rango a consultar.' },
+        professionalId: { type: 'string', description: 'Identificador interno del profesional, solo si ya fue resuelto por el sistema.' },
+        professionalName: { type: 'string', description: 'Nombre humano del profesional pedido por el cliente.' },
+      },
+      required: ['startDate', 'endDate'],
+    },
+    implementation: 'google_calendar_list',
+  },
+  {
     name: 'escalate',
     description: 'Escala la conversación a un humano. Envía un mensaje de WhatsApp al número de escalación de la empresa con el contexto del problema.',
     parameters: {
