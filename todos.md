@@ -71,6 +71,11 @@ _(vacío — nada en progreso activo)_
   - Contexto: hoy el LLM no tiene visibilidad de los appointments existentes del cliente. Si pide cancelar, el bot no sabe qué appointment cancelar y pregunta servicio/profesional innecesariamente. Inyectar `recent_appointments` (filtrado por phone_number) en el system prompt del prompt-builder resolverría esto.
   - Criterio de cierre: el prompt incluye appointments activos del cliente, y el bot puede responder "tu turno del martes a las 14hs" sin que el cliente lo especifique.
 
+- [ ] `BUFFER-1 · Startup recovery para buffers de mensajes perdidos`
+  - Resultado esperado: si el backend se reinicia mientras hay un buffer pendiente, los mensajes sin respuesta se procesan automáticamente al arrancar.
+  - Contexto: el message buffer vive en memoria (Map + setTimeout). Si el backend se reinicia dentro de la ventana de 10s, el timer se pierde y el usuario no recibe respuesta hasta que mande otro mensaje. Fix: al arrancar, buscar conversations con mensajes de usuario recientes (últimos 2 min) sin respuesta del bot y procesarlas.
+  - Prioridad: P3 (edge case raro — restart + buffer activo, ventana de 10s).
+
 - [ ] `AGENT-2 · Reprogram: extraer servicio del appointment existente`
   - Resultado esperado: `google_calendar_reprogram` puede funcionar sin resolución de servicio si el appointment ya existe.
   - Contexto: mismo patrón que el fix de cancel — si el appointment ya tiene service_id, se puede extraer duration y title sin pasar por resolveOrFail. Hoy funciona porque el LLM generalmente pasa hints de servicio, pero puede fallar igual que cancel.
