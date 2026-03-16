@@ -51,6 +51,11 @@ _(vacío — nada en progreso activo)_
   - Criterio de cierre: migraciones versionadas, sin backfills semánticos de prompt/tools core.
   - Prioridad: P3 — deuda técnica, funciona pero escala mal.
 
+- [ ] `BUFFER-1 · Startup recovery para buffers de mensajes perdidos`
+  - Resultado esperado: si el backend se reinicia mientras hay un buffer pendiente, los mensajes sin respuesta se procesan automáticamente al arrancar.
+  - Contexto: el message buffer vive en memoria (Map + setTimeout). Si el backend se reinicia dentro de la ventana de 10s, el timer se pierde y el usuario no recibe respuesta hasta que mande otro mensaje. Fix: al arrancar, buscar conversations con mensajes de usuario recientes (últimos 2 min) sin respuesta del bot y procesarlas.
+  - Prioridad: P3 (edge case raro — restart + buffer activo, ventana de 10s).
+
 - [ ] `ARCH-6 · Definir estrategia para historial sin trazas`
   - Resultado esperado: las conversaciones viejas sin `agent_message_traces` tienen una política clara de compatibilidad.
   - Estado actual: UI en `messages-observability-panel.tsx` asume que trazas existen; backend no tiene fallback. Conversaciones viejas muestran vacío sin indicación.

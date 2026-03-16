@@ -15,6 +15,11 @@ All notable changes to this project will be documented in this file.
 ## [1.0.3.0] - 2026-03-16
 
 ### Added
+- Message buffer/debounce for WhatsApp bot: waits 10s for user to finish typing before responding, preventing fragmented per-message responses
+- Max buffer window (30s) to prevent starvation when messages arrive continuously
+- Buffer cancellation on /reset command and bot_paused re-check at invocation time
+- Configurable buffer delays via `MESSAGE_BUFFER_DELAY_MS` and `MESSAGE_BUFFER_MAX_WINDOW_MS` env vars
+- 7 new tests covering buffer batching, reset cancellation, bot_paused mid-flight, max window, and agent-processing overlap
 - Client analytics KPI cards on detail view: último turno, ticket promedio, frecuencia, total turnos, revenue total, mensajes enviados, tasa de respuesta, tasa de conversión
 - `GET /clients/:id/analytics` endpoint combining `client_analytics`, preferred day of week, and per-client reactivation stats
 - `ClientDetailAnalytics` shared type in `@talora/shared`

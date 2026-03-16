@@ -33,6 +33,89 @@ function withConversationLock(lockKey: string, fn: () => Promise<void>): Promise
   return current;
 }
 
+// Per-conversation message buffer to debounce agent invocations.
+// When multiple messages arrive within BUFFER_DELAY_MS, only one agent
+// call is made after the last message, preventing fragmented responses.
+//
+//   msg1 arrives → Lock → DB Save → scheduleAgentResponse() → Release Lock (fast)
+//   msg2 arrives → Lock → DB Save → scheduleAgentResponse() resets timer → Release Lock
+//   ... 10s after last message ...
+//   Timer fires → Lock → re-check bot_paused → Agent → Release Lock
+//
+const messageBuffers = new Map<string, {
+  timer: ReturnType<typeof setTimeout>;
+  firstMessageAt: number;
+  messageCount: number;
+  conversationId: string;
+  instanceName: string;
+}>();
+
+function scheduleAgentResponse(
+  lockKey: string,
+  conversationId: string,
+  instanceName: string
+) {
+  const existing = messageBuffers.get(lockKey);
+  const now = Date.now();
+  const firstMessageAt = existing?.firstMessageAt ?? now;
+  const messageCount = (existing?.messageCount ?? 0) + 1;
+
+  if (existing) {
+    clearTimeout(existing.timer);
+  }
+
+  // If buffer has been open longer than max window, fire immediately
+  const elapsed = now - firstMessageAt;
+  const delay = elapsed >= config.messageBufferMaxWindowMs
+    ? 0
+    : config.messageBufferDelayMs;
+
+  const timer = setTimeout(() => {
+    messageBuffers.delete(lockKey);
+    logger.info(`Agent buffer fired for ${lockKey} (${messageCount} messages buffered)`);
+
+    withConversationLock(lockKey, async () => {
+      // Re-check bot_paused at invocation time — state may have changed
+      // since the message was received
+      const conv = await pool.query<{ bot_paused: boolean }>(
+        'SELECT bot_paused FROM conversations WHERE id = $1',
+        [conversationId]
+      );
+      if (conv.rows[0]?.bot_paused) {
+        logger.info(`Conversation ${conversationId} is paused; skipping buffered agent response`);
+        return;
+      }
+      await handleIncomingMessage(conversationId, instanceName, '');
+    });
+  }, delay);
+
+  messageBuffers.set(lockKey, {
+    timer,
+    firstMessageAt,
+    messageCount,
+    conversationId,
+    instanceName,
+  });
+
+  if (messageCount === 1) {
+    logger.info(`Buffering agent response for ${lockKey}, delay: ${delay}ms`);
+  } else {
+    logger.info(`Extended agent buffer for ${lockKey} (${messageCount} messages, elapsed: ${elapsed}ms)`);
+  }
+}
+
+function cancelMessageBuffer(lockKey: string) {
+  const existing = messageBuffers.get(lockKey);
+  if (existing) {
+    clearTimeout(existing.timer);
+    messageBuffers.delete(lockKey);
+    logger.info(`Agent buffer cancelled for ${lockKey} (reset command)`);
+  }
+}
+
+// Export for testing
+export { messageBuffers, scheduleAgentResponse, cancelMessageBuffer };
+
 interface EvolutionWebhookBody {
   event: string;
   instance: string;
@@ -385,6 +468,7 @@ export async function handleMessagesUpsert(body: EvolutionWebhookBody) {
     }
 
     if (isResetCommand(messageText)) {
+      cancelMessageBuffer(lockKey);
       const resetResult = await resetConversationMemory(conversation.id, conversation.company_id);
 
       broadcast({
@@ -477,8 +561,8 @@ export async function handleMessagesUpsert(body: EvolutionWebhookBody) {
       return;
     }
 
-    // Handle incoming message with agent
-    await handleIncomingMessage(conversation.id, instanceName, messageText);
+    // Schedule agent response with debounce — waits for user to finish typing
+    scheduleAgentResponse(lockKey, conversation.id, instanceName);
   });
 }
 
