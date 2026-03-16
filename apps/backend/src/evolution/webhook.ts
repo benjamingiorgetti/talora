@@ -9,6 +9,7 @@ import { logger } from '../utils/logger';
 import { withTimeout } from '../utils/timeout';
 import { isResetCommand, resetConversationMemory } from '../conversations/reset';
 import { isConversationInactive } from '../conversations/archive';
+import { transcribeAudio } from '../agent/transcribe';
 import type { WhatsAppInstance } from '@talora/shared';
 
 const evolution = new EvolutionClient();
@@ -230,21 +231,49 @@ export async function handleMessagesUpsert(body: EvolutionWebhookBody) {
   const phone = normalizePhone(rawPhone);
 
   // Extract message text
-  const messageText =
+  let messageText =
     data.message?.conversation ||
     data.message?.extendedTextMessage?.text ||
     data.message?.imageMessage?.caption ||
     '';
 
-  // If no text was extracted but the message object exists, it's a non-text message
-  // (audio, image without caption, video, sticker, document, etc.)
+  // Handle audio messages via Whisper transcription
+  const audioMessage = data.message?.audioMessage;
+  if (!messageText && audioMessage) {
+    try {
+      const base64Audio = audioMessage.base64 || data.message?.base64;
+      if (!base64Audio) {
+        await evolution.sendText(instanceName, phone,
+          'No pude procesar tu audio. ¿Podés escribirlo como texto?');
+        return;
+      }
+      const transcript = await transcribeAudio(base64Audio, audioMessage.mimetype || 'audio/ogg');
+      if (!transcript) {
+        await evolution.sendText(instanceName, phone,
+          'No pude entender tu audio. ¿Podés repetirlo o escribirlo?');
+        return;
+      }
+      messageText = `[Audio] ${transcript}`;
+    } catch (err) {
+      logger.error(`Audio transcription failed for ${phone}:`, err);
+      try {
+        await evolution.sendText(instanceName, phone,
+          'Hubo un error procesando tu audio. ¿Podés escribirlo como texto?');
+      } catch (sendErr) {
+        logger.error(`Failed to send audio error reply to ${phone}:`, sendErr);
+      }
+      return;
+    }
+  }
+
+  // If still no text (video, sticker, document, image without caption)
   if (!messageText) {
     if (data.message) {
       try {
         await evolution.sendText(
           instanceName,
           phone,
-          'Gracias por tu mensaje. Por ahora solo puedo procesar texto. Si queres compartir una referencia o explicarme tu consulta, describila con palabras y te ayudo desde aca.',
+          'Gracias por tu mensaje. Por ahora solo puedo procesar texto y audios. Si queres compartir una referencia o explicarme tu consulta, describila con palabras y te ayudo desde aca.',
         );
       } catch (err) {
         logger.error(`Failed to send unsupported media reply to ${phone}:`, err);
