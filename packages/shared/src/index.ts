@@ -297,6 +297,7 @@ export interface Client {
   is_active: boolean;
   next_appointment_at?: string | null;
   recent_appointments?: Array<Pick<Appointment, 'id' | 'starts_at' | 'status'>>;
+  booked_services?: Array<{ id: string; name: string }>;
   created_at: string;
   updated_at?: string;
 }
