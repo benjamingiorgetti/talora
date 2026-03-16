@@ -2,6 +2,16 @@
 
 All notable changes to this project will be documented in this file.
 
+## [1.0.4.0] - 2026-03-16
+
+### Added
+- WhatsApp audio message support: voice notes are transcribed via OpenAI Whisper and processed as text with `[Audio]` prefix
+- `transcribeAudio()` utility in `apps/backend/src/agent/transcribe.ts` with mime type mapping and base64 handling
+- 5 new webhook tests covering audio transcription success, missing base64, empty transcript, API errors, and default mimetype
+
+### Fixed
+- Global service creation (`professional_id: null`) rejected by validation schema — added `.nullable()` to `createServiceSchema` to match `updateServiceSchema`
+
 ## [1.0.3.0] - 2026-03-16
 
 ### Added
