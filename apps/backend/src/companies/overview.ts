@@ -83,13 +83,6 @@ function mapOverview(row: CompanyOverviewRow): CompanyOverview {
 }
 
 const COMPANY_OVERVIEW_QUERY = `
-  WITH google_status AS (
-    SELECT EXISTS (
-      SELECT 1
-      FROM google_calendar_connections
-      WHERE NULLIF(refresh_token, '') IS NOT NULL
-    ) AS connected
-  )
   SELECT c.*,
          COALESCE(admin_stats.admin_count, 0)::text AS admin_count,
          COALESCE(professional_stats.professional_count, 0)::text AS professional_count,
@@ -97,7 +90,7 @@ const COMPANY_OVERVIEW_QUERY = `
          COALESCE(instance_stats.instance_count, 0)::text AS instance_count,
          COALESCE(instance_stats.connected_instance_count, 0)::text AS connected_instance_count,
          COALESCE(calendar_stats.calendar_connection_count, 0)::text AS calendar_connection_count,
-         (SELECT connected FROM google_status) AS google_oauth_connected
+         (COALESCE(calendar_stats.calendar_connection_count, 0) > 0) AS google_oauth_connected
   FROM companies c
   LEFT JOIN LATERAL (
     SELECT COUNT(*) AS admin_count
@@ -135,23 +128,23 @@ const COMPANY_OVERVIEW_QUERY = `
   ) AS calendar_stats ON true
 `;
 
+function buildQuery(schema: { hasRefreshToken: boolean }): string {
+  const refreshFilter = schema.hasRefreshToken ? "NULLIF(gcc.refresh_token, '') IS NOT NULL" : 'false';
+  return COMPANY_OVERVIEW_QUERY.replace(/NULLIF\(gcc\.refresh_token, ''\) IS NOT NULL/g, refreshFilter);
+}
+
 export async function listCompanyOverviews(): Promise<CompanyOverview[]> {
   const schema = await getGoogleConnectionSchema();
-  const refreshTokenFilter = schema.hasRefreshToken ? "NULLIF(refresh_token, '') IS NOT NULL" : 'false';
   const result = await pool.query<CompanyOverviewRow>(
-    `${COMPANY_OVERVIEW_QUERY.replace(/NULLIF\(refresh_token, ''\) IS NOT NULL/g, refreshTokenFilter).replace(/NULLIF\(gcc\.refresh_token, ''\) IS NOT NULL/g, schema.hasRefreshToken ? "NULLIF(gcc.refresh_token, '') IS NOT NULL" : 'false')}
-     ORDER BY c.created_at DESC`
+    `${buildQuery(schema)} ORDER BY c.created_at DESC`
   );
   return result.rows.map(mapOverview);
 }
 
 export async function getCompanyOverview(companyId: string): Promise<CompanyOverview | null> {
   const schema = await getGoogleConnectionSchema();
-  const refreshTokenFilter = schema.hasRefreshToken ? "NULLIF(refresh_token, '') IS NOT NULL" : 'false';
   const result = await pool.query<CompanyOverviewRow>(
-    `${COMPANY_OVERVIEW_QUERY.replace(/NULLIF\(refresh_token, ''\) IS NOT NULL/g, refreshTokenFilter).replace(/NULLIF\(gcc\.refresh_token, ''\) IS NOT NULL/g, schema.hasRefreshToken ? "NULLIF(gcc.refresh_token, '') IS NOT NULL" : 'false')}
-     WHERE c.id = $1
-     LIMIT 1`,
+    `${buildQuery(schema)} WHERE c.id = $1 LIMIT 1`,
     [companyId]
   );
   const row = result.rows[0];
