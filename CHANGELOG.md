@@ -2,6 +2,16 @@
 
 All notable changes to this project will be documented in this file.
 
+## [1.0.5.0] - 2026-03-16
+
+### Changed
+- Redesigned services settings page: split monolithic component into `ServiceEditorSheet`, `ServicesFilters`, and `ServicesList`
+- Replaced inline editing cards with side-panel Sheet for create/edit/delete flows
+- Added filtering by status (active/inactive) and professional assignment
+- Added sorting by name, price, and duration
+- Moved CSV import preview into a modal Dialog instead of inline card
+- Created reusable `Sheet` UI component based on Radix Dialog primitives
+
 ## [1.0.4.0] - 2026-03-16
 
 ### Added
