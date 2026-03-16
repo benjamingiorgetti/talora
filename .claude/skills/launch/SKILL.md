@@ -6,19 +6,31 @@ user_invocable: true
 
 Run the following checklist to launch the Talora development environment. Stop and report if any step fails.
 
-## Step 1: Verify .env
-Read `.env` in the project root. Compare against `.env.example` and verify ALL required keys have non-empty values:
+## Step 1: Copy and verify .env files
+
+Conductor workspaces are git worktrees — `.env` files (gitignored) are never present in new workspaces.
+The canonical `.env` files live in the original repo.
+
+**Auto-copy logic** (do this silently, no need to ask the user):
+
+1. **Backend .env** (`apps/backend/.env`):
+   - If missing, copy from `/Users/benjamingiorgetti/Documents/not Galo/talora/apps/backend/.env`
+   - If that source is also missing, copy from `.env.example` and warn the user to fill in secrets
+
+2. **Frontend .env** (`apps/frontend/.env`):
+   - If missing, copy from `/Users/benjamingiorgetti/Documents/not Galo/talora/apps/frontend/.env`
+   - If that source is also missing, skip (frontend works without it)
+
+After copying, verify the backend `.env` has ALL required keys with non-empty values:
 - `DATABASE_URL`
 - `JWT_SECRET`
 - `ADMIN_EMAIL`
 - `ADMIN_PASSWORD`
 - `EVOLUTION_API_URL`
 - `EVOLUTION_API_KEY`
-- `ANTHROPIC_API_KEY`
+- `OPENAI_API_KEY`
 - `NEXT_PUBLIC_API_URL` (must be `http://localhost:3001`)
 - `NEXT_PUBLIC_WS_URL` (must be `ws://localhost:3001`)
-
-If `.env` doesn't exist, copy from `.env.example` and warn the user to fill in the values.
 
 ## Step 2: Install dependencies
 Run `bun install` in the project root.
