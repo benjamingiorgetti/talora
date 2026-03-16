@@ -23,12 +23,16 @@ mock.module('../../utils/logger', () => ({
   logger: mockLogger,
 }));
 
-const mockSendReactivationMessage = mock(() =>
-  Promise.resolve({ success: true, reactivationId: 'react-111' })
-);
+const mockSelectSlotFillCandidates = mock(() => Promise.resolve([]));
 
-mock.module('../reactivation', () => ({
-  sendReactivationMessage: mockSendReactivationMessage,
+mock.module('../slot-fill-selector', () => ({
+  selectSlotFillCandidates: mockSelectSlotFillCandidates,
+}));
+
+const mockBroadcast = mock(() => {});
+
+mock.module('../../ws/server', () => ({
+  broadcast: mockBroadcast,
 }));
 
 // Real EventEmitter to test the listener
@@ -52,8 +56,8 @@ const { initSlotFillListener } = await import('../slot-fill');
 const COMPANY_ID = TEST_IDS.COMPANY_A;
 const SERVICE_ID = TEST_IDS.SERVICE_A;
 const CLIENT_A = TEST_IDS.CLIENT_A;
-const CLIENT_B = 'ccccc-bbb-2222-3333-444444444444';
 const APPT_ID = TEST_IDS.APPT_A;
+const PROF_ID = TEST_IDS.PROF_A;
 const CANCELLER_ID = 'cancel-aaa-1111-2222-333333333333';
 
 // Future slot: 24 hours from now
@@ -61,24 +65,36 @@ const FUTURE_SLOT = new Date(Date.now() + 24 * 3_600_000).toISOString();
 // Past slot: 1 hour from now (< MIN_HOURS_BEFORE_SLOT)
 const SOON_SLOT = new Date(Date.now() + 1 * 3_600_000).toISOString();
 
+const OPP_ID = 'opp-aaaa-1111-2222-333333333333';
+
 function baseEvent() {
   return {
     appointmentId: APPT_ID,
     companyId: COMPANY_ID,
     serviceId: SERVICE_ID,
-    professionalId: null,
+    professionalId: PROF_ID,
     startsAt: FUTURE_SLOT,
     cancelledClientId: CANCELLER_ID,
   };
 }
 
+const DEFAULT_CANDIDATES = [
+  {
+    client_id: CLIENT_A,
+    client_name: 'Maria',
+    client_phone: '5491155550000',
+    score: 75,
+    match_reasons: ['same_service', 'same_weekday'],
+    days_overdue: 5,
+  },
+];
+
 beforeEach(() => {
   mockQuery.mockReset();
   mockQuery.mockImplementation(() => Promise.resolve({ rows: [], rowCount: 0 }));
-  mockSendReactivationMessage.mockReset();
-  mockSendReactivationMessage.mockImplementation(() =>
-    Promise.resolve({ success: true, reactivationId: 'react-111' })
-  );
+  mockSelectSlotFillCandidates.mockReset();
+  mockSelectSlotFillCandidates.mockImplementation(() => Promise.resolve([]));
+  mockBroadcast.mockReset();
   mockLogger.error.mockReset();
   mockLogger.warn.mockReset();
   mockLogger.info.mockReset();
@@ -97,33 +113,35 @@ async function emitAndWait(event: string, payload: unknown) {
 // Standard query mock setup for happy path
 // ---------------------------------------------------------------------------
 
-function setupHappyPathMocks(eligibleClients = [{ client_id: CLIENT_A, client_name: 'Maria' }]) {
+function setupHappyPathMocks(candidates = DEFAULT_CANDIDATES) {
   mockQuery.mockImplementation((sql: string) => {
     const s = String(sql);
     // company_settings check
     if (s.includes('slot_fill_enabled')) {
       return Promise.resolve({
-        rows: [{ slot_fill_enabled: true, slot_fill_message_template: null }],
+        rows: [{ slot_fill_enabled: true, slot_fill_max_candidates: 3 }],
         rowCount: 1,
       });
     }
-    // service + company name
-    if (s.includes('service_name') && s.includes('company_name')) {
+    // INSERT opportunity (check before context query since both have service_name)
+    if (s.includes('INSERT INTO slot_fill_opportunities')) {
+      return Promise.resolve({ rows: [{ id: OPP_ID }], rowCount: 1 });
+    }
+    // context query (appointment + service + company + professional)
+    if (s.includes('FROM appointments a') && s.includes('service_name')) {
       return Promise.resolve({
-        rows: [{ service_name: 'Corte de pelo', company_name: 'Barberia Cool' }],
+        rows: [{ service_name: 'Corte de pelo', company_name: 'Barberia Cool', professional_name: 'Juan', slot_ends_at: null }],
         rowCount: 1,
       });
     }
-    // eligible clients
-    if (s.includes('DISTINCT ON')) {
-      return Promise.resolve({ rows: eligibleClients, rowCount: eligibleClients.length });
-    }
-    // trigger_type update
-    if (s.includes('trigger_type')) {
+    // INSERT candidate
+    if (s.includes('INSERT INTO slot_fill_candidates')) {
       return Promise.resolve({ rows: [], rowCount: 1 });
     }
     return Promise.resolve({ rows: [], rowCount: 0 });
   });
+
+  mockSelectSlotFillCandidates.mockImplementation(() => Promise.resolve(candidates));
 }
 
 // ---------------------------------------------------------------------------
@@ -131,45 +149,68 @@ function setupHappyPathMocks(eligibleClients = [{ client_id: CLIENT_A, client_na
 // ---------------------------------------------------------------------------
 
 describe('initSlotFillListener', () => {
-  it('should send slot-fill messages to eligible clients when enabled', async () => {
+  it('should create opportunity and candidates when enabled', async () => {
     initSlotFillListener();
     setupHappyPathMocks();
 
     await emitAndWait('appointment:cancelled', baseEvent());
 
-    // Should have called sendReactivationMessage once
-    expect(mockSendReactivationMessage).toHaveBeenCalledTimes(1);
-    const [companyId, clientId, message] = mockSendReactivationMessage.mock.calls[0] as unknown[];
-    expect(companyId).toBe(COMPANY_ID);
-    expect(clientId).toBe(CLIENT_A);
-    expect(String(message)).toContain('Maria');
-    expect(String(message)).toContain('Corte de pelo');
-    expect(String(message)).toContain('Barberia Cool');
+    // Should have called selectSlotFillCandidates
+    expect(mockSelectSlotFillCandidates).toHaveBeenCalledTimes(1);
+    const selectorInput = mockSelectSlotFillCandidates.mock.calls[0][0];
+    expect(selectorInput.companyId).toBe(COMPANY_ID);
+    expect(selectorInput.serviceId).toBe(SERVICE_ID);
+    expect(selectorInput.professionalId).toBe(PROF_ID);
+    expect(selectorInput.cancelledClientId).toBe(CANCELLER_ID);
+    expect(selectorInput.maxCandidates).toBe(3);
 
-    // Should have updated trigger_type
-    const triggerUpdate = mockQuery.mock.calls.find(c => String(c[0]).includes('trigger_type'));
-    expect(triggerUpdate).toBeDefined();
+    // Should have inserted opportunity
+    const oppInsert = mockQuery.mock.calls.find(c => String(c[0]).includes('INSERT INTO slot_fill_opportunities'));
+    expect(oppInsert).toBeDefined();
+
+    // Should have inserted candidate
+    const candInsert = mockQuery.mock.calls.find(c => String(c[0]).includes('INSERT INTO slot_fill_candidates'));
+    expect(candInsert).toBeDefined();
+    const candParams = candInsert![1] as unknown[];
+    expect(candParams).toBeDefined();
+    expect(candParams[1]).toBe(CLIENT_A); // client_id
+    expect(candParams[2]).toBe(75); // score
+    expect(candParams[3]).toEqual(['same_service', 'same_weekday']); // match_reasons
   });
 
-  it('should send to multiple clients (up to MAX_RECIPIENTS)', async () => {
+  it('should broadcast WebSocket event with correct payload', async () => {
     initSlotFillListener();
-    setupHappyPathMocks([
-      { client_id: CLIENT_A, client_name: 'Maria' },
-      { client_id: CLIENT_B, client_name: 'Juan' },
-    ]);
+    setupHappyPathMocks();
 
     await emitAndWait('appointment:cancelled', baseEvent());
 
-    expect(mockSendReactivationMessage).toHaveBeenCalledTimes(2);
+    expect(mockBroadcast).toHaveBeenCalledTimes(1);
+    const wsEvent = mockBroadcast.mock.calls[0][0];
+    expect(wsEvent.type).toBe('slot_fill:new_opportunity');
+    expect(wsEvent.payload.id).toBe(OPP_ID);
+    expect(wsEvent.payload.company_id).toBe(COMPANY_ID);
+    expect(wsEvent.payload.service_name).toBe('Corte de pelo');
   });
 
-  it('should not send when slot_fill_enabled is false', async () => {
+  it('should not create anything when no valid candidates', async () => {
+    initSlotFillListener();
+    setupHappyPathMocks([]);
+
+    await emitAndWait('appointment:cancelled', baseEvent());
+
+    expect(mockSelectSlotFillCandidates).toHaveBeenCalledTimes(1);
+    const oppInsert = mockQuery.mock.calls.find(c => String(c[0]).includes('INSERT INTO slot_fill_opportunities'));
+    expect(oppInsert).toBeUndefined();
+    expect(mockBroadcast).not.toHaveBeenCalled();
+  });
+
+  it('should not create when slot_fill_enabled is false', async () => {
     initSlotFillListener();
     mockQuery.mockImplementation((sql: string) => {
       const s = String(sql);
       if (s.includes('slot_fill_enabled')) {
         return Promise.resolve({
-          rows: [{ slot_fill_enabled: false, slot_fill_message_template: null }],
+          rows: [{ slot_fill_enabled: false, slot_fill_max_candidates: 3 }],
           rowCount: 1,
         });
       }
@@ -178,16 +219,16 @@ describe('initSlotFillListener', () => {
 
     await emitAndWait('appointment:cancelled', baseEvent());
 
-    expect(mockSendReactivationMessage).not.toHaveBeenCalled();
+    expect(mockSelectSlotFillCandidates).not.toHaveBeenCalled();
+    expect(mockBroadcast).not.toHaveBeenCalled();
   });
 
-  it('should not send when no company_settings row exists', async () => {
+  it('should not create when no company_settings row exists', async () => {
     initSlotFillListener();
-    // Default mock returns empty rows for everything
 
     await emitAndWait('appointment:cancelled', baseEvent());
 
-    expect(mockSendReactivationMessage).not.toHaveBeenCalled();
+    expect(mockSelectSlotFillCandidates).not.toHaveBeenCalled();
   });
 
   it('should skip when serviceId is null', async () => {
@@ -197,7 +238,7 @@ describe('initSlotFillListener', () => {
     await emitAndWait('appointment:cancelled', { ...baseEvent(), serviceId: null });
 
     expect(mockQuery).not.toHaveBeenCalled();
-    expect(mockSendReactivationMessage).not.toHaveBeenCalled();
+    expect(mockSelectSlotFillCandidates).not.toHaveBeenCalled();
   });
 
   it('should skip when slot is less than 2 hours away', async () => {
@@ -207,74 +248,21 @@ describe('initSlotFillListener', () => {
     await emitAndWait('appointment:cancelled', { ...baseEvent(), startsAt: SOON_SLOT });
 
     expect(mockQuery).not.toHaveBeenCalled();
-    expect(mockSendReactivationMessage).not.toHaveBeenCalled();
+    expect(mockSelectSlotFillCandidates).not.toHaveBeenCalled();
   });
 
-  it('should skip when no eligible clients found', async () => {
+  it('should insert multiple candidates', async () => {
     initSlotFillListener();
-    mockQuery.mockImplementation((sql: string) => {
-      const s = String(sql);
-      if (s.includes('slot_fill_enabled')) {
-        return Promise.resolve({
-          rows: [{ slot_fill_enabled: true, slot_fill_message_template: null }],
-          rowCount: 1,
-        });
-      }
-      if (s.includes('service_name')) {
-        return Promise.resolve({
-          rows: [{ service_name: 'Corte', company_name: 'Shop' }],
-          rowCount: 1,
-        });
-      }
-      // No eligible clients
-      return Promise.resolve({ rows: [], rowCount: 0 });
-    });
+    const twoCandidates = [
+      { client_id: CLIENT_A, client_name: 'Maria', client_phone: '111', score: 75, match_reasons: ['same_service'], days_overdue: 5 },
+      { client_id: 'client-bb-1111-2222-333333333333', client_name: 'Juan', client_phone: '222', score: 50, match_reasons: ['same_service'], days_overdue: 0 },
+    ];
+    setupHappyPathMocks(twoCandidates);
 
     await emitAndWait('appointment:cancelled', baseEvent());
 
-    expect(mockSendReactivationMessage).not.toHaveBeenCalled();
-  });
-
-  it('should stop sending on rate limit (429)', async () => {
-    initSlotFillListener();
-    setupHappyPathMocks([
-      { client_id: CLIENT_A, client_name: 'Maria' },
-      { client_id: CLIENT_B, client_name: 'Juan' },
-    ]);
-
-    // First call succeeds, second hits rate limit
-    mockSendReactivationMessage
-      .mockImplementationOnce(() => Promise.resolve({ success: true, reactivationId: 'r1' }))
-      .mockImplementationOnce(() =>
-        Promise.resolve({ success: false, error: 'Rate limit', status: 429 })
-      );
-
-    await emitAndWait('appointment:cancelled', baseEvent());
-
-    expect(mockSendReactivationMessage).toHaveBeenCalledTimes(2);
-    // Only 1 trigger_type update (the successful one)
-    const triggerUpdates = mockQuery.mock.calls.filter(c => String(c[0]).includes('trigger_type'));
-    expect(triggerUpdates.length).toBe(1);
-  });
-
-  it('should continue sending when individual message fails (non-429)', async () => {
-    initSlotFillListener();
-    setupHappyPathMocks([
-      { client_id: CLIENT_A, client_name: 'Maria' },
-      { client_id: CLIENT_B, client_name: 'Juan' },
-    ]);
-
-    // First fails with 502, second succeeds
-    mockSendReactivationMessage
-      .mockImplementationOnce(() =>
-        Promise.resolve({ success: false, error: 'WhatsApp down', status: 502 })
-      )
-      .mockImplementationOnce(() => Promise.resolve({ success: true, reactivationId: 'r2' }));
-
-    await emitAndWait('appointment:cancelled', baseEvent());
-
-    expect(mockSendReactivationMessage).toHaveBeenCalledTimes(2);
-    expect(mockLogger.warn).toHaveBeenCalledTimes(1);
+    const candInserts = mockQuery.mock.calls.filter(c => String(c[0]).includes('INSERT INTO slot_fill_candidates'));
+    expect(candInserts).toHaveLength(2);
   });
 
   it('should catch and log errors without propagating', async () => {
@@ -293,65 +281,35 @@ describe('initSlotFillListener', () => {
     expect(String(errorArgs[0])).toContain('slot-fill');
   });
 
-  it('should use custom template when configured', async () => {
+  it('should use max_candidates from settings', async () => {
     initSlotFillListener();
     mockQuery.mockImplementation((sql: string) => {
       const s = String(sql);
       if (s.includes('slot_fill_enabled')) {
         return Promise.resolve({
-          rows: [{
-            slot_fill_enabled: true,
-            slot_fill_message_template: 'Hey {{client_name}}, hay lugar para {{service_name}}!',
-          }],
+          rows: [{ slot_fill_enabled: true, slot_fill_max_candidates: 5 }],
           rowCount: 1,
         });
       }
-      if (s.includes('service_name') && s.includes('company_name')) {
+      if (s.includes('service_name') && s.includes('professional_name')) {
         return Promise.resolve({
-          rows: [{ service_name: 'Masajes', company_name: 'Spa' }],
+          rows: [{ service_name: 'Corte', company_name: 'Shop', professional_name: 'Pro', slot_ends_at: null }],
           rowCount: 1,
         });
       }
-      if (s.includes('DISTINCT ON')) {
-        return Promise.resolve({
-          rows: [{ client_id: CLIENT_A, client_name: 'Ana' }],
-          rowCount: 1,
-        });
+      if (s.includes('INSERT INTO slot_fill_opportunities')) {
+        return Promise.resolve({ rows: [{ id: OPP_ID }], rowCount: 1 });
       }
-      if (s.includes('trigger_type')) {
+      if (s.includes('INSERT INTO slot_fill_candidates')) {
         return Promise.resolve({ rows: [], rowCount: 1 });
       }
       return Promise.resolve({ rows: [], rowCount: 0 });
     });
+    mockSelectSlotFillCandidates.mockImplementation(() => Promise.resolve(DEFAULT_CANDIDATES));
 
     await emitAndWait('appointment:cancelled', baseEvent());
 
-    const [, , message] = mockSendReactivationMessage.mock.calls[0] as unknown[];
-    expect(String(message)).toBe('Hey Ana, hay lugar para Masajes!');
-  });
-
-  it('should pass canceller exclusion to SQL query', async () => {
-    initSlotFillListener();
-    setupHappyPathMocks();
-
-    await emitAndWait('appointment:cancelled', baseEvent());
-
-    // Find the eligible clients query
-    const eligibleQuery = mockQuery.mock.calls.find(c => String(c[0]).includes('DISTINCT ON'));
-    expect(eligibleQuery).toBeDefined();
-    const params = eligibleQuery![1] as unknown[];
-    expect(params[2]).toBe(CANCELLER_ID); // cancelledClientId passed as $3
-  });
-
-  it('should pass LIMIT to SQL query for max recipients cap', async () => {
-    initSlotFillListener();
-    setupHappyPathMocks();
-
-    await emitAndWait('appointment:cancelled', baseEvent());
-
-    const eligibleQuery = mockQuery.mock.calls.find(c => String(c[0]).includes('DISTINCT ON'));
-    expect(eligibleQuery).toBeDefined();
-    const params = eligibleQuery![1] as unknown[];
-    expect(params[3]).toBe(5); // MAX_RECIPIENTS
+    const selectorInput = mockSelectSlotFillCandidates.mock.calls[0][0];
+    expect(selectorInput.maxCandidates).toBe(5);
   });
 });
