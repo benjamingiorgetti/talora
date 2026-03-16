@@ -3,8 +3,8 @@
 import { useEffect, useMemo, useState } from "react";
 import { usePathname, useRouter } from "next/navigation";
 import useSWR from "swr";
-import type { Client, Professional } from "@talora/shared";
-import { MessageCircle, Plus, Search, UserRound } from "lucide-react";
+import type { Client, Professional, Service } from "@talora/shared";
+import { Filter, MessageCircle, Plus, Search, UserRound } from "lucide-react";
 import { toast } from "sonner";
 import { api, companyScopedFetcher, companyScopedKey } from "@/lib/api";
 import { Button } from "@/components/ui/button";
@@ -21,20 +21,30 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { PageEntrance } from "@/components/ui/page-entrance";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Badge } from "@/components/ui/badge";
 import { useAuth } from "@/lib/auth";
 import { WorkspaceEmptyState } from "@/components/workspace/chrome";
 import { WorkspaceErrorState } from "@/components/workspace/error-state";
 
-function formatNextAppointment(dateStr: string | null | undefined): string {
-  if (!dateStr) return "Sin turno";
+function formatNextAppointment(dateStr: string | null | undefined): { label: string; urgent: boolean } {
+  if (!dateStr) return { label: "Sin turno", urgent: false };
   const d = new Date(dateStr);
-  return d.toLocaleString("es-AR", {
-    day: "2-digit",
-    month: "2-digit",
-    year: "2-digit",
-    hour: "2-digit",
-    minute: "2-digit",
-  });
+  const now = new Date();
+  const diffMs = d.getTime() - now.getTime();
+  const diffHours = diffMs / (1000 * 60 * 60);
+  const time = d.toLocaleString("es-AR", { hour: "2-digit", minute: "2-digit" });
+
+  const isToday = d.toDateString() === now.toDateString();
+  const tomorrow = new Date(now);
+  tomorrow.setDate(tomorrow.getDate() + 1);
+  const isTomorrow = d.toDateString() === tomorrow.toDateString();
+
+  if (isToday) return { label: `Hoy ${time}`, urgent: diffHours <= 3 };
+  if (isTomorrow) return { label: `Mañana ${time}`, urgent: false };
+  return {
+    label: d.toLocaleString("es-AR", { day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" }),
+    urgent: false,
+  };
 }
 
 export default function WorkspaceClientsPage() {
@@ -44,6 +54,7 @@ export default function WorkspaceClientsPage() {
   const isProfessional = session?.role === "professional";
   const professionalId = session?.professionalId ?? null;
   const [search, setSearch] = useState("");
+  const [serviceFilter, setServiceFilter] = useState<string>("all");
   const [createOpen, setCreateOpen] = useState(false);
   const [creating, setCreating] = useState(false);
   const [newClient, setNewClient] = useState({ name: "", phone_number: "", professional_id: "", notes: "" });
@@ -60,6 +71,11 @@ export default function WorkspaceClientsPage() {
   const { data: professionals } = useSWR(
     !isProfessional ? companyScopedKey("/professionals", activeCompanyId) : null,
     companyScopedFetcher<Professional[]>
+  );
+
+  const { data: services } = useSWR(
+    companyScopedKey("/services", activeCompanyId),
+    companyScopedFetcher<Service[]>
   );
 
   const handleCreateClient = async () => {
@@ -90,18 +106,25 @@ export default function WorkspaceClientsPage() {
 
   useEffect(() => {
     setSearch("");
+    setServiceFilter("all");
   }, [activeCompanyId]);
 
   const displayClients = useMemo(() => {
     return (clients ?? []).filter((client) => {
       const query = search.trim().toLowerCase();
-      if (!query) return true;
-      return (
-        (client.name || "Cliente sin nombre").toLowerCase().includes(query) ||
-        client.phone_number.toLowerCase().includes(query)
-      );
+      if (query) {
+        const matchesSearch =
+          (client.name || "Cliente sin nombre").toLowerCase().includes(query) ||
+          client.phone_number.toLowerCase().includes(query);
+        if (!matchesSearch) return false;
+      }
+      if (serviceFilter !== "all") {
+        const hasService = client.booked_services?.some(s => s.id === serviceFilter);
+        if (!hasService) return false;
+      }
+      return true;
     });
-  }, [clients, search]);
+  }, [clients, search, serviceFilter]);
 
   useEffect(() => {
     if (pathname === "/workspace/clients") {
@@ -116,7 +139,7 @@ export default function WorkspaceClientsPage() {
   return (
     <PageEntrance className="min-h-0 flex-1 overflow-y-auto space-y-5 lg:space-y-6">
       {/* Top bar */}
-      <div className="flex flex-wrap items-center justify-between gap-3">
+      <div className="flex flex-wrap items-center gap-3">
         <Dialog open={createOpen} onOpenChange={setCreateOpen}>
           <DialogTrigger asChild>
             <Button className="h-11 rounded-2xl bg-slate-900 px-5 text-white hover:bg-slate-800">
@@ -193,7 +216,22 @@ export default function WorkspaceClientsPage() {
           </DialogContent>
         </Dialog>
 
-        <div className="relative w-full min-w-0 sm:w-[320px]">
+        <Select value={serviceFilter} onValueChange={setServiceFilter}>
+          <SelectTrigger className="h-11 w-auto min-w-[180px] rounded-2xl border-[#dde1ea] bg-white">
+            <Filter className="mr-2 h-3.5 w-3.5 text-slate-400" />
+            <SelectValue placeholder="Todos los servicios" />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="all">Todos los servicios</SelectItem>
+            {(services ?? []).filter(s => s.is_active).map((service) => (
+              <SelectItem key={service.id} value={service.id}>
+                {service.name}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+
+        <div className="relative ml-auto w-full min-w-0 sm:w-[320px]">
           <Search className="pointer-events-none absolute left-4 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
           <Input
             value={search}
@@ -219,6 +257,9 @@ export default function WorkspaceClientsPage() {
                 <th className="hidden md:table-cell px-5 py-3 text-left text-[11px] uppercase tracking-[0.16em] text-slate-400 font-medium">
                   Proximo turno
                 </th>
+                <th className="hidden md:table-cell px-5 py-3 text-left text-[11px] uppercase tracking-[0.16em] text-slate-400 font-medium">
+                  Servicio
+                </th>
                 <th className="hidden lg:table-cell px-5 py-3 text-left text-[11px] uppercase tracking-[0.16em] text-slate-400 font-medium">
                   Historial
                 </th>
@@ -229,7 +270,11 @@ export default function WorkspaceClientsPage() {
             </thead>
             <tbody>
               {displayClients.map((client) => (
-                <tr key={client.id} className="border-b border-[#f0f1f5] last:border-0 hover:bg-[#fafafa] transition-colors">
+                <tr
+                  key={client.id}
+                  onClick={() => router.push(`/workspace/clients/${client.id}`)}
+                  className="border-b border-[#f0f1f5] last:border-0 hover:bg-[#fafafa] transition-colors cursor-pointer"
+                >
                   {/* Nombre */}
                   <td className="px-5 py-3">
                     <div className="flex items-center gap-3">
@@ -255,9 +300,30 @@ export default function WorkspaceClientsPage() {
 
                   {/* Proximo turno */}
                   <td className="hidden md:table-cell px-5 py-3">
-                    <span className={`text-sm ${client.next_appointment_at ? "text-slate-950 font-medium" : "text-slate-400"}`}>
-                      {formatNextAppointment(client.next_appointment_at)}
-                    </span>
+                    {(() => {
+                      const apt = formatNextAppointment(client.next_appointment_at);
+                      return (
+                        <span className={`text-sm ${apt.urgent ? "text-amber-600 font-semibold" : client.next_appointment_at ? "text-slate-950 font-medium" : "text-slate-400"}`}>
+                          {apt.label}
+                        </span>
+                      );
+                    })()}
+                  </td>
+
+                  {/* Servicio */}
+                  <td className="hidden md:table-cell px-5 py-3">
+                    {client.booked_services && client.booked_services.length > 0 ? (
+                      <div className="flex items-center gap-1.5">
+                        <Badge variant="secondary" className="border-0 bg-[hsl(var(--surface-lilac))] text-slate-700 text-xs font-medium">
+                          {client.booked_services[0].name}
+                        </Badge>
+                        {client.booked_services.length > 1 && (
+                          <span className="text-xs text-slate-400">+{client.booked_services.length - 1}</span>
+                        )}
+                      </div>
+                    ) : (
+                      <span className="text-sm text-slate-400">--</span>
+                    )}
                   </td>
 
                   {/* Historial */}

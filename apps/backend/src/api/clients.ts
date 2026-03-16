@@ -40,12 +40,13 @@ clientsRouter.get('/', async (req, res) => {
       query = `
         SELECT c.*,
                next_appointment.starts_at AS next_appointment_at,
-               COALESCE(recent_appointments.items, '[]'::json) AS recent_appointments
+               COALESCE(recent_appointments.items, '[]'::json) AS recent_appointments,
+               COALESCE(booked_services.items, '[]'::json) AS booked_services
         FROM clients c
         LEFT JOIN LATERAL (
           SELECT a.starts_at
           FROM appointments a
-          WHERE a.client_id = c.id AND a.status = 'confirmed' AND a.starts_at >= NOW()
+          WHERE (a.client_id = c.id OR (a.phone_number = c.phone_number AND a.company_id = c.company_id)) AND a.status = 'confirmed' AND a.starts_at >= NOW()
           ORDER BY a.starts_at ASC
           LIMIT 1
         ) AS next_appointment ON true
@@ -54,27 +55,34 @@ clientsRouter.get('/', async (req, res) => {
           FROM (
             SELECT a.id, a.starts_at, a.status
             FROM appointments a
-            WHERE a.client_id = c.id
+            WHERE (a.client_id = c.id OR (a.phone_number = c.phone_number AND a.company_id = c.company_id))
             ORDER BY a.starts_at DESC
             LIMIT 3
           ) a
         ) AS recent_appointments ON true
+        LEFT JOIN LATERAL (
+          SELECT json_agg(DISTINCT jsonb_build_object('id', s.id, 'name', s.name)) AS items
+          FROM appointments a
+          JOIN services s ON s.id = a.service_id
+          WHERE (a.client_id = c.id OR (a.phone_number = c.phone_number AND a.company_id = c.company_id)) AND a.service_id IS NOT NULL
+        ) AS booked_services ON true
         WHERE c.agent_id = $1
           AND c.company_id = $2
           AND ($3::uuid IS NULL OR c.professional_id = $3)
           AND (c.name ILIKE $4 OR c.phone_number ILIKE $4)
-        ORDER BY c.name ASC`;
+        ORDER BY next_appointment.starts_at ASC NULLS LAST, c.name ASC`;
       params = [agentId, companyId, professionalId, pattern];
     } else {
       query = `
         SELECT c.*,
                next_appointment.starts_at AS next_appointment_at,
-               COALESCE(recent_appointments.items, '[]'::json) AS recent_appointments
+               COALESCE(recent_appointments.items, '[]'::json) AS recent_appointments,
+               COALESCE(booked_services.items, '[]'::json) AS booked_services
         FROM clients c
         LEFT JOIN LATERAL (
           SELECT a.starts_at
           FROM appointments a
-          WHERE a.client_id = c.id AND a.status = 'confirmed' AND a.starts_at >= NOW()
+          WHERE (a.client_id = c.id OR (a.phone_number = c.phone_number AND a.company_id = c.company_id)) AND a.status = 'confirmed' AND a.starts_at >= NOW()
           ORDER BY a.starts_at ASC
           LIMIT 1
         ) AS next_appointment ON true
@@ -83,43 +91,90 @@ clientsRouter.get('/', async (req, res) => {
           FROM (
             SELECT a.id, a.starts_at, a.status
             FROM appointments a
-            WHERE a.client_id = c.id
+            WHERE (a.client_id = c.id OR (a.phone_number = c.phone_number AND a.company_id = c.company_id))
             ORDER BY a.starts_at DESC
             LIMIT 3
           ) a
         ) AS recent_appointments ON true
+        LEFT JOIN LATERAL (
+          SELECT json_agg(DISTINCT jsonb_build_object('id', s.id, 'name', s.name)) AS items
+          FROM appointments a
+          JOIN services s ON s.id = a.service_id
+          WHERE (a.client_id = c.id OR (a.phone_number = c.phone_number AND a.company_id = c.company_id)) AND a.service_id IS NOT NULL
+        ) AS booked_services ON true
         WHERE c.agent_id = $1
           AND c.company_id = $2
           AND ($3::uuid IS NULL OR c.professional_id = $3)
-        ORDER BY c.name ASC`;
+        ORDER BY next_appointment.starts_at ASC NULLS LAST, c.name ASC`;
       params = [agentId, companyId, professionalId];
     }
 
     const result = await pool.query<Client>(query, params);
-    const enriched = await Promise.all(result.rows.map(async (client) => {
-      const appointmentsResult = await pool.query<{ id: string; starts_at: string; status: 'confirmed' | 'cancelled' }>(
-        `SELECT id, starts_at, status
-         FROM appointments
-         WHERE company_id = $1
-           AND phone_number = $2
-           AND ($3::uuid IS NULL OR professional_id = $3)
-         ORDER BY starts_at DESC
-         LIMIT 3`,
-        [companyId, client.phone_number, professionalId]
-      );
-      const nextAppointment = appointmentsResult.rows
-        .filter((appointment) => appointment.status === 'confirmed' && new Date(appointment.starts_at).getTime() >= Date.now())
-        .sort((a, b) => new Date(a.starts_at).getTime() - new Date(b.starts_at).getTime())[0];
-      return {
-        ...client,
-        next_appointment_at: nextAppointment?.starts_at ?? null,
-        recent_appointments: appointmentsResult.rows,
-      };
-    }));
-    res.json({ data: enriched });
+    res.json({ data: result.rows });
   } catch (err) {
     logger.error('Error listing clients:', err);
     res.status(500).json({ error: 'Failed to list clients' });
+  }
+});
+
+// GET /:id — single client with full appointment history
+clientsRouter.get('/:id', async (req, res) => {
+  try {
+    const companyId = getRequestCompanyId(req)!;
+    const professionalId = getScopedProfessionalId(req);
+    const agentId = await getAgentId(companyId);
+    if (!agentId) {
+      res.status(404).json({ error: 'No agent configured' });
+      return;
+    }
+
+    const result = await pool.query<Client>(
+      `SELECT c.*,
+              next_appointment.starts_at AS next_appointment_at,
+              COALESCE(booked_services.items, '[]'::json) AS booked_services
+       FROM clients c
+       LEFT JOIN LATERAL (
+         SELECT a.starts_at
+         FROM appointments a
+         WHERE (a.client_id = c.id OR (a.phone_number = c.phone_number AND a.company_id = c.company_id)) AND a.status = 'confirmed' AND a.starts_at >= NOW()
+         ORDER BY a.starts_at ASC
+         LIMIT 1
+       ) AS next_appointment ON true
+       LEFT JOIN LATERAL (
+         SELECT json_agg(DISTINCT jsonb_build_object('id', s.id, 'name', s.name)) AS items
+         FROM appointments a
+         JOIN services s ON s.id = a.service_id
+         WHERE (a.client_id = c.id OR (a.phone_number = c.phone_number AND a.company_id = c.company_id)) AND a.service_id IS NOT NULL
+       ) AS booked_services ON true
+       WHERE c.id = $1
+         AND c.agent_id = $2
+         AND c.company_id = $3
+         AND ($4::uuid IS NULL OR c.professional_id = $4)`,
+      [req.params.id, agentId, companyId, professionalId]
+    );
+
+    if (result.rows.length === 0) {
+      res.status(404).json({ error: 'Client not found' });
+      return;
+    }
+
+    // Fetch full appointment history for this client (by client_id or phone match)
+    const client = result.rows[0];
+    const appointments = await pool.query(
+      `SELECT a.id, a.starts_at, a.ends_at, a.status, s.name AS service_name, p.name AS professional_name
+       FROM appointments a
+       LEFT JOIN services s ON s.id = a.service_id
+       LEFT JOIN professionals p ON p.id = a.professional_id
+       WHERE (a.client_id = $1 OR (a.phone_number = $2 AND a.company_id = $3))
+       ORDER BY a.starts_at DESC
+       LIMIT 20`,
+      [req.params.id, client.phone_number, companyId]
+    );
+
+    res.json({ data: { ...result.rows[0], appointments: appointments.rows } });
+  } catch (err) {
+    logger.error('Error fetching client:', err);
+    res.status(500).json({ error: 'Failed to fetch client' });
   }
 });
 
