@@ -302,6 +302,20 @@ export interface Client {
   updated_at?: string;
 }
 
+// --- Client Detail Analytics ---
+export interface ClientDetailAnalytics {
+  last_appointment_at: string | null;
+  avg_ticket: number;
+  avg_frequency_days: number | null;
+  total_appointments: number;
+  total_revenue: number;
+  preferred_day: string | null;
+  messages_sent: number;
+  response_rate: number;
+  conversion_rate: number;
+  risk_score: number;
+}
+
 // --- Company Settings ---
 export interface CompanySettings {
   id: string;

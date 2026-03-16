@@ -61,7 +61,7 @@ describe('computeClientAnalytics', () => {
 
     setupQueryMock(mockQuery, [
       // 1. The big analytics CTE query
-      ['WITH appointment_gaps', [analyticsRow]],
+      ['WITH client_appointments', [analyticsRow]],
       // 2. Upsert into client_analytics
       ['INSERT INTO client_analytics', []],
     ]);
@@ -91,7 +91,7 @@ describe('computeClientAnalytics', () => {
     };
 
     setupQueryMock(mockQuery, [
-      ['WITH appointment_gaps', [analyticsRow]],
+      ['WITH client_appointments', [analyticsRow]],
       ['INSERT INTO client_analytics', []],
     ]);
 
@@ -115,7 +115,7 @@ describe('computeClientAnalytics', () => {
     };
 
     setupQueryMock(mockQuery, [
-      ['WITH appointment_gaps', [analyticsRow]],
+      ['WITH client_appointments', [analyticsRow]],
       ['INSERT INTO client_analytics', []],
     ]);
 
@@ -125,9 +125,9 @@ describe('computeClientAnalytics', () => {
     expect(upsertParams[8]).toEqual([100]); // risk_scores capped
   });
 
-  it('should not upsert anything when no at-risk clients are found', async () => {
+  it('should not upsert anything when no active clients exist', async () => {
     setupQueryMock(mockQuery, [
-      ['WITH appointment_gaps', []],
+      ['WITH client_appointments', []],
     ]);
 
     await computeClientAnalytics(COMPANY_ID);
@@ -161,7 +161,7 @@ describe('computeClientAnalytics', () => {
     ];
 
     setupQueryMock(mockQuery, [
-      ['WITH appointment_gaps', rows],
+      ['WITH client_appointments', rows],
       ['INSERT INTO client_analytics', []],
     ]);
 
@@ -186,7 +186,7 @@ describe('computeClientAnalytics', () => {
     expect(capturedSql).toContain("status = 'confirmed'");
   });
 
-  it('should only include clients with >= 2 appointments (SQL has HAVING COUNT(*) >= 2)', async () => {
+  it('should include ALL active clients by joining from clients table', async () => {
     let capturedSql = '';
     mockQuery.mockImplementation((sql: string) => {
       capturedSql += sql;
@@ -195,7 +195,11 @@ describe('computeClientAnalytics', () => {
 
     await computeClientAnalytics(COMPANY_ID);
 
-    expect(capturedSql).toContain('HAVING COUNT(*) >= 2');
+    // New query starts from clients table (LEFT JOIN to appointments)
+    // to include clients with 0-1 appointments
+    expect(capturedSql).toContain('FROM clients c');
+    expect(capturedSql).toContain('is_active = true');
+    expect(capturedSql).not.toContain('HAVING COUNT(*) >= 2');
   });
 });
 
@@ -234,7 +238,7 @@ describe('getAtRiskClients', () => {
         return Promise.resolve({ rows: [{ computed_at: staleDate }], rowCount: 1 });
       }
       // 2. computeClientAnalytics analytics CTE
-      if (sqlStr.includes('WITH appointment_gaps')) {
+      if (sqlStr.includes('WITH client_appointments')) {
         return Promise.resolve({ rows: [], rowCount: 0 });
       }
       // 3. Data query
@@ -252,7 +256,7 @@ describe('getAtRiskClients', () => {
 
     // Staleness check should trigger computeClientAnalytics call
     const sqlCalls = mockQuery.mock.calls.map(c => String(c[0]));
-    const hasComputeCall = sqlCalls.some(s => s.includes('WITH appointment_gaps'));
+    const hasComputeCall = sqlCalls.some(s => s.includes('WITH client_appointments'));
     expect(hasComputeCall).toBe(true);
     expect(result.data).toHaveLength(1);
   });
@@ -266,7 +270,7 @@ describe('getAtRiskClients', () => {
       if (sqlStr.includes('MIN(computed_at)')) {
         return Promise.resolve({ rows: [{ computed_at: freshDate }], rowCount: 1 });
       }
-      if (sqlStr.includes('WITH appointment_gaps')) {
+      if (sqlStr.includes('WITH client_appointments')) {
         return Promise.resolve({ rows: [], rowCount: 0 });
       }
       if (sqlStr.includes('JOIN clients c ON c.id = ca.client_id')) {
@@ -281,7 +285,7 @@ describe('getAtRiskClients', () => {
     await getAtRiskClients(COMPANY_ID, { refresh: true });
 
     const sqlCalls = mockQuery.mock.calls.map(c => String(c[0]));
-    const hasComputeCall = sqlCalls.some(s => s.includes('WITH appointment_gaps'));
+    const hasComputeCall = sqlCalls.some(s => s.includes('WITH client_appointments'));
     expect(hasComputeCall).toBe(true);
   });
 
@@ -306,7 +310,7 @@ describe('getAtRiskClients', () => {
     await getAtRiskClients(COMPANY_ID);
 
     const sqlCalls = mockQuery.mock.calls.map(c => String(c[0]));
-    const hasComputeCall = sqlCalls.some(s => s.includes('WITH appointment_gaps'));
+    const hasComputeCall = sqlCalls.some(s => s.includes('WITH client_appointments'));
     expect(hasComputeCall).toBe(false);
   });
 
