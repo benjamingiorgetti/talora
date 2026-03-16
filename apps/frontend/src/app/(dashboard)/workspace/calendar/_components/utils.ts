@@ -104,6 +104,20 @@ export function formatTimeRange(startsAt: string, endsAt: string): string {
   return `${fmt(startsAt)} – ${fmt(endsAt)}`;
 }
 
+export type AppointmentTimeState = "past" | "now" | "future";
+
+export function getAppointmentTimeState(
+  startsAt: string,
+  endsAt: string
+): AppointmentTimeState {
+  const now = Date.now();
+  const end = new Date(endsAt).getTime();
+  if (now > end) return "past";
+  const start = new Date(startsAt).getTime();
+  if (now >= start && now <= end) return "now";
+  return "future";
+}
+
 export type CalendarDay = {
   date: Date;
   key: string;

@@ -56,6 +56,11 @@ _(vacío — nada en progreso activo)_
   - Contexto: el message buffer vive en memoria (Map + setTimeout). Si el backend se reinicia dentro de la ventana de 10s, el timer se pierde y el usuario no recibe respuesta hasta que mande otro mensaje. Fix: al arrancar, buscar conversations con mensajes de usuario recientes (últimos 2 min) sin respuesta del bot y procesarlas.
   - Prioridad: P3 (edge case raro — restart + buffer activo, ventana de 10s).
 
+- [ ] `UX-CAL-1 · Dim past day pills in week strip`
+  - Resultado esperado: los pills de días pasados en el week strip se ven visualmente "completados" (más apagados o con checkmark), consistente con el tratamiento de turnos pasados.
+  - Contexto: los appointment rows ya tienen tratamiento temporal (past/now/future), pero los day pills no reflejan esto. Completar la coherencia visual del calendario.
+  - Prioridad: P3 (polish, no bloquea nada).
+
 - [ ] `ARCH-6 · Definir estrategia para historial sin trazas`
   - Resultado esperado: las conversaciones viejas sin `agent_message_traces` tienen una política clara de compatibilidad.
   - Estado actual: UI en `messages-observability-panel.tsx` asume que trazas existen; backend no tiene fallback. Conversaciones viejas muestran vacío sin indicación.
