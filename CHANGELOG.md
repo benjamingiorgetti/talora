@@ -9,10 +9,23 @@ All notable changes to this project will be documented in this file.
 - `getAppointmentTimeState` utility with unit tests (past/now/future detection)
 - Vercel Analytics integration on landing page
 - Auto-copy `.env` from canonical repo in `/launch` skill for Conductor worktrees
+- Message buffer/debounce for WhatsApp bot: waits 10s for user to finish typing before responding, preventing fragmented per-message responses
+- Max buffer window (30s) to prevent starvation when messages arrive continuously
+- Buffer cancellation on /reset command and bot_paused re-check at invocation time
+- Configurable buffer delays via `MESSAGE_BUFFER_DELAY_MS` and `MESSAGE_BUFFER_MAX_WINDOW_MS` env vars
+- 7 new tests covering buffer batching, reset cancellation, bot_paused mid-flight, max window, and agent-processing overlap
+- Client analytics KPI cards on detail view: último turno, ticket promedio, frecuencia, total turnos, revenue total, mensajes enviados, tasa de respuesta, tasa de conversión
+- `GET /clients/:id/analytics` endpoint combining `client_analytics`, preferred day of week, and per-client reactivation stats
+- `ClientDetailAnalytics` shared type in `@talora/shared`
+- 9 unit tests for the analytics endpoint (0/1/3+ appointments, DOW mapping, division safety, auth scoping)
 
 ### Changed
 - Reuse existing `status-pulse` animation instead of duplicating keyframes
 - Updated CLAUDE.md with worktree `.env` documentation
+
+### Fixed
+- CRM/Growth view now shows ALL active clients, not just those with 2+ appointments — rewrote `computeClientAnalytics()` to start from `clients` table with LEFT JOIN to appointments
+- Backlog cleanup: moved AGENT-1, AGENT-2, QA-CAL to Done (verified in code); removed obsolete MVP-4/6/7/8/9a/11; reordered by priority
 
 ### Removed
 - 16 custom agent definitions (replaced by gstack agents)

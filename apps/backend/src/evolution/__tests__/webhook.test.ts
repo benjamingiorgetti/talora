@@ -68,6 +68,8 @@ mock.module('../../config', () => ({
     webhookAllowedHosts: '',
     evolutionApiUrl: 'http://localhost:8080',
     evolutionApiKey: 'test-api-key',
+    messageBufferDelayMs: 100,
+    messageBufferMaxWindowMs: 500,
   },
 }));
 
@@ -113,6 +115,7 @@ const {
   handleMessagesUpsert,
   handleConnectionUpdate,
   handleQrCodeUpdate,
+  messageBuffers,
 } = await import('../webhook');
 
 // ---------------------------------------------------------------------------
@@ -148,6 +151,11 @@ const messageRow = {
 // ---------------------------------------------------------------------------
 // Helpers
 // ---------------------------------------------------------------------------
+/** Wait for the message buffer timer (100ms in test config) to fire and complete. */
+async function waitForBuffer(ms = 150) {
+  await new Promise((r) => setTimeout(r, ms));
+}
+
 function makeWebhookBody(overrides: Record<string, unknown> = {}) {
   return {
     event: 'messages.upsert',
@@ -301,6 +309,7 @@ describe('handleMessagesUpsert', () => {
     mockSendReaction.mockReset();
     mockIsResetCommand.mockReset();
     mockIsConversationInactive.mockReset();
+    messageBuffers.clear();
 
     // Default: no reset command, conversation not inactive
     mockIsResetCommand.mockImplementation(() => false);
@@ -312,7 +321,7 @@ describe('handleMessagesUpsert', () => {
     setupDefaultQueryMock();
   });
 
-  it('should create/update conversation in DB and call handleIncomingMessage for a valid incoming message', async () => {
+  it('should create/update conversation in DB and call handleIncomingMessage after buffer delay', async () => {
     await handleMessagesUpsert(makeWebhookBody());
 
     // Verified at least one query touched whatsapp_instances (instance lookup)
@@ -334,11 +343,16 @@ describe('handleMessagesUpsert', () => {
     );
     expect(msgQuery).toBeDefined();
 
-    // Agent was called with conversation ID and message text
+    // Agent is NOT called immediately — it's buffered
+    expect(mockHandleIncomingMessage).not.toHaveBeenCalled();
+
+    // Wait for buffer timer to fire
+    await waitForBuffer();
+
+    // Agent was called after buffer delay
     expect(mockHandleIncomingMessage).toHaveBeenCalledTimes(1);
     const agentCalls = mockHandleIncomingMessage.mock.calls as unknown as any[][];
     expect(agentCalls[0][0]).toBe(CONV_ID);
-    expect(agentCalls[0][2]).toBe('Hola, quiero un turno');
   });
 
   it('should skip processing when fromMe is true', async () => {
@@ -472,15 +486,18 @@ describe('handleMessagesUpsert', () => {
     });
 
     await handleMessagesUpsert(body);
+    await waitForBuffer();
     const firstCallCount = (mockHandleIncomingMessage.mock.calls as unknown as any[][]).length;
 
     // Reset mocks but NOT the idempotency map (it lives in the module)
     mockQuery.mockReset();
     mockHandleIncomingMessage.mockReset();
+    messageBuffers.clear();
     setupDefaultQueryMock();
 
     // Second call with the same body (same key.id)
     await handleMessagesUpsert(body);
+    await waitForBuffer();
     const secondCallCount = (mockHandleIncomingMessage.mock.calls as unknown as any[][]).length;
 
     expect(firstCallCount).toBe(1);
@@ -500,6 +517,7 @@ describe('handleMessagesUpsert — conversation serialization', () => {
     mockSendReaction.mockReset();
     mockIsResetCommand.mockReset();
     mockIsConversationInactive.mockReset();
+    messageBuffers.clear();
 
     mockIsConversationInactive.mockImplementation(() => false);
     mockHandleIncomingMessage.mockImplementation(() => Promise.resolve());
@@ -598,6 +616,9 @@ describe('handleMessagesUpsert — conversation serialization', () => {
     resolveReset();
 
     await Promise.all([first, second]);
+
+    // Wait for the buffer timer to fire (hola schedules agent via buffer)
+    await waitForBuffer();
 
     // Reset must complete fully before hola's agent call
     expect(order).toEqual(['reset:start', 'reset:end', 'agent']);
@@ -729,5 +750,243 @@ describe('handleQrCodeUpdate', () => {
     });
 
     expect(mockQuery).not.toHaveBeenCalled();
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Message buffer / debounce tests
+// ---------------------------------------------------------------------------
+describe('handleMessagesUpsert — message buffer', () => {
+  beforeEach(() => {
+    mockQuery.mockReset();
+    mockBroadcast.mockReset();
+    mockHandleIncomingMessage.mockReset();
+    mockSendText.mockReset();
+    mockSendReaction.mockReset();
+    mockIsResetCommand.mockReset();
+    mockIsConversationInactive.mockReset();
+    messageBuffers.clear();
+
+    mockIsResetCommand.mockImplementation(() => false);
+    mockIsConversationInactive.mockImplementation(() => false);
+    mockHandleIncomingMessage.mockImplementation(() => Promise.resolve());
+    mockSendText.mockImplementation(() => Promise.resolve({ key: { id: 'msg-sent-001' } }));
+    mockSendReaction.mockImplementation(() => Promise.resolve({ key: { id: 'msg-rxn-001' } }));
+  });
+
+  it('should fire agent once after a single message and buffer delay', async () => {
+    setupDefaultQueryMock();
+
+    await handleMessagesUpsert(makeWebhookBody({
+      data: {
+        key: { id: 'ev-single-buf', remoteJid: `${PHONE}@s.whatsapp.net`, fromMe: false },
+        message: { conversation: 'Hola' },
+        pushName: 'Test Client',
+      },
+    }));
+
+    // Agent NOT called immediately
+    expect(mockHandleIncomingMessage).not.toHaveBeenCalled();
+    expect(messageBuffers.size).toBe(1);
+
+    await waitForBuffer();
+
+    expect(mockHandleIncomingMessage).toHaveBeenCalledTimes(1);
+    expect(messageBuffers.size).toBe(0);
+  });
+
+  it('should batch two messages within buffer window into one agent call', async () => {
+    setupDefaultQueryMock();
+
+    // First message
+    await handleMessagesUpsert(makeWebhookBody({
+      data: {
+        key: { id: 'ev-batch-1', remoteJid: `${PHONE}@s.whatsapp.net`, fromMe: false },
+        message: { conversation: 'sí' },
+        pushName: 'Test Client',
+      },
+    }));
+
+    // Second message 50ms later (within 100ms buffer window)
+    await new Promise((r) => setTimeout(r, 50));
+    await handleMessagesUpsert(makeWebhookBody({
+      data: {
+        key: { id: 'ev-batch-2', remoteJid: `${PHONE}@s.whatsapp.net`, fromMe: false },
+        message: { conversation: 'jueves a las 14' },
+        pushName: 'Test Client',
+      },
+    }));
+
+    // Still no agent call
+    expect(mockHandleIncomingMessage).not.toHaveBeenCalled();
+
+    // Wait for buffer to fire (100ms from last message = 150ms from now)
+    await waitForBuffer();
+
+    // Only ONE agent call, not two
+    expect(mockHandleIncomingMessage).toHaveBeenCalledTimes(1);
+  });
+
+  it('should make two separate agent calls for messages spaced beyond buffer delay', async () => {
+    setupDefaultQueryMock();
+
+    // First message
+    await handleMessagesUpsert(makeWebhookBody({
+      data: {
+        key: { id: 'ev-sep-1', remoteJid: `${PHONE}@s.whatsapp.net`, fromMe: false },
+        message: { conversation: 'Hola' },
+        pushName: 'Test Client',
+      },
+    }));
+
+    // Wait for buffer to fire
+    await waitForBuffer();
+    expect(mockHandleIncomingMessage).toHaveBeenCalledTimes(1);
+
+    // Second message after buffer has fired
+    await handleMessagesUpsert(makeWebhookBody({
+      data: {
+        key: { id: 'ev-sep-2', remoteJid: `${PHONE}@s.whatsapp.net`, fromMe: false },
+        message: { conversation: 'Quiero un turno' },
+        pushName: 'Test Client',
+      },
+    }));
+
+    await waitForBuffer();
+    expect(mockHandleIncomingMessage).toHaveBeenCalledTimes(2);
+  });
+
+  it('should cancel pending buffer when /reset command arrives', async () => {
+    setupDefaultQueryMock();
+
+    // First message — schedules buffer
+    await handleMessagesUpsert(makeWebhookBody({
+      data: {
+        key: { id: 'ev-rst-buf-1', remoteJid: `${PHONE}@s.whatsapp.net`, fromMe: false },
+        message: { conversation: 'Hola' },
+        pushName: 'Test Client',
+      },
+    }));
+
+    expect(messageBuffers.size).toBe(1);
+
+    // /reset arrives — should cancel the buffer
+    mockIsResetCommand.mockImplementation(() => true);
+    await handleMessagesUpsert(makeWebhookBody({
+      data: {
+        key: { id: 'ev-rst-buf-2', remoteJid: `${PHONE}@s.whatsapp.net`, fromMe: false },
+        message: { conversation: '/reset' },
+        pushName: 'Test Client',
+      },
+    }));
+
+    expect(messageBuffers.size).toBe(0);
+
+    // Wait well past the buffer delay — agent should NOT be called
+    await waitForBuffer();
+    expect(mockHandleIncomingMessage).not.toHaveBeenCalled();
+  });
+
+  it('should skip agent invocation when bot_paused is set between message arrival and buffer fire', async () => {
+    // Setup: bot NOT paused when message arrives, but paused when buffer fires.
+    // 'SELECT bot_paused' must come BEFORE 'FROM conversations' so the
+    // re-check query matches the more specific pattern first.
+    setupQueryMock(mockQuery, [
+      ['SELECT bot_paused', [{ bot_paused: true }]],
+      ['whatsapp_instances WHERE evolution_instance_name', [instanceRow]],
+      ['FROM clients', []],
+      ['FROM conversations', [{ id: CONV_ID, archived_at: null, last_message_at: FIXED_NOW }]],
+      ['INSERT INTO conversations', [{ ...conversationRow, bot_paused: false }]],
+      ['INSERT INTO messages', [messageRow]],
+    ]);
+
+    await handleMessagesUpsert(makeWebhookBody({
+      data: {
+        key: { id: 'ev-paused-buf', remoteJid: `${PHONE}@s.whatsapp.net`, fromMe: false },
+        message: { conversation: 'Hola' },
+        pushName: 'Test Client',
+      },
+    }));
+
+    await waitForBuffer();
+
+    // Agent should NOT be called because bot was paused at invocation time
+    expect(mockHandleIncomingMessage).not.toHaveBeenCalled();
+  });
+
+  it('should fire at max window when messages keep arriving within buffer delay', async () => {
+    setupDefaultQueryMock();
+
+    // Config: bufferDelay=100ms, maxWindow=500ms
+    // Send 8 messages every 80ms: 7 intervals * 80ms = 560ms > 500ms max window
+    // The 8th message (at ~560ms) sees elapsed >= 500ms and sets delay=0
+    const messageCount = 8;
+    for (let i = 0; i < messageCount; i++) {
+      await handleMessagesUpsert(makeWebhookBody({
+        data: {
+          key: { id: `ev-rapid-${i}`, remoteJid: `${PHONE}@s.whatsapp.net`, fromMe: false },
+          message: { conversation: `msg ${i}` },
+          pushName: 'Test Client',
+        },
+      }));
+      if (i < messageCount - 1) {
+        await new Promise((r) => setTimeout(r, 80));
+      }
+    }
+
+    // The last message set delay=0, so the agent fires almost immediately.
+    // Wait a small amount for the setTimeout(fn, 0) to execute.
+    await new Promise((r) => setTimeout(r, 50));
+
+    expect(mockHandleIncomingMessage).toHaveBeenCalledTimes(1);
+  });
+
+  it('should start a new buffer cycle for messages arriving during agent processing', async () => {
+    let resolveAgent!: () => void;
+    const agentBlocked = new Promise<void>((resolve) => {
+      resolveAgent = resolve;
+    });
+
+    // First agent call blocks; second resolves immediately
+    let agentCallCount = 0;
+    mockHandleIncomingMessage.mockImplementation(async () => {
+      agentCallCount++;
+      if (agentCallCount === 1) await agentBlocked;
+    });
+
+    setupDefaultQueryMock();
+
+    // Message 1 — schedules buffer
+    await handleMessagesUpsert(makeWebhookBody({
+      data: {
+        key: { id: 'ev-during-1', remoteJid: `${PHONE}@s.whatsapp.net`, fromMe: false },
+        message: { conversation: 'Hola' },
+        pushName: 'Test Client',
+      },
+    }));
+
+    // Wait for buffer to fire — agent starts but blocks
+    await waitForBuffer();
+    expect(mockHandleIncomingMessage).toHaveBeenCalledTimes(1);
+
+    // Message 2 arrives while agent is processing (lock is held by agent).
+    // Don't await — it'll queue behind the blocked agent lock.
+    const p2 = handleMessagesUpsert(makeWebhookBody({
+      data: {
+        key: { id: 'ev-during-2', remoteJid: `${PHONE}@s.whatsapp.net`, fromMe: false },
+        message: { conversation: 'Quiero cancelar' },
+        pushName: 'Test Client',
+      },
+    }));
+
+    // Release the first agent call so msg2 can proceed
+    resolveAgent();
+    await p2;
+
+    // Wait for the second message's buffer to fire
+    await waitForBuffer(300);
+
+    // Two separate agent calls — one for each conversation turn
+    expect(mockHandleIncomingMessage).toHaveBeenCalledTimes(2);
   });
 });

@@ -3,7 +3,8 @@ import { pool } from '../db/pool';
 import { buildUpdateSet } from '../db/query-helpers';
 import { getAgentConfig } from '../cache/agent-cache';
 import { logger } from '../utils/logger';
-import type { Client } from '@talora/shared';
+import type { Client, ClientDetailAnalytics } from '@talora/shared';
+import { computeClientAnalytics } from '../growth/analytics';
 import { authMiddleware, getRequestCompanyId, getRequestProfessionalId, requireCompanyScope } from './middleware';
 import { validateBody, createClientSchema, updateClientSchema } from './validation';
 
@@ -175,6 +176,126 @@ clientsRouter.get('/:id', async (req, res) => {
   } catch (err) {
     logger.error('Error fetching client:', err);
     res.status(500).json({ error: 'Failed to fetch client' });
+  }
+});
+
+const DOW_LABELS = ['Domingo', 'Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes', 'Sábado'];
+
+// GET /:id/analytics — client KPI metrics
+clientsRouter.get('/:id/analytics', async (req, res) => {
+  try {
+    const companyId = getRequestCompanyId(req)!;
+    const professionalId = getScopedProfessionalId(req);
+
+    // Verify client exists and belongs to this company
+    const clientResult = await pool.query(
+      `SELECT id FROM clients
+       WHERE id = $1 AND company_id = $2 AND ($3::uuid IS NULL OR professional_id = $3)`,
+      [req.params.id, companyId, professionalId]
+    );
+    if (clientResult.rows.length === 0) {
+      res.status(404).json({ error: 'Client not found' });
+      return;
+    }
+
+    // Check staleness of client_analytics and refresh if needed
+    const stalenessResult = await pool.query<{ computed_at: Date }>(
+      `SELECT computed_at FROM client_analytics WHERE client_id = $1`,
+      [req.params.id]
+    );
+    const computedAt = stalenessResult.rows[0]?.computed_at;
+    const isStale = !computedAt || Date.now() - new Date(computedAt).getTime() > 24 * 60 * 60 * 1000;
+    if (isStale) {
+      await computeClientAnalytics(companyId);
+    }
+
+    // Query 1: client_analytics (may still be missing if client has <2 appointments)
+    const analyticsResult = await pool.query<{
+      total_appointments: number;
+      total_revenue: string;
+      avg_frequency_days: string | null;
+      last_appointment_at: string | null;
+      risk_score: number;
+    }>(
+      `SELECT total_appointments, total_revenue, avg_frequency_days, last_appointment_at, risk_score
+       FROM client_analytics WHERE client_id = $1`,
+      [req.params.id]
+    );
+
+    // Fallback if client_analytics row is missing (new client or compute not yet run)
+    let totalAppointments = 0;
+    let totalRevenue = 0;
+    let avgFrequencyDays: number | null = null;
+    let lastAppointmentAt: string | null = null;
+    let riskScore = 0;
+
+    if (analyticsResult.rows.length > 0) {
+      const row = analyticsResult.rows[0];
+      totalAppointments = row.total_appointments;
+      totalRevenue = Number(row.total_revenue);
+      avgFrequencyDays = row.avg_frequency_days !== null ? Number(row.avg_frequency_days) : null;
+      lastAppointmentAt = row.last_appointment_at;
+      riskScore = row.risk_score;
+    } else {
+      // No analytics row yet — compute basics directly
+      const basicResult = await pool.query<{ count: string; revenue: string; last_at: string | null }>(
+        `SELECT COUNT(*)::text AS count,
+                COALESCE(SUM(s.price), 0)::text AS revenue,
+                MAX(a.starts_at)::text AS last_at
+         FROM appointments a
+         LEFT JOIN services s ON s.id = a.service_id
+         WHERE a.client_id = $1 AND a.status = 'confirmed'`,
+        [req.params.id]
+      );
+      totalAppointments = Number(basicResult.rows[0]?.count ?? 0);
+      totalRevenue = Number(basicResult.rows[0]?.revenue ?? 0);
+      lastAppointmentAt = basicResult.rows[0]?.last_at ?? null;
+    }
+
+    // Query 2: preferred day of week
+    const dowResult = await pool.query<{ dow: string }>(
+      `SELECT EXTRACT(DOW FROM starts_at)::text AS dow
+       FROM appointments
+       WHERE client_id = $1 AND status = 'confirmed'
+       GROUP BY EXTRACT(DOW FROM starts_at)
+       ORDER BY COUNT(*) DESC
+       LIMIT 1`,
+      [req.params.id]
+    );
+    const preferredDay = dowResult.rows.length > 0 ? DOW_LABELS[Number(dowResult.rows[0].dow)] : null;
+
+    // Query 3: reactivation stats
+    const reactivationResult = await pool.query<{ sent: string; converted: string }>(
+      `SELECT
+         COUNT(*) FILTER(WHERE status IN ('sent', 'converted'))::text AS sent,
+         COUNT(*) FILTER(WHERE status = 'converted')::text AS converted
+       FROM reactivation_messages
+       WHERE client_id = $1`,
+      [req.params.id]
+    );
+    const messagesSent = Number(reactivationResult.rows[0]?.sent ?? 0);
+    const converted = Number(reactivationResult.rows[0]?.converted ?? 0);
+
+    const avgTicket = totalAppointments > 0 ? Math.round(totalRevenue / totalAppointments) : 0;
+    const responseRate = messagesSent > 0 ? Math.round((converted / messagesSent) * 1000) / 10 : 0;
+
+    const analytics: ClientDetailAnalytics = {
+      last_appointment_at: lastAppointmentAt,
+      avg_ticket: avgTicket,
+      avg_frequency_days: avgFrequencyDays !== null ? Math.round(avgFrequencyDays * 10) / 10 : null,
+      total_appointments: totalAppointments,
+      total_revenue: totalRevenue,
+      preferred_day: preferredDay,
+      messages_sent: messagesSent,
+      response_rate: responseRate,
+      conversion_rate: responseRate, // same metric in reactivation context
+      risk_score: riskScore,
+    };
+
+    res.json({ data: analytics });
+  } catch (err) {
+    logger.error('Error fetching client analytics:', err);
+    res.status(500).json({ error: 'Failed to fetch client analytics' });
   }
 });
 
