@@ -2,6 +2,12 @@
 
 All notable changes to this project will be documented in this file.
 
+## [1.0.2.0] - 2026-03-16
+
+### Added
+- Create professional modal dialog on professionals settings page with form fields for name, specialty, and calendar ID
+- Professionals section header button to create new professionals (visible to superadmin/admin_empresa roles only)
+
 ## [1.0.1.0] - 2026-03-15
 
 ### Added
