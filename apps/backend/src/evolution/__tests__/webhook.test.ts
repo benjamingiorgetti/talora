@@ -53,6 +53,7 @@ const mockResetConversationMemory = mock(() =>
   })
 );
 const mockIsConversationInactive = mock((_lastMessageAt: string | null | undefined) => false);
+const mockTranscribeAudio = mock((_base64: string, _mime: string) => Promise.resolve('Hola quiero un turno'));
 
 // ---------------------------------------------------------------------------
 // Module mocks — MUST be registered before the dynamic import below
@@ -104,6 +105,10 @@ mock.module('../../conversations/reset', () => ({
 
 mock.module('../../conversations/archive', () => ({
   isConversationInactive: mockIsConversationInactive,
+}));
+
+mock.module('../../agent/transcribe', () => ({
+  transcribeAudio: mockTranscribeAudio,
 }));
 
 // ---------------------------------------------------------------------------
@@ -309,6 +314,7 @@ describe('handleMessagesUpsert', () => {
     mockSendReaction.mockReset();
     mockIsResetCommand.mockReset();
     mockIsConversationInactive.mockReset();
+    mockTranscribeAudio.mockReset();
     messageBuffers.clear();
 
     // Default: no reset command, conversation not inactive
@@ -317,6 +323,7 @@ describe('handleMessagesUpsert', () => {
     mockHandleIncomingMessage.mockImplementation(() => Promise.resolve());
     mockSendText.mockImplementation(() => Promise.resolve({ key: { id: 'msg-sent-001' } }));
     mockSendReaction.mockImplementation(() => Promise.resolve({ key: { id: 'msg-rxn-001' } }));
+    mockTranscribeAudio.mockImplementation(() => Promise.resolve('Hola quiero un turno'));
 
     setupDefaultQueryMock();
   });
@@ -394,7 +401,7 @@ describe('handleMessagesUpsert', () => {
     expect(mockHandleIncomingMessage).not.toHaveBeenCalled();
   });
 
-  it('should send unsupported media reply and NOT call agent when message has no text', async () => {
+  it('should send unsupported media reply and NOT call agent when message has no text (non-audio)', async () => {
     const body = makeWebhookBody({
       data: {
         key: {
@@ -414,7 +421,7 @@ describe('handleMessagesUpsert', () => {
 
     expect(mockSendText).toHaveBeenCalledTimes(1);
     const sendTextCalls = mockSendText.mock.calls as unknown as any[][];
-    expect(sendTextCalls[0][2]).toContain('solo puedo procesar texto');
+    expect(sendTextCalls[0][2]).toContain('solo puedo procesar texto y audios');
     expect(mockHandleIncomingMessage).not.toHaveBeenCalled();
   });
 
@@ -468,6 +475,141 @@ describe('handleMessagesUpsert', () => {
     await handleMessagesUpsert(makeWebhookBody());
 
     expect(mockHandleIncomingMessage).not.toHaveBeenCalled();
+  });
+
+  // -------------------------------------------------------------------------
+  // Audio message handling
+  // -------------------------------------------------------------------------
+  it('should transcribe audio and call agent with [Audio] prefix when base64 is available', async () => {
+    mockTranscribeAudio.mockImplementation(() => Promise.resolve('Quiero agendar un turno para mañana'));
+
+    const body = makeWebhookBody({
+      data: {
+        key: { id: 'ev-audio-001', remoteJid: `${PHONE}@s.whatsapp.net`, fromMe: false },
+        message: {
+          audioMessage: {
+            base64: 'data:audio/ogg;base64,T2dnUw==',
+            mimetype: 'audio/ogg; codecs=opus',
+            seconds: 8,
+            ptt: true,
+          },
+        },
+        pushName: 'Test Client',
+      },
+    });
+
+    await handleMessagesUpsert(body);
+
+    expect(mockTranscribeAudio).toHaveBeenCalledTimes(1);
+    const transcribeCalls = mockTranscribeAudio.mock.calls as unknown as any[][];
+    expect(transcribeCalls[0][0]).toBe('data:audio/ogg;base64,T2dnUw==');
+    expect(transcribeCalls[0][1]).toBe('audio/ogg; codecs=opus');
+
+    // Verify the [Audio] prefix was saved to DB
+    const queryCalls = mockQuery.mock.calls as unknown as any[][];
+    const msgInsert = queryCalls.find(
+      (args) => typeof args[0] === 'string' && args[0].includes('INSERT INTO messages')
+    );
+    expect(msgInsert).toBeDefined();
+    expect(msgInsert![1][1]).toBe('[Audio] Quiero agendar un turno para mañana');
+
+    // Wait for buffer timer to fire — agent is called via buffer
+    await waitForBuffer();
+    expect(mockHandleIncomingMessage).toHaveBeenCalledTimes(1);
+  });
+
+  it('should send fallback when audio has no base64 data', async () => {
+    const body = makeWebhookBody({
+      data: {
+        key: { id: 'ev-audio-no-b64', remoteJid: `${PHONE}@s.whatsapp.net`, fromMe: false },
+        message: {
+          audioMessage: {
+            mimetype: 'audio/ogg',
+            seconds: 5,
+          },
+        },
+        pushName: 'Test Client',
+      },
+    });
+
+    await handleMessagesUpsert(body);
+
+    expect(mockSendText).toHaveBeenCalledTimes(1);
+    const sendCalls = mockSendText.mock.calls as unknown as any[][];
+    expect(sendCalls[0][2]).toContain('No pude procesar tu audio');
+    expect(mockHandleIncomingMessage).not.toHaveBeenCalled();
+  });
+
+  it('should send fallback when transcription returns null (empty audio)', async () => {
+    mockTranscribeAudio.mockImplementation(() => Promise.resolve(null));
+
+    const body = makeWebhookBody({
+      data: {
+        key: { id: 'ev-audio-empty', remoteJid: `${PHONE}@s.whatsapp.net`, fromMe: false },
+        message: {
+          audioMessage: {
+            base64: 'data:audio/ogg;base64,AAAA',
+            mimetype: 'audio/ogg',
+          },
+        },
+        pushName: 'Test Client',
+      },
+    });
+
+    await handleMessagesUpsert(body);
+
+    expect(mockSendText).toHaveBeenCalledTimes(1);
+    const sendCalls = mockSendText.mock.calls as unknown as any[][];
+    expect(sendCalls[0][2]).toContain('No pude entender tu audio');
+    expect(mockHandleIncomingMessage).not.toHaveBeenCalled();
+  });
+
+  it('should send error fallback when transcription throws', async () => {
+    mockTranscribeAudio.mockImplementation(() => Promise.reject(new Error('Whisper API error')));
+
+    const body = makeWebhookBody({
+      data: {
+        key: { id: 'ev-audio-error', remoteJid: `${PHONE}@s.whatsapp.net`, fromMe: false },
+        message: {
+          audioMessage: {
+            base64: 'data:audio/ogg;base64,AAAA',
+            mimetype: 'audio/ogg',
+          },
+        },
+        pushName: 'Test Client',
+      },
+    });
+
+    await handleMessagesUpsert(body);
+
+    expect(mockSendText).toHaveBeenCalledTimes(1);
+    const sendCalls = mockSendText.mock.calls as unknown as any[][];
+    expect(sendCalls[0][2]).toContain('Hubo un error procesando tu audio');
+    expect(mockHandleIncomingMessage).not.toHaveBeenCalled();
+  });
+
+  it('should use default mimetype when audioMessage has no mimetype', async () => {
+    mockTranscribeAudio.mockImplementation(() => Promise.resolve('Audio sin mimetype'));
+
+    const body = makeWebhookBody({
+      data: {
+        key: { id: 'ev-audio-no-mime', remoteJid: `${PHONE}@s.whatsapp.net`, fromMe: false },
+        message: {
+          audioMessage: {
+            base64: 'data:audio/ogg;base64,T2dnUw==',
+          },
+        },
+        pushName: 'Test Client',
+      },
+    });
+
+    await handleMessagesUpsert(body);
+
+    const transcribeCalls = mockTranscribeAudio.mock.calls as unknown as any[][];
+    expect(transcribeCalls[0][1]).toBe('audio/ogg'); // default mimetype
+
+    await waitForBuffer();
+    expect(mockHandleIncomingMessage).toHaveBeenCalledTimes(1);
   });
 
   it('should be idempotent — duplicate message ID must be processed only once', async () => {

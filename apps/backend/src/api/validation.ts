@@ -94,7 +94,7 @@ export const updateProfessionalSchema = z.object({
 
 export const createServiceSchema = z.object({
   name: z.string().min(1, 'name is required').max(200),
-  professional_id: optionalUuid,
+  professional_id: optionalUuid.nullable(),
   aliases: serviceAliases.default([]),
   duration_minutes: z.number().int().min(5).max(480).default(60),
   price: z.number().int().min(0),
