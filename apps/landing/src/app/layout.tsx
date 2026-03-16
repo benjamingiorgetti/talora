@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import { IBM_Plex_Sans, Fraunces } from "next/font/google";
+import { Analytics } from "@vercel/analytics/next";
 import "./globals.css";
 
 const ibmPlex = IBM_Plex_Sans({
@@ -36,6 +37,7 @@ export default function RootLayout({
     <html lang="es" className="scroll-smooth">
       <body className={`${ibmPlex.variable} ${fraunces.variable} antialiased`}>
         {children}
+        <Analytics />
       </body>
     </html>
   );
