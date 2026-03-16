@@ -841,6 +841,24 @@ ALTER TABLE company_settings
 -- Growth: Missing index for analytics query
 CREATE INDEX IF NOT EXISTS idx_appointments_client_id
   ON appointments(client_id, status);
+
+-- Slot Fill: company settings extension
+ALTER TABLE company_settings
+  ADD COLUMN IF NOT EXISTS slot_fill_enabled BOOLEAN NOT NULL DEFAULT false,
+  ADD COLUMN IF NOT EXISTS slot_fill_message_template TEXT;
+
+-- Slot Fill: trigger_type on reactivation_messages for tracking
+ALTER TABLE reactivation_messages
+  ADD COLUMN IF NOT EXISTS trigger_type VARCHAR(20) NOT NULL DEFAULT 'reactivation';
+
+DO $$ BEGIN
+  ALTER TABLE reactivation_messages ADD CONSTRAINT chk_reactivation_trigger_type
+    CHECK (trigger_type IN ('reactivation', 'slot_fill'));
+EXCEPTION WHEN duplicate_object THEN NULL;
+END $$;
+
+CREATE INDEX IF NOT EXISTS idx_reactivation_client_trigger_sent
+  ON reactivation_messages(client_id, trigger_type, sent_at DESC);
 `;
 
 async function run() {

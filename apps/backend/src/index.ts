@@ -21,6 +21,7 @@ import { dashboardRouter } from './api/dashboard';
 import { companySettingsRouter } from './api/company-settings';
 import { growthRouter } from './api/growth';
 import { initAttributionListener } from './growth/attribution';
+import { initSlotFillListener } from './growth/slot-fill';
 import { requestIdMiddleware } from './api/request-id';
 import { createRateLimiter } from './api/rate-limit';
 import { pool } from './db/pool';
@@ -141,6 +142,7 @@ setupWebSocket(server);
 
 // Growth: attribution listener
 initAttributionListener();
+initSlotFillListener();
 
 server.listen(config.port, () => {
   logger.info(`Backend running on port ${config.port}`);

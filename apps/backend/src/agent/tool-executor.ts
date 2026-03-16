@@ -3,7 +3,7 @@ import { bookSlot, checkSlot, deleteEvent, updateEvent } from '../calendar/opera
 import { validateWebhookUrl } from '../utils/url-validator';
 import { logger } from '../utils/logger';
 import { EvolutionClient } from '../evolution/client';
-import { appEvents } from '../events';
+import { appEvents, type AppointmentCancelledEvent } from '../events';
 import type { Appointment, Client, Professional, Service } from '@talora/shared';
 
 type ToolExecutionContext = {
@@ -844,6 +844,15 @@ export async function executeTool(
            WHERE id = $1 AND company_id = $2`,
           [appointment.id, context.companyId]
         );
+
+        appEvents.emit('appointment:cancelled', {
+          appointmentId: appointment.id,
+          companyId: context.companyId,
+          serviceId: appointment.service_id ?? null,
+          professionalId: appointment.professional_id ?? null,
+          startsAt: appointment.starts_at,
+          cancelledClientId: appointment.client_id ?? null,
+        } satisfies AppointmentCancelledEvent);
 
         return JSON.stringify({ success: true, appointmentId: appointment.id });
       }
