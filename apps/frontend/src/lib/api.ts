@@ -39,6 +39,7 @@ const COMPANY_SCOPED_PREFIXES = [
   "/auth/google/disconnect",
   "/agent",
   "/company-settings",
+  "/growth",
 ];
 
 function shouldInjectCompanyScope(path: string): boolean {

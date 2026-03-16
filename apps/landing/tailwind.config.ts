@@ -56,8 +56,8 @@ const config: Config = {
         body: ["var(--font-body)", "sans-serif"],
       },
       fontSize: {
-        "hero": ["3.5rem", { lineHeight: "1.08", letterSpacing: "-0.03em" }],
-        "hero-mobile": ["2.25rem", { lineHeight: "1.12", letterSpacing: "-0.02em" }],
+        "hero": ["2.75rem", { lineHeight: "1.1", letterSpacing: "-0.03em" }],
+        "hero-mobile": ["1.875rem", { lineHeight: "1.15", letterSpacing: "-0.02em" }],
         "section": ["2.5rem", { lineHeight: "1.15", letterSpacing: "-0.025em" }],
         "section-mobile": ["1.75rem", { lineHeight: "1.2", letterSpacing: "-0.02em" }],
         "body-lg": ["1.125rem", { lineHeight: "1.6" }],

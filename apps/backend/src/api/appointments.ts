@@ -6,6 +6,7 @@ import { bookSlot, checkSlot, createEvent, deleteEvent, updateEvent } from '../c
 import { validateBody, createAppointmentSchema, reprogramAppointmentSchema } from './validation';
 import type { Appointment, AppointmentWsPayload, Client, Professional, Service, WsEvent } from '@talora/shared';
 import { broadcast } from '../ws/server';
+import { appEvents, type AppointmentCancelledEvent } from '../events';
 
 export const appointmentsRouter = Router();
 
@@ -309,6 +310,15 @@ async function cancelAppointment(req: Parameters<typeof authMiddleware>[0], comp
       type: 'appointment:cancelled',
       payload: buildAppointmentWsPayload(cancelled, professional?.name),
     });
+
+    appEvents.emit('appointment:cancelled', {
+      appointmentId: cancelled.id,
+      companyId,
+      serviceId: cancelled.service_id ?? null,
+      professionalId: cancelled.professional_id ?? null,
+      startsAt: cancelled.starts_at,
+      cancelledClientId: cancelled.client_id ?? null,
+    } satisfies AppointmentCancelledEvent);
   }
 
   return { status: 200 as const, body: { data: cancelled } };
@@ -479,6 +489,13 @@ appointmentsRouter.post('/', validateBody(createAppointmentSchema), async (req, 
       broadcast({
         type: 'appointment:created',
         payload: buildAppointmentWsPayload(created, professional.name, service?.name),
+      });
+      appEvents.emit('appointment:created', {
+        appointmentId: created.id,
+        clientId: created.client_id,
+        companyId: created.company_id,
+        serviceId: created.service_id,
+        professionalId: created.professional_id,
       });
     }
   } catch (err) {

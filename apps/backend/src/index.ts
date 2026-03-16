@@ -19,6 +19,9 @@ import { servicesRouter } from './api/services';
 import { appointmentsRouter } from './api/appointments';
 import { dashboardRouter } from './api/dashboard';
 import { companySettingsRouter } from './api/company-settings';
+import { growthRouter } from './api/growth';
+import { initAttributionListener } from './growth/attribution';
+import { initSlotFillListener } from './growth/slot-fill';
 import { requestIdMiddleware } from './api/request-id';
 import { createRateLimiter } from './api/rate-limit';
 import { pool } from './db/pool';
@@ -129,12 +132,17 @@ app.use('/services', authMiddleware, apiRateLimiter, servicesRouter);
 app.use('/appointments', authMiddleware, apiRateLimiter, appointmentsRouter);
 app.use('/dashboard', authMiddleware, apiRateLimiter, dashboardRouter);
 app.use('/company-settings', authMiddleware, apiRateLimiter, companySettingsRouter);
+app.use('/growth', authMiddleware, apiRateLimiter, growthRouter);
 
 // Full agents CRUD (kept for direct API access)
 app.use('/api/agents', authMiddleware, apiRateLimiter, agentsRouter);
 
 // WebSocket
 setupWebSocket(server);
+
+// Growth: attribution listener
+initAttributionListener();
+initSlotFillListener();
 
 server.listen(config.port, () => {
   logger.info(`Backend running on port ${config.port}`);

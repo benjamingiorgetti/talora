@@ -328,6 +328,55 @@ export interface ApiResponse<T> {
   error?: string;
 }
 
+// --- Growth / Reactivation ---
+export interface ClientAnalytics {
+  client_id: string;
+  company_id: string;
+  total_appointments: number;
+  total_revenue: number;
+  avg_frequency_days: number | null;
+  last_appointment_at: string | null;
+  days_since_last: number | null;
+  days_overdue: number | null;
+  risk_score: number;
+  computed_at: string;
+  client_name?: string;
+  client_phone?: string;
+}
+
+export interface ReactivationMessage {
+  id: string;
+  company_id: string;
+  client_id: string;
+  professional_id?: string;
+  message_text: string;
+  status: 'pending' | 'sent' | 'converted' | 'failed';
+  trigger_type?: 'reactivation' | 'slot_fill';
+  sent_at?: string;
+  converted_at?: string;
+  attributed_appointment_id?: string;
+  created_at: string;
+  client_name?: string;
+  client_phone?: string;
+}
+
+export interface GrowthStats {
+  period: { from: string; to: string };
+  clients_at_risk: number;
+  messages_sent: number;
+  clients_reactivated: number;
+  conversion_rate: number;
+  revenue_attributed: number;
+  avg_days_to_convert: number;
+}
+
+export interface ReactivationSettings {
+  reactivation_enabled: boolean;
+  reactivation_threshold_days: number;
+  reactivation_auto_send: boolean;
+  reactivation_message_template: string | null;
+}
+
 // --- WebSocket Events ---
 export type AppointmentWsPayload = {
   id: string;

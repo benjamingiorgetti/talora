@@ -3,6 +3,7 @@ import { bookSlot, checkSlot, deleteEvent, listEvents, updateEvent } from '../ca
 import { validateWebhookUrl } from '../utils/url-validator';
 import { logger } from '../utils/logger';
 import { EvolutionClient } from '../evolution/client';
+import { appEvents, type AppointmentCancelledEvent } from '../events';
 import type { Appointment, Client, Professional, Service } from '@talora/shared';
 
 type ToolExecutionContext = {
@@ -705,10 +706,21 @@ export async function executeTool(
           ]
         );
 
+        const createdAppointment = result.rows[0];
+        if (createdAppointment) {
+          appEvents.emit('appointment:created', {
+            appointmentId: createdAppointment.id,
+            clientId: createdAppointment.client_id,
+            companyId: createdAppointment.company_id,
+            serviceId: createdAppointment.service_id,
+            professionalId: createdAppointment.professional_id,
+          });
+        }
+
         return JSON.stringify({
           success: true,
           eventId: booking.eventId,
-          appointmentId: result.rows[0]?.id ?? null,
+          appointmentId: createdAppointment?.id ?? null,
           professionalId: scheduling.professional.id,
           serviceId: scheduling.service?.id ?? null,
         });
@@ -800,20 +812,18 @@ export async function executeTool(
           return JSON.stringify(result);
         }
 
-        // Cancel only needs professional — NOT service. Resolve professional first, then look up appointment.
-        const profResolution = await resolveProfessionalSelection(context.companyId, toolInput, context.professionalId);
-        const resolvedProfId = profResolution.kind === 'resolved' ? profResolution.professional.id : null;
-
-        const appointment = await resolveAppointmentByReference(context.companyId, toolInput, resolvedProfId);
+        // Look up appointment directly — no service/professional resolution needed
+        const appointment = await resolveAppointmentByReference(context.companyId, toolInput, null);
         if (!appointment) {
           if (eventId) {
             const result = await deleteEvent(eventId);
             return JSON.stringify(result);
           }
-          return JSON.stringify({ error: 'Appointment not found' });
+          return JSON.stringify({ error: 'No se encontró el turno a cancelar. Verificá el ID del turno.' });
         }
 
-        // Get calendar credentials from the appointment's professional
+        // Resolve deletion credentials from the appointment itself
+        const targetEventId = appointment.google_event_id ?? eventId;
         let calendarId = 'primary';
         let profId: string | null = null;
         if (appointment.professional_id) {
@@ -821,14 +831,8 @@ export async function executeTool(
           calendarId = professional?.calendar_id ?? 'primary';
           profId = appointment.professional_id;
         }
-
-        if (appointment.google_event_id) {
-          const result = await deleteEvent(appointment.google_event_id, calendarId, profId);
-          if (!result.success) {
-            return JSON.stringify(result);
-          }
-        } else if (eventId) {
-          const result = await deleteEvent(eventId);
+        if (targetEventId) {
+          const result = await deleteEvent(targetEventId, calendarId, profId);
           if (!result.success) {
             return JSON.stringify(result);
           }
@@ -840,6 +844,15 @@ export async function executeTool(
            WHERE id = $1 AND company_id = $2`,
           [appointment.id, context.companyId]
         );
+
+        appEvents.emit('appointment:cancelled', {
+          appointmentId: appointment.id,
+          companyId: context.companyId,
+          serviceId: appointment.service_id ?? null,
+          professionalId: appointment.professional_id ?? null,
+          startsAt: appointment.starts_at,
+          cancelledClientId: appointment.client_id ?? null,
+        } satisfies AppointmentCancelledEvent);
 
         return JSON.stringify({ success: true, appointmentId: appointment.id });
       }

@@ -2,18 +2,11 @@
 
 import { useState, useEffect, useRef } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import {
-  ChevronLeft,
-  ChevronRight,
-  Phone,
-  Video,
-  Paperclip,
-  Mic,
-} from "lucide-react";
+import { Phone, Video, Paperclip, Mic, TrendingUp, CheckCircle2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { hero } from "@/lib/content";
-import { fadeUp, scaleIn, staggerContainer, slideFromRight } from "@/lib/animations";
+import { fadeUp, scaleIn, slideFromRight } from "@/lib/animations";
 
 // ─── Conversation data ──────────────────────────────────────────────────────
 
@@ -23,51 +16,16 @@ interface Message {
   time: string;
 }
 
-interface Conversation {
-  niche: string;
-  messages: Message[];
-}
-
-const conversations: Conversation[] = [
-  {
-    niche: "Peluqueria",
-    messages: [
-      { from: "user", text: "Hola! Quiero un turno para corte", time: "14:28" },
-      { from: "bot", text: "Hola! Tengo disponible manana a las 10:00, 14:30 o 17:00. Cual te queda mas comodo?", time: "14:28" },
-      { from: "user", text: "14:30 perfecto", time: "14:29" },
-      { from: "bot", text: "Perfecto! Queda confirmado tu turno para manana a las 14:30. Te voy a enviar un recordatorio antes", time: "14:29" },
-    ],
-  },
-  {
-    niche: "Tatuaje",
-    messages: [
-      { from: "user", text: "Quiero agendar una sesion", time: "11:02" },
-      { from: "bot", text: "Hola! Para sesion de tatuaje tengo jueves 11:00 o viernes 16:00. Cual te viene mejor?", time: "11:02" },
-      { from: "user", text: "Jueves a las 11", time: "11:03" },
-      { from: "bot", text: "Genial! Queda agendado para el jueves a las 11:00. No te olvides de traer tu referencia!", time: "11:03" },
-    ],
-  },
-  {
-    niche: "Dentista",
-    messages: [
-      { from: "user", text: "Necesito turno para limpieza", time: "09:15" },
-      { from: "bot", text: "Hola! Para limpieza dental tengo lunes 9:30 o miercoles 15:00. Cual preferis?", time: "09:15" },
-      { from: "user", text: "Lunes 9:30", time: "09:16" },
-      { from: "bot", text: "Listo! Tu turno queda confirmado el lunes 9:30 con la Dra. Martinez. Te esperamos!", time: "09:16" },
-    ],
-  },
-  {
-    niche: "Manicuria",
-    messages: [
-      { from: "user", text: "Hola! Turno para semi-permanente", time: "16:44" },
-      { from: "bot", text: "Hola! Para semi-permanente tengo manana a las 10:00 o 16:30. Cual te queda mejor?", time: "16:44" },
-      { from: "user", text: "16:30 genial!", time: "16:45" },
-      { from: "bot", text: "Perfecto! Queda confirmado manana a las 16:30. Te esperamos!", time: "16:45" },
-    ],
-  },
+const CONVERSATION: Message[] = [
+  { from: "user", text: "Hola! Quiero un turno para color y brushing", time: "14:28" },
+  { from: "bot", text: "Hola! Para color y brushing tengo jueves a las 10:30 o viernes a las 15:00. Cual te queda mejor?", time: "14:28" },
+  { from: "user", text: "Viernes a las 15:00", time: "14:29" },
+  { from: "bot", text: "Perfecto! Te reservo color y brushing el viernes a las 15:00. Si queres, tambien podes sumar cejas y perfilado en el mismo turno.", time: "14:29" },
+  { from: "user", text: "Si, sumalo!", time: "14:30" },
+  { from: "bot", text: "Listo! Color, brushing + cejas y perfilado el viernes a las 15:00. Te envio un recordatorio antes.", time: "14:30" },
 ];
 
-// ─── SVG check marks ─────────────────────────────────────────────────────────
+// ─── SVG check marks ──────────────────────────────────────────────────────────
 
 function DoubleCheck({ className }: { className?: string }) {
   return (
@@ -86,7 +44,7 @@ function SingleCheck({ className }: { className?: string }) {
   );
 }
 
-// ─── Typing indicator ────────────────────────────────────────────────────────
+// ─── Typing indicator ──────────────────────────────────────────────────────────
 
 function TypingIndicator() {
   return (
@@ -114,10 +72,9 @@ function TypingIndicator() {
   );
 }
 
-// ─── WhatsApp mockup ─────────────────────────────────────────────────────────
+// ─── WhatsApp mockup ──────────────────────────────────────────────────────────
 
 function WhatsAppMockup() {
-  const [convIndex, setConvIndex] = useState(0);
   const [renderedMsgs, setRenderedMsgs] = useState<Message[]>([]);
   const [isTyping, setIsTyping] = useState(false);
 
@@ -125,44 +82,43 @@ function WhatsAppMockup() {
     let cancelled = false;
     const ids: ReturnType<typeof setTimeout>[] = [];
 
-    // Reset state for new conversation
-    setRenderedMsgs([]);
-    setIsTyping(false);
+    const msgs = CONVERSATION;
 
-    const msgs = conversations[convIndex].messages;
-
-    // Build timeline with absolute delays
+    // Build timeline with absolute delays — play once, no loop
     const timeline: { delay: number; action: () => void }[] = [];
-    let t = 500;
+    let t = 1200;
 
     for (let i = 0; i < msgs.length; i++) {
       const msg = msgs[i];
       if (msg.from === "user") {
-        timeline.push({ delay: t, action: () => {
-          if (!cancelled) setRenderedMsgs((prev) => [...prev, msg]);
-        }});
-        t += 700;
+        timeline.push({
+          delay: t,
+          action: () => {
+            if (!cancelled) setRenderedMsgs((prev) => [...prev, msg]);
+          },
+        });
+        t += 1000;
       } else {
-        timeline.push({ delay: t, action: () => {
-          if (!cancelled) setIsTyping(true);
-        }});
-        t += 1300;
-        timeline.push({ delay: t, action: () => {
-          if (!cancelled) {
-            setIsTyping(false);
-            setRenderedMsgs((prev) => [...prev, msg]);
-          }
-        }});
+        timeline.push({
+          delay: t,
+          action: () => {
+            if (!cancelled) setIsTyping(true);
+          },
+        });
+        t += 1800;
+        timeline.push({
+          delay: t,
+          action: () => {
+            if (!cancelled) {
+              setIsTyping(false);
+              setRenderedMsgs((prev) => [...prev, msg]);
+            }
+          },
+        });
         t += 900;
       }
     }
 
-    // After all messages: clear and advance to next conversation
-    timeline.push({ delay: t + 2000, action: () => {
-      if (!cancelled) setConvIndex((prev) => (prev + 1) % conversations.length);
-    }});
-
-    // Schedule all at once
     for (const { delay, action } of timeline) {
       ids.push(setTimeout(action, delay));
     }
@@ -171,12 +127,12 @@ function WhatsAppMockup() {
       cancelled = true;
       ids.forEach(clearTimeout);
     };
-  }, [convIndex]);
+  }, []);
 
   return (
     <div className="relative">
       {/* iPhone frame */}
-      <div className="relative w-[280px] h-[560px] rounded-[50px] bg-gradient-to-b from-[#3A3442] to-[#2C2B33] p-[12px] shadow-2xl flex-shrink-0">
+      <div className="relative w-[220px] h-[500px] sm:w-[240px] sm:h-[480px] rounded-[40px] sm:rounded-[44px] bg-gradient-to-b from-[#3A3442] to-[#2C2B33] p-[12px] shadow-2xl flex-shrink-0">
         {/* Side buttons — volume (left) */}
         <div className="absolute -left-[3px] top-[72px] h-[28px] w-[3px] rounded-l-sm bg-[#232029]" />
         <div className="absolute -left-[3px] top-[110px] h-[44px] w-[3px] rounded-l-sm bg-[#232029]" />
@@ -185,7 +141,7 @@ function WhatsAppMockup() {
         <div className="absolute -right-[3px] top-[120px] h-[60px] w-[3px] rounded-r-sm bg-[#232029]" />
 
         {/* Screen area */}
-        <div className="relative h-full rounded-[40px] overflow-hidden bg-[#ECE5DD] flex flex-col">
+        <div className="relative h-full rounded-[30px] sm:rounded-[34px] overflow-hidden bg-[#ECE5DD] flex flex-col">
           {/* Dynamic Island */}
           <div className="absolute top-[8px] left-1/2 -translate-x-1/2 z-20 flex items-center justify-center">
             <div className="w-[90px] h-[28px] rounded-full bg-black flex items-center justify-end pr-[10px]">
@@ -195,9 +151,8 @@ function WhatsAppMockup() {
 
           {/* WhatsApp header */}
           <div className="flex items-center gap-2 bg-[#075E54] px-3 pt-[44px] pb-3 flex-shrink-0">
-            <ChevronLeft className="h-5 w-5 text-white/80" />
-            <div className="h-8 w-8 rounded-full bg-[#25D366]/30 flex items-center justify-center text-white text-sm font-semibold flex-shrink-0">
-              T
+            <div className="h-8 w-8 rounded-full bg-[#25D366] flex items-center justify-center flex-shrink-0 overflow-hidden">
+              <img src="/images/icono-blanco.png" alt="Talora" className="h-5 w-5 object-contain" />
             </div>
             <div className="flex-1 min-w-0">
               <p className="text-[13px] font-semibold text-white leading-none">Talora</p>
@@ -209,11 +164,11 @@ function WhatsAppMockup() {
             </div>
           </div>
 
-          {/* Messages area — always present in DOM for stable flex layout */}
+          {/* Messages area */}
           <div className="flex-1 flex flex-col gap-1.5 px-3 py-3 overflow-hidden">
             {renderedMsgs.map((msg, i) => (
               <motion.div
-                key={`${convIndex}-${i}`}
+                key={i}
                 initial={{ opacity: 0, y: 8, scale: 0.96 }}
                 animate={{ opacity: 1, y: 0, scale: 1 }}
                 transition={{ duration: 0.3, ease: [0.22, 1, 0.36, 1] }}
@@ -222,7 +177,7 @@ function WhatsAppMockup() {
                 }`}
               >
                 <div
-                  className={`relative rounded-2xl px-3 py-1.5 text-[12px] leading-relaxed ${
+                  className={`relative rounded-2xl px-2.5 py-1 sm:px-3 sm:py-1.5 text-[11px] sm:text-[12px] leading-relaxed ${
                     msg.from === "user"
                       ? "bg-[#DCF8C6] text-[#111] rounded-br-sm"
                       : "bg-white text-[#111] rounded-bl-sm shadow-sm"
@@ -266,197 +221,176 @@ function WhatsAppMockup() {
   );
 }
 
-// ─── Calendar event data ──────────────────────────────────────────────────────
+// ─── Results panel data ───────────────────────────────────────────────────────
 
-interface CalEvent {
-  col: number;
-  startMin: number;
-  durationMin: number;
+interface Metric {
   label: string;
+  value: string;
+  sub?: string;
+  type: "number" | "progress";
+  progress?: number;
   color: string;
 }
 
-const calEvents: CalEvent[] = [
-  { col: 0, startMin: 60, durationMin: 60, label: "Ana — Consulta", color: "bg-[#EFE9FF] border-[#C4B5FD]" },
-  { col: 0, startMin: 180, durationMin: 60, label: "Laura — Masaje", color: "bg-[#FFF5E0] border-[#FCD34D]" },
-  { col: 1, startMin: 120, durationMin: 60, label: "Diego — Masaje", color: "bg-[#FFF5E0] border-[#FCD34D]" },
-  { col: 1, startMin: 240, durationMin: 90, label: "Sofia — Tratamiento", color: "bg-[#FFE4E6] border-[#FCA5A5]" },
-  { col: 2, startMin: 60, durationMin: 60, label: "Carlos — Corte", color: "bg-[#E0F2FE] border-[#7DD3FC]" },
-  { col: 2, startMin: 180, durationMin: 60, label: "Paula — Consulta", color: "bg-[#EFE9FF] border-[#C4B5FD]" },
-  { col: 3, startMin: 30, durationMin: 60, label: "Belen — Peinado", color: "bg-[#E6F9EE] border-[#6EE7B7]" },
-  { col: 3, startMin: 300, durationMin: 60, label: "Juan — Corte", color: "bg-[#E0F2FE] border-[#7DD3FC]" },
-  { col: 4, startMin: 0, durationMin: 60, label: "Lucas — Barba", color: "bg-[#E6F9EE] border-[#6EE7B7]" },
-  { col: 4, startMin: 120, durationMin: 120, label: "Maria — Color", color: "bg-[#FFE4E6] border-[#FCA5A5]" },
+const METRICS: Metric[] = [
+  {
+    label: "Turnos esta semana",
+    value: "47",
+    sub: "+8 vs semana anterior",
+    type: "number",
+    color: "text-emerald-600",
+  },
+  {
+    label: "Clientas reactivadas",
+    value: "12",
+    sub: "en los ultimos 30 dias",
+    type: "number",
+    color: "text-violet-600",
+  },
+  {
+    label: "Ocupacion",
+    value: "89%",
+    type: "progress",
+    progress: 89,
+    color: "text-sky-600",
+  },
+  {
+    label: "Ticket promedio",
+    value: "+23%",
+    sub: "vs mes anterior",
+    type: "number",
+    color: "text-amber-600",
+  },
 ];
 
-const GRID_HOURS = ["09:00", "10:00", "11:00", "12:00", "13:00", "14:00", "15:00"];
-const GRID_MINUTES = 360;
+// ─── Animated counter ─────────────────────────────────────────────────────────
 
-const dayHeaders = [
-  { short: "LUN", num: "9", isToday: false },
-  { short: "MAR", num: "10", isToday: false },
-  { short: "MIE", num: "11", isToday: false },
-  { short: "JUE", num: "12", isToday: true },
-  { short: "VIE", num: "13", isToday: false },
-];
+function AnimatedCounter({ value, delay = 0 }: { value: string; delay?: number }) {
+  const [display, setDisplay] = useState("0");
+  const hasAnimated = useRef(false);
 
-const NOW_TOP_PCT = (255 / GRID_MINUTES) * 100;
+  useEffect(() => {
+    if (hasAnimated.current) return;
+    hasAnimated.current = true;
 
-function DashboardMockup() {
+    const prefix = value.startsWith("+") ? "+" : "";
+    const suffix = value.endsWith("%") ? "%" : "";
+    const num = parseInt(value.replace(/[^0-9]/g, ""), 10);
+    if (isNaN(num)) { setDisplay(value); return; }
+
+    const duration = 800;
+    const startTime = performance.now() + delay * 1000;
+
+    function tick(now: number) {
+      const elapsed = now - startTime;
+      if (elapsed < 0) { requestAnimationFrame(tick); return; }
+      const progress = Math.min(elapsed / duration, 1);
+      const eased = 1 - Math.pow(1 - progress, 3);
+      const current = Math.round(eased * num);
+      setDisplay(`${prefix}${current}${suffix}`);
+      if (progress < 1) requestAnimationFrame(tick);
+    }
+
+    requestAnimationFrame(tick);
+  }, [value, delay]);
+
+  return <>{display}</>;
+}
+
+// ─── Results panel mockup ──────────────────────────────────────────────────────
+
+function ResultsPanelMockup() {
   return (
-    <div className="w-full max-w-[420px] rounded-2xl border border-[#E2E4EC] bg-white shadow-xl shadow-ink/5 ring-1 ring-black/[0.03] overflow-hidden">
+    <div className="w-full max-w-[280px] sm:max-w-[300px] rounded-2xl border border-[#E2E4EC] bg-white shadow-xl shadow-ink/5 ring-1 ring-black/[0.03] overflow-hidden">
       {/* Header */}
       <motion.div
         initial={{ opacity: 0 }}
         animate={{ opacity: 1 }}
-        transition={{ delay: 0.4, duration: 0.4 }}
+        transition={{ delay: 1.0, duration: 0.4 }}
         className="flex items-center justify-between px-4 py-3 border-b border-[#E2E4EC]"
       >
-        <div className="flex items-center gap-2">
-          <button aria-hidden="true" tabIndex={-1} className="rounded-md px-2 py-0.5 text-[11px] font-medium bg-[#F3F4F6] text-gray-600 hover:bg-[#E5E7EB] transition-colors">
-            Hoy
-          </button>
-          <ChevronLeft className="h-4 w-4 text-gray-400 cursor-pointer" />
-          <ChevronRight className="h-4 w-4 text-gray-400 cursor-pointer" />
-          <span className="text-[13px] font-semibold text-gray-800">Marzo 2026</span>
+        <div>
+          <p className="text-[13px] font-semibold text-[#1C1D22]">Resultados</p>
+          <p className="text-[10px] text-gray-400 mt-0.5">Semana del 9 al 15 de marzo</p>
         </div>
-        <div className="flex items-center gap-0.5 rounded-full bg-[#F3F4F6] p-0.5">
-          {["Dia", "Semana", "Mes"].map((v) => (
-            <span
-              key={v}
-              className={`text-[10px] font-medium px-2 py-0.5 rounded-full cursor-pointer transition-colors ${
-                v === "Semana"
-                  ? "bg-[#1C1B22] text-white"
-                  : "text-gray-500 hover:text-gray-700"
-              }`}
-            >
-              {v}
-            </span>
-          ))}
+        <div className="flex items-center gap-1 rounded-full bg-emerald-50 border border-emerald-100 px-2 py-0.5">
+          <span className="h-1.5 w-1.5 rounded-full bg-emerald-500 animate-pulse" />
+          <span className="text-[10px] font-medium text-emerald-700">en vivo</span>
         </div>
       </motion.div>
 
-      {/* Day headers */}
-      <motion.div
-        initial={{ opacity: 0 }}
-        animate={{ opacity: 1 }}
-        transition={{ delay: 0.5, duration: 0.35 }}
-        className="flex border-b border-[#E2E4EC]"
-      >
-        <div className="w-10 flex-shrink-0" />
-        {dayHeaders.map((d) => (
-          <div
-            key={d.short}
-            className="flex-1 flex flex-col items-center py-1.5 gap-0.5"
-          >
-            <span className="text-[9px] font-medium text-gray-400 uppercase tracking-wide">
-              {d.short}
-            </span>
-            <span
-              className={`text-[12px] font-semibold flex items-center justify-center h-5 w-5 rounded-full ${
-                d.isToday
-                  ? "bg-[#1C1B22] text-white"
-                  : "text-gray-700"
-              }`}
-            >
-              {d.num}
-            </span>
-          </div>
-        ))}
-      </motion.div>
-
-      {/* Time grid */}
-      <motion.div
-        initial={{ opacity: 0 }}
-        animate={{ opacity: 1 }}
-        transition={{ delay: 0.6, duration: 0.35 }}
-        className="flex"
-        style={{ height: 216 }}
-      >
-        <div className="w-10 flex-shrink-0 flex flex-col relative">
-          {GRID_HOURS.map((h, i) => (
-            <div
-              key={h}
-              className="absolute left-0 right-0 flex justify-end pr-1"
-              style={{ top: `${(i / (GRID_HOURS.length - 1)) * 100}%`, transform: "translateY(-50%)" }}
-            >
-              <span className="text-[8px] text-gray-400 leading-none">{h}</span>
-            </div>
-          ))}
-        </div>
-
-        <div className="flex-1 flex relative">
-          {GRID_HOURS.map((h, i) => (
-            <div
-              key={h}
-              className="absolute left-0 right-0 border-t border-[#F0F0F0]"
-              style={{ top: `${(i / (GRID_HOURS.length - 1)) * 100}%` }}
-            />
-          ))}
-
-          {dayHeaders.map((d, colIdx) => (
-            <div
-              key={d.short}
-              className={`flex-1 relative ${colIdx < dayHeaders.length - 1 ? "border-r border-[#F0F0F0]" : ""}`}
-            >
-              {calEvents
-                .filter((e) => e.col === colIdx)
-                .map((evt, ei) => {
-                  const topPct = (evt.startMin / GRID_MINUTES) * 100;
-                  const heightPct = (evt.durationMin / GRID_MINUTES) * 100;
-                  return (
-                    <motion.div
-                      key={ei}
-                      initial={{ opacity: 0, x: -8 }}
-                      animate={{ opacity: 1, x: 0 }}
-                      transition={{
-                        delay: 1.0 + colIdx * 0.12 + ei * 0.1,
-                        duration: 0.35,
-                        ease: [0.22, 1, 0.36, 1],
-                      }}
-                      className={`absolute inset-x-0.5 ${evt.color} rounded border-l-[2px] px-1 py-0.5 overflow-hidden`}
-                      style={{
-                        top: `${topPct}%`,
-                        height: `${heightPct}%`,
-                      }}
-                    >
-                      <p className="text-[9px] font-medium text-gray-700 leading-tight truncate">
-                        {evt.label}
-                      </p>
-                    </motion.div>
-                  );
-                })}
-            </div>
-          ))}
-
+      {/* Metrics grid */}
+      <div className="p-4 flex flex-col gap-3">
+        {METRICS.map((metric, i) => (
           <motion.div
-            initial={{ scaleX: 0 }}
-            animate={{ scaleX: 1 }}
-            transition={{ delay: 2.0, duration: 0.6, ease: [0.22, 1, 0.36, 1] }}
-            className="absolute left-0 right-0 origin-left pointer-events-none z-10"
-            style={{ top: `${NOW_TOP_PCT}%` }}
+            key={metric.label}
+            initial={{ opacity: 0, y: 10 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{
+              delay: 1.2 + i * 0.18,
+              duration: 0.35,
+              ease: [0.22, 1, 0.36, 1],
+            }}
+            className="flex flex-col gap-1"
           >
-            <div className="relative flex items-center" style={{ marginLeft: "60%", marginRight: "0%" }}>
-              <div className="h-2 w-2 rounded-full bg-red-500 -ml-1 flex-shrink-0" />
-              <div className="flex-1 h-[1.5px] bg-red-500" />
+            <div className="flex items-center justify-between">
+              <span className="text-[11px] text-gray-500">{metric.label}</span>
+              <div className="flex items-center gap-1">
+                <TrendingUp className={`h-3 w-3 ${metric.color}`} />
+                <span className={`text-[13px] font-semibold ${metric.color}`}>
+                  <AnimatedCounter value={metric.value} delay={1.2 + i * 0.18} />
+                </span>
+              </div>
             </div>
+
+            {metric.type === "progress" && metric.progress !== undefined && (
+              <div className="w-full h-1.5 rounded-full bg-gray-100 overflow-hidden">
+                <motion.div
+                  initial={{ width: 0 }}
+                  animate={{ width: `${metric.progress}%` }}
+                  transition={{
+                    delay: 1.4 + i * 0.18,
+                    duration: 0.6,
+                    ease: [0.22, 1, 0.36, 1],
+                  }}
+                  className="h-full rounded-full bg-sky-400"
+                />
+              </div>
+            )}
+
+            {metric.sub && (
+              <span className="text-[10px] text-gray-400">{metric.sub}</span>
+            )}
           </motion.div>
-        </div>
+        ))}
+      </div>
+
+      {/* Footer row */}
+      <motion.div
+        initial={{ opacity: 0 }}
+        animate={{ opacity: 1 }}
+        transition={{ delay: 2.0, duration: 0.35 }}
+        className="px-4 py-3 border-t border-[#E2E4EC] bg-[#FAFAFA] flex items-center gap-1.5"
+      >
+        <CheckCircle2 className="h-3.5 w-3.5 text-emerald-500 flex-shrink-0" />
+        <span className="text-[10px] text-gray-500">
+          Talora atendio <span className="font-semibold text-gray-700">23 consultas</span> esta semana sin intervension manual
+        </span>
       </motion.div>
     </div>
   );
 }
 
-// ─── Hero stagger ─────────────────────────────────────────────────────────────
+// ─── Hero stagger ──────────────────────────────────────────────────────────────
 
 const heroStagger = {
   hidden: {},
   visible: {
-    transition: { staggerChildren: 0.08 },
+    transition: { staggerChildren: 0.15 },
   },
 };
 
-// ─── Hero export ──────────────────────────────────────────────────────────────
+// ─── Hero export ───────────────────────────────────────────────────────────────
 
 export function Hero() {
   return (
@@ -464,7 +398,7 @@ export function Hero() {
       {/* Subtle radial gradient behind mockup area */}
       <div className="absolute bottom-0 left-1/2 -translate-x-1/2 w-[800px] h-[600px] bg-[radial-gradient(ellipse_at_center,_rgba(239,233,255,0.15)_0%,_rgba(232,246,235,0.1)_40%,_transparent_70%)] pointer-events-none" />
 
-      <div className="container mx-auto max-w-[1200px] px-4 sm:px-6 pb-10 pt-4 sm:pb-14 sm:pt-12 md:pb-20 md:pt-24">
+      <div className="container mx-auto max-w-[1200px] px-4 sm:px-6 pb-6 pt-2 sm:pb-8 sm:pt-8 md:pb-12 md:pt-16">
         <motion.div
           variants={heroStagger}
           initial="hidden"
@@ -493,25 +427,47 @@ export function Hero() {
           {/* Subheadline */}
           <motion.p
             variants={fadeUp}
-            className="mt-4 max-w-xl text-base sm:text-body-lg text-gray-medium"
+            className="mt-5 max-w-lg text-base sm:text-body-lg text-gray-600"
           >
             {hero.subheadline}
           </motion.p>
 
-          {/* CTAs */}
-          <motion.div variants={fadeUp} className="mt-6 flex flex-col sm:flex-row gap-3 w-full sm:w-auto">
+          {/* CTAs — primary is Calendly demo, secondary is scroll link */}
+          <motion.div variants={fadeUp} className="mt-7 sm:mt-8 flex flex-col sm:flex-row gap-3 w-full sm:w-auto">
             <Button size="lg" className="w-full sm:w-auto" asChild>
-              <a href={hero.ctaPrimaryHref}>{hero.ctaPrimary}</a>
+              <a
+                href={hero.ctaPrimaryHref}
+                target="_blank"
+                rel="noopener noreferrer"
+              >
+                {hero.ctaPrimary}
+              </a>
             </Button>
             <Button size="lg" variant="secondary" className="w-full sm:w-auto" asChild>
-              <a href={hero.ctaSecondaryHref} target="_blank" rel="noopener noreferrer">{hero.ctaSecondary}</a>
+              <a href={hero.ctaSecondaryHref}>{hero.ctaSecondary}</a>
             </Button>
+          </motion.div>
+
+          {/* Microcopy pills */}
+          <motion.div
+            variants={fadeUp}
+            className="mt-4 flex flex-wrap justify-center gap-x-5 gap-y-1.5"
+          >
+            {hero.microcopy.map((item) => (
+              <span
+                key={item}
+                className="flex items-center gap-1.5 text-[12px] text-gray-medium"
+              >
+                <CheckCircle2 className="h-3.5 w-3.5 text-emerald-500 flex-shrink-0" />
+                {item}
+              </span>
+            ))}
           </motion.div>
 
           {/* Mockup composition */}
           <motion.div
             variants={scaleIn}
-            className="relative mt-8 sm:mt-12 md:mt-16"
+            className="relative mt-12 sm:mt-14 md:mt-16"
           >
             {/* Background glow */}
             <div className="absolute inset-0 sm:-m-8 md:-m-12 rounded-3xl bg-gradient-to-b from-surface-cool via-surface-cool/50 to-transparent" />
@@ -524,7 +480,14 @@ export function Hero() {
               {/* Connector arrow */}
               <div className="hidden md:flex flex-col items-center gap-2 text-gray-soft">
                 <svg width="48" height="24" viewBox="0 0 48 24" fill="none">
-                  <path d="M0 12h40m0 0l-6-6m6 6l-6 6" stroke="#E2E4EC" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" strokeDasharray="4 4" />
+                  <path
+                    d="M0 12h40m0 0l-6-6m6 6l-6 6"
+                    stroke="#E2E4EC"
+                    strokeWidth="1.5"
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    strokeDasharray="4 4"
+                  />
                 </svg>
               </div>
 
@@ -533,9 +496,9 @@ export function Hero() {
                 initial="hidden"
                 whileInView="visible"
                 viewport={{ once: true, margin: "-64px" }}
-                className="hidden sm:block"
+                className="block"
               >
-                <DashboardMockup />
+                <ResultsPanelMockup />
               </motion.div>
             </div>
           </motion.div>

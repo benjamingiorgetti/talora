@@ -4,11 +4,10 @@ import { useEffect, useMemo, useState } from "react";
 import { usePathname, useRouter } from "next/navigation";
 import useSWR from "swr";
 import type { Client, Professional } from "@talora/shared";
-import { NotebookPen, PhoneCall, Plus, Search, UserRound } from "lucide-react";
+import { MessageCircle, Plus, Search, UserRound } from "lucide-react";
 import { toast } from "sonner";
 import { api, companyScopedFetcher, companyScopedKey } from "@/lib/api";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent } from "@/components/ui/card";
 import {
   Dialog,
   DialogContent,
@@ -21,11 +20,22 @@ import {
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { PageEntrance } from "@/components/ui/page-entrance";
-import { AnimatedList, AnimatedItem } from "@/components/ui/animated-list";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useAuth } from "@/lib/auth";
 import { WorkspaceEmptyState } from "@/components/workspace/chrome";
 import { WorkspaceErrorState } from "@/components/workspace/error-state";
+
+function formatNextAppointment(dateStr: string | null | undefined): string {
+  if (!dateStr) return "Sin turno";
+  const d = new Date(dateStr);
+  return d.toLocaleString("es-AR", {
+    day: "2-digit",
+    month: "2-digit",
+    year: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+  });
+}
 
 export default function WorkspaceClientsPage() {
   const pathname = usePathname();
@@ -105,6 +115,7 @@ export default function WorkspaceClientsPage() {
 
   return (
     <PageEntrance className="min-h-0 flex-1 overflow-y-auto space-y-5 lg:space-y-6">
+      {/* Top bar */}
       <div className="flex flex-wrap items-center justify-between gap-3">
         <Dialog open={createOpen} onOpenChange={setCreateOpen}>
           <DialogTrigger asChild>
@@ -182,7 +193,6 @@ export default function WorkspaceClientsPage() {
           </DialogContent>
         </Dialog>
 
-
         <div className="relative w-full min-w-0 sm:w-[320px]">
           <Search className="pointer-events-none absolute left-4 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
           <Input
@@ -194,69 +204,84 @@ export default function WorkspaceClientsPage() {
         </div>
       </div>
 
-      <AnimatedList className="grid gap-4 lg:grid-cols-2">
-        {displayClients.map((client, index) => (
-          <AnimatedItem key={client.id}>
-            <Card className="interactive-soft rounded-[24px] border-[#e6e7ec] bg-white shadow-none sm:rounded-[28px]">
-            <CardContent className="p-5 sm:p-6">
-              <div className="flex items-start gap-4">
-                <div
-                  className="flex h-14 w-14 items-center justify-center rounded-[20px] text-slate-900"
-                  style={{
-                    backgroundColor:
-                      index % 3 === 0
-                        ? "hsl(var(--surface-lilac))"
-                        : index % 3 === 1
-                          ? "hsl(var(--surface-sky))"
-                          : "hsl(var(--surface-sand))",
-                  }}
-                >
-                  <UserRound className="h-6 w-6" />
-                </div>
-                <div className="min-w-0 flex-1">
-                  <div className="flex flex-wrap items-center gap-2">
-                    <h3 className="text-lg font-semibold tracking-[-0.04em] text-slate-950">{client.name || "Cliente sin nombre"}</h3>
-                    <span className="rounded-full bg-[hsl(var(--surface-sand))] px-2.5 py-1 text-[11px] font-semibold text-slate-600">
-                      Proximo turno visible
-                    </span>
-                  </div>
-                  <div className="mt-3 flex flex-wrap items-center gap-4 text-sm text-slate-500">
-                    <span className="inline-flex items-center gap-2">
-                      <PhoneCall className="h-4 w-4" />
-                      {client.phone_number}
-                    </span>
-                    <span className="inline-flex items-center gap-2">
-                      <NotebookPen className="h-4 w-4" />
-                      {client.notes || "Sin notas internas todavia"}
-                    </span>
-                  </div>
-                </div>
-              </div>
+      {/* Table */}
+      {displayClients.length > 0 && (
+        <div className="rounded-[28px] border border-[#e6e7ec] bg-white overflow-hidden">
+          <table className="w-full border-collapse">
+            <thead>
+              <tr className="border-b border-[#f0f1f5]">
+                <th className="px-5 py-3 text-left text-[11px] uppercase tracking-[0.16em] text-slate-400 font-medium">
+                  Nombre
+                </th>
+                <th className="hidden sm:table-cell px-5 py-3 text-left text-[11px] uppercase tracking-[0.16em] text-slate-400 font-medium">
+                  Telefono
+                </th>
+                <th className="hidden md:table-cell px-5 py-3 text-left text-[11px] uppercase tracking-[0.16em] text-slate-400 font-medium">
+                  Proximo turno
+                </th>
+                <th className="hidden lg:table-cell px-5 py-3 text-left text-[11px] uppercase tracking-[0.16em] text-slate-400 font-medium">
+                  Historial
+                </th>
+                <th className="hidden lg:table-cell px-5 py-3 text-left text-[11px] uppercase tracking-[0.16em] text-slate-400 font-medium">
+                  Canal
+                </th>
+              </tr>
+            </thead>
+            <tbody>
+              {displayClients.map((client) => (
+                <tr key={client.id} className="border-b border-[#f0f1f5] last:border-0 hover:bg-[#fafafa] transition-colors">
+                  {/* Nombre */}
+                  <td className="px-5 py-3">
+                    <div className="flex items-center gap-3">
+                      <div className="flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-full bg-[hsl(var(--surface-lilac))]">
+                        <UserRound className="h-4 w-4 text-slate-700" />
+                      </div>
+                      <div className="min-w-0">
+                        <p className="truncate text-sm font-semibold text-slate-950 leading-snug">
+                          {client.name || "Cliente sin nombre"}
+                        </p>
+                        {/* Phone visible on mobile below name */}
+                        <p className="truncate text-xs text-slate-500 sm:hidden">
+                          {client.phone_number}
+                        </p>
+                      </div>
+                    </div>
+                  </td>
 
-              <div className="mt-5 grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
-                <div className="rounded-[22px] border border-[#e2e4ec] bg-[linear-gradient(180deg,#ffffff_0%,#f7f8fc_100%)] px-4 py-4">
-                  <p className="text-xs uppercase tracking-[0.16em] text-slate-400">Proximo turno</p>
-                  <p className="mt-2 text-sm font-semibold text-slate-950">
-                    {client.next_appointment_at
-                      ? new Date(client.next_appointment_at).toLocaleString("es-AR", { day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" })
-                      : "Sin turno"}
-                  </p>
-                </div>
-                <div className="rounded-[22px] border border-[#e2e4ec] bg-[linear-gradient(180deg,#ffffff_0%,#f7f8fc_100%)] px-4 py-4">
-                  <p className="text-xs uppercase tracking-[0.16em] text-slate-400">Historial</p>
-                  <p className="mt-2 text-sm font-semibold text-slate-950">{client.recent_appointments?.length ?? 0} ultimos visibles</p>
-                </div>
-                <div className="rounded-[22px] border border-[#e2e4ec] bg-[linear-gradient(180deg,#ffffff_0%,#f7f8fc_100%)] px-4 py-4">
-                  <p className="text-xs uppercase tracking-[0.16em] text-slate-400">Canal</p>
-                  <p className="mt-2 text-sm font-semibold text-slate-950">WhatsApp</p>
-                </div>
-              </div>
-            </CardContent>
-            </Card>
-          </AnimatedItem>
-        ))}
-      </AnimatedList>
+                  {/* Telefono */}
+                  <td className="hidden sm:table-cell px-5 py-3">
+                    <span className="text-sm text-slate-500">{client.phone_number}</span>
+                  </td>
 
+                  {/* Proximo turno */}
+                  <td className="hidden md:table-cell px-5 py-3">
+                    <span className={`text-sm ${client.next_appointment_at ? "text-slate-950 font-medium" : "text-slate-400"}`}>
+                      {formatNextAppointment(client.next_appointment_at)}
+                    </span>
+                  </td>
+
+                  {/* Historial */}
+                  <td className="hidden lg:table-cell px-5 py-3">
+                    <span className="text-sm text-slate-500">
+                      {client.recent_appointments?.length ?? 0} ultimos visibles
+                    </span>
+                  </td>
+
+                  {/* Canal */}
+                  <td className="hidden lg:table-cell px-5 py-3">
+                    <span className="inline-flex items-center gap-1.5 text-sm text-slate-500">
+                      <MessageCircle className="h-3.5 w-3.5 text-green-500" />
+                      WhatsApp
+                    </span>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+
+      {/* Empty state */}
       {displayClients.length === 0 && (
         <WorkspaceEmptyState
           title={isProfessional ? "No tenes clientes asignados todavia." : "No hay clientes para mostrar."}

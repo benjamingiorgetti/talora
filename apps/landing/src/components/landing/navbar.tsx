@@ -7,7 +7,7 @@ import { Button } from "@/components/ui/button";
 import { nav } from "@/lib/content";
 import { cn } from "@/lib/utils";
 
-const sectionIds = ["beneficios", "como-funciona", "faq"];
+const sectionIds = ["que-cambia", "como-funciona", "faq"];
 
 export function Navbar() {
   const [open, setOpen] = useState(false);
@@ -52,7 +52,7 @@ export function Navbar() {
   return (
     <>
       {/* Document-flow spacer so content below doesn't jump under the fixed header */}
-      <div className="h-16" aria-hidden="true" />
+      <div className="h-14" aria-hidden="true" />
 
       {/* Fixed wrapper — no bg/border here; those live on the inner pill */}
       <header
@@ -71,44 +71,28 @@ export function Navbar() {
             "transition-all duration-300 ease-[cubic-bezier(0.4,0,0.2,1)]",
             scrolled
               ? // Pill state — no backdrop-blur on mobile (causes flicker on iOS Safari)
-                "mx-auto max-w-[620px] mt-3 rounded-full h-12 px-6 bg-white/95 md:backdrop-blur-xl md:bg-white/85 shadow-lg border border-white/60"
+                "mx-auto max-w-[620px] mt-3 rounded-full h-11 px-6 bg-white/95 md:backdrop-blur-xl md:bg-white/85 shadow-lg border border-white/60"
               : // Full-width transparent state
-                "mx-auto max-w-[1200px] h-16 px-4 sm:px-6"
+                "mx-auto max-w-[1200px] h-14 px-4 sm:px-6"
           )}
           style={
             scrolled
-              ? { boxShadow: "0 8px 32px 0 rgba(28,29,34,0.10), 0 1.5px 4px 0 rgba(28,29,34,0.07)" }
+              ? { boxShadow: "0 4px 20px 0 rgba(28,29,34,0.08), 0 1px 3px 0 rgba(28,29,34,0.05)" }
               : undefined
           }
         >
           <div className="flex h-full items-center justify-between">
             {/* Logo */}
-            <a href="/" className="flex items-center gap-2 shrink-0">
-              {/* Icon only on mobile (or when in pill — pill is small) */}
-              <img
-                src="/images/icono-negro.png"
-                alt="Talora"
-                width={26}
-                height={26}
-                className={cn(
-                  "transition-all duration-300",
-                  scrolled ? "block" : "block sm:hidden"
-                )}
-              />
+            <a href="/" className="flex items-center shrink-0">
               <img
                 src="/images/logo-talora.png"
                 alt="Talora"
-                height={30}
+                height={48}
                 className={cn(
-                  "h-8 w-auto transition-all duration-300",
-                  scrolled ? "hidden" : "hidden sm:block"
+                  "h-12 w-auto transition-all duration-300",
+                  scrolled ? "h-9" : ""
                 )}
               />
-              {!scrolled && (
-                <span className="hidden sm:inline text-xs text-gray-medium font-medium">
-                  {nav.descriptor}
-                </span>
-              )}
             </a>
 
             {/* Desktop nav */}

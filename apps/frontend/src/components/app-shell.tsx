@@ -24,6 +24,7 @@ import {
   Settings2,
   Shield,
   Sparkles,
+  TrendingUp,
   UsersRound,
   Wrench,
   BellRing,
@@ -62,6 +63,7 @@ const sharedNav: NavItem[] = [
   { href: "/whatsapp", label: "WhatsApp", icon: MessageSquareMore },
   { href: "/appointments", label: "Turnos", icon: BriefcaseBusiness },
   { href: "/clients", label: "Clientes", icon: UsersRound },
+  { href: "/workspace/growth", label: "CRM", icon: TrendingUp },
 ];
 
 const configNav: NavItem[] = [

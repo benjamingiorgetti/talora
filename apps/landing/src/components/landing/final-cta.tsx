@@ -19,11 +19,11 @@ export function FinalCTA() {
         <div className="relative mx-auto max-w-2xl text-center">
           {/* Brand icon */}
           <img
-            src="/images/icono-blanco.png"
+            src="/images/icono-blanco-cta.png"
             alt="Talora"
-            width={40}
-            height={40}
-            className="mx-auto mb-6 h-10 w-10 opacity-80"
+            width={44}
+            height={44}
+            className="mx-auto mb-6 h-11 w-11 rounded-xl"
           />
           <h2 className="font-display text-section-mobile md:text-section font-semibold text-white">
             {finalCta.headline}
@@ -32,7 +32,7 @@ export function FinalCTA() {
             {finalCta.subheadline}
           </p>
           <div className="mt-6 sm:mt-8">
-            <Button size="lg" variant="invert" className="w-full sm:w-auto" asChild>
+            <Button size="lg" variant="invert" className="w-full sm:w-auto shimmer-btn" asChild>
               <a href={finalCta.ctaHref} target="_blank" rel="noopener noreferrer">{finalCta.cta}</a>
             </Button>
           </div>
