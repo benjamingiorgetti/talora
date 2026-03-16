@@ -392,6 +392,48 @@ export interface ReactivationSettings {
   reactivation_message_template: string | null;
 }
 
+// --- Slot Fill ---
+export type SlotFillOpportunityStatus = 'pending' | 'reviewed' | 'dismissed' | 'expired';
+export type SlotFillCandidateStatus = 'pending' | 'sent' | 'skipped';
+
+export interface SlotFillOpportunity {
+  id: string;
+  company_id: string;
+  appointment_id: string;
+  service_id: string;
+  professional_id: string | null;
+  slot_starts_at: string;
+  slot_ends_at: string | null;
+  service_name: string;
+  professional_name: string;
+  status: SlotFillOpportunityStatus;
+  candidates?: SlotFillCandidate[];
+  created_at: string;
+  updated_at: string;
+}
+
+export interface SlotFillCandidate {
+  id: string;
+  opportunity_id: string;
+  client_id: string;
+  score: number;
+  match_reasons: string[];
+  status: SlotFillCandidateStatus;
+  reactivation_message_id: string | null;
+  client_name?: string;
+  client_phone?: string;
+  days_overdue?: number;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface SlotFillSettings {
+  slot_fill_enabled: boolean;
+  slot_fill_manual_review: boolean;
+  slot_fill_max_candidates: number;
+  slot_fill_message_template: string | null;
+}
+
 // --- WebSocket Events ---
 export type AppointmentWsPayload = {
   id: string;
@@ -412,4 +454,5 @@ export type WsEvent =
   | { type: 'appointment:confirmed'; payload: AppointmentWsPayload }
   | { type: 'appointment:rescheduled'; payload: AppointmentWsPayload }
   | { type: 'appointment:cancelled'; payload: AppointmentWsPayload }
-  | { type: 'appointment:confirmed'; payload: AppointmentWsPayload };
+  | { type: 'appointment:confirmed'; payload: AppointmentWsPayload }
+  | { type: 'slot_fill:new_opportunity'; payload: { id: string; company_id: string; service_name: string } };
