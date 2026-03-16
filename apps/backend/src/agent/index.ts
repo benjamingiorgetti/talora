@@ -14,7 +14,7 @@ import type { AgentToolExecutionTrace, Message, Conversation } from '@talora/sha
 const openai = new OpenAI({ apiKey: config.openaiApiKey, maxRetries: 3, timeout: 60_000 });
 const evolution = new EvolutionClient();
 
-const CALENDAR_TOOLS = new Set(['google_calendar_check', 'google_calendar_book', 'google_calendar_cancel', 'google_calendar_reprogram']);
+const CALENDAR_TOOLS = new Set(['google_calendar_check', 'google_calendar_book', 'google_calendar_cancel', 'google_calendar_reprogram', 'google_calendar_list']);
 
 
 function normalizePhone(value: string | null | undefined): string {
@@ -108,11 +108,15 @@ async function loadRecentBookingsSummary(
   }
 
   const result = await pool.query<{
+    id: string;
+    google_event_id: string | null;
     service_name: string | null;
     professional_name: string | null;
     starts_at: string;
   }>(
-    `SELECT s.name AS service_name,
+    `SELECT a.id,
+            a.google_event_id,
+            s.name AS service_name,
             p.name AS professional_name,
             a.starts_at
      FROM appointments a
@@ -132,7 +136,7 @@ async function loadRecentBookingsSummary(
   }
 
   const [latest, ...rest] = result.rows;
-  const formatBooking = (booking: { service_name: string | null; professional_name: string | null; starts_at: string }) => {
+  const formatBooking = (booking: { id: string; google_event_id: string | null; service_name: string | null; professional_name: string | null; starts_at: string }) => {
     const service = booking.service_name ?? 'servicio sin nombre';
     const withProfessional = booking.professional_name ? `${service} con ${booking.professional_name}` : service;
     const when = formatFriendlyDateTime(new Date(booking.starts_at), config.timezone);

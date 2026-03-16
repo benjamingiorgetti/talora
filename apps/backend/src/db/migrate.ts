@@ -264,6 +264,18 @@ WHERE NOT EXISTS (
   SELECT 1 FROM tools t WHERE t.agent_id = a.id AND t.name = 'google_calendar_cancel'
 );
 
+INSERT INTO tools (agent_id, name, description, parameters, implementation, source)
+SELECT a.id,
+       'google_calendar_list',
+       'Lista los turnos agendados en Google Calendar para un rango de fechas.',
+       '{"type":"object","properties":{"startDate":{"type":"string","description":"Fecha ISO de inicio del rango."},"endDate":{"type":"string","description":"Fecha ISO de fin del rango."},"professionalId":{"type":"string","description":"ID del profesional."},"professionalName":{"type":"string","description":"Nombre del profesional."}},"required":["startDate","endDate"]}'::jsonb,
+       'google_calendar_list',
+       'core'
+FROM agents a
+WHERE NOT EXISTS (
+  SELECT 1 FROM tools t WHERE t.agent_id = a.id AND t.name = 'google_calendar_list'
+);
+
 -- Test sessions
 CREATE TABLE IF NOT EXISTS test_sessions (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -673,7 +685,8 @@ WHERE implementation IN (
   'google_calendar_check',
   'google_calendar_book',
   'google_calendar_reprogram',
-  'google_calendar_cancel'
+  'google_calendar_cancel',
+  'google_calendar_list'
 );
 
 ALTER TABLE conversations ADD COLUMN IF NOT EXISTS archived_at TIMESTAMPTZ;

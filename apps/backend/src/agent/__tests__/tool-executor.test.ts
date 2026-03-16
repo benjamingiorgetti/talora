@@ -12,6 +12,7 @@ mock.module('../../calendar/operations', () => ({
   createEvent: mock(() => Promise.resolve({ success: true, eventId: 'evt-2' })),
   deleteEvent: mock(() => Promise.resolve({ success: true })),
   updateEvent: mock(() => Promise.resolve({ success: true })),
+  listEvents: mock(() => Promise.resolve({ events: [] })),
 }));
 mock.module('../../utils/url-validator', () => ({
   validateWebhookUrl: mock(() => Promise.resolve()),
@@ -627,5 +628,125 @@ describe('cancel: SQL does NOT include professional_id filter', () => {
     const sql = appointmentCall![0] as string;
     // Cancel should NOT filter by professional_id — any appointment in the company can be cancelled
     expect(sql).not.toContain('professional_id');
+  });
+});
+
+// ──────────────────────────────────────────────────────────
+// Bug fix: cancel must NOT require service selection
+// ──────────────────────────────────────────────────────────
+
+describe('cancel: does not require service selection', () => {
+  beforeEach(() => mockQuery.mockReset());
+
+  it('cancels by appointmentId without serviceName — no service selection error', async () => {
+    const prof = fakeProfessional(PROF_A);
+    const appt = fakeAppointment(PROF_A);
+
+    setupQueryMock([
+      ['FROM professionals WHERE id =', [prof]],
+      ['FROM appointments WHERE', [appt]],
+      ['UPDATE appointments', []],
+    ]);
+
+    const result = await executeTool(
+      'google_calendar_cancel',
+      { appointmentId: APPT_ID },
+      makeContext({ professionalId: PROF_A })
+    );
+    const parsed = JSON.parse(result);
+    expect(parsed.needsServiceSelection).toBeUndefined();
+    expect(parsed.success).toBe(true);
+    expect(parsed.appointmentId).toBe(APPT_ID);
+  });
+
+  it('cancels by eventId without serviceName — no service selection error', async () => {
+    const prof = fakeProfessional(PROF_A);
+    const appt = fakeAppointment(PROF_A);
+
+    setupQueryMock([
+      ['FROM professionals WHERE id =', [prof]],
+      ['FROM appointments WHERE', [appt]],
+      ['UPDATE appointments', []],
+    ]);
+
+    const result = await executeTool(
+      'google_calendar_cancel',
+      { eventId: EVENT_ID },
+      makeContext({ professionalId: PROF_A })
+    );
+    const parsed = JSON.parse(result);
+    expect(parsed.needsServiceSelection).toBeUndefined();
+    expect(parsed.success).toBe(true);
+  });
+
+  it('cancels appointment even when multiple services exist (no ambiguity prompt)', async () => {
+    const prof = fakeProfessional(PROF_A);
+    const appt = fakeAppointment(PROF_A);
+
+    setupQueryMock([
+      ['FROM professionals WHERE id =', [prof]],
+      ['FROM appointments WHERE', [appt]],
+      ['UPDATE appointments', []],
+    ]);
+
+    // No serviceName, no serviceId — should still cancel without asking
+    const result = await executeTool(
+      'google_calendar_cancel',
+      { appointmentId: APPT_ID },
+      makeContext({ professionalId: PROF_A })
+    );
+    const parsed = JSON.parse(result);
+    expect(parsed.serviceOptions).toBeUndefined();
+    expect(parsed.success).toBe(true);
+  });
+});
+
+// ──────────────────────────────────────────────────────────
+// Bug fix: list enriches events with Talora appointmentId
+// ──────────────────────────────────────────────────────────
+
+describe('list: enriches events with appointmentId from DB', () => {
+  beforeEach(() => mockQuery.mockReset());
+
+  it('returns appointmentId when google_event_id matches an appointment', async () => {
+    const prof = fakeProfessional(PROF_A);
+    const corteService = {
+      id: 'svc-corte',
+      company_id: COMPANY_A,
+      name: 'Corte',
+      duration_minutes: 20,
+      professional_id: PROF_A,
+      is_active: true,
+      aliases: [],
+    };
+
+    setupQueryMock([
+      ['FROM professionals WHERE id =', [prof]],
+      ['FROM services', [corteService]],
+      ['UPDATE conversations SET professional_id', []],
+      // Cross-reference query for enrichment
+      ['google_event_id IN', [
+        { id: APPT_ID, google_event_id: 'gcal-evt-1' },
+      ]],
+    ]);
+
+    // Mock listEvents to return an event with a google_event_id
+    const { listEvents } = await import('../../calendar/operations');
+    (listEvents as ReturnType<typeof mock>).mockImplementation(() =>
+      Promise.resolve({
+        events: [
+          { id: 'gcal-evt-1', summary: 'Corte con Juli', description: '', starts_at: '2026-03-16T10:00:00-03:00', ends_at: '2026-03-16T10:30:00-03:00' },
+        ],
+      })
+    );
+
+    const result = await executeTool(
+      'google_calendar_list',
+      { startDate: '2026-03-16T00:00:00Z', endDate: '2026-03-17T00:00:00Z' },
+      makeContext({ professionalId: PROF_A })
+    );
+    const parsed = JSON.parse(result);
+    expect(parsed.events).toBeDefined();
+    expect(parsed.events[0].appointmentId).toBe(APPT_ID);
   });
 });

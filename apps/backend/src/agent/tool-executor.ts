@@ -1,5 +1,5 @@
 import { pool } from '../db/pool';
-import { bookSlot, checkSlot, deleteEvent, updateEvent } from '../calendar/operations';
+import { bookSlot, checkSlot, deleteEvent, listEvents, updateEvent } from '../calendar/operations';
 import { validateWebhookUrl } from '../utils/url-validator';
 import { logger } from '../utils/logger';
 import { EvolutionClient } from '../evolution/client';
@@ -855,6 +855,46 @@ export async function executeTool(
         } satisfies AppointmentCancelledEvent);
 
         return JSON.stringify({ success: true, appointmentId: appointment.id });
+      }
+
+      case 'google_calendar_list': {
+        const startDate = asString(toolInput.startDate) ?? asString(toolInput.start_date);
+        const endDate = asString(toolInput.endDate) ?? asString(toolInput.end_date);
+        if (!startDate || !endDate) {
+          return JSON.stringify({ error: 'startDate and endDate are required' });
+        }
+
+        if (!context.companyId) {
+          const result = await listEvents(startDate, endDate);
+          return JSON.stringify(result);
+        }
+
+        const resolved = await resolveOrFail(context.companyId, toolInput, context.professionalId, context.conversationId);
+        if (!resolved.ok) return resolved.errorJson;
+        const { scheduling } = resolved;
+        const result = await listEvents(startDate, endDate, scheduling.calendarId, scheduling.professional.id);
+
+        // Enrich events with Talora appointmentId by cross-referencing google_event_id
+        if (result.events.length > 0) {
+          const gcalIds = result.events.map((e) => e.id).filter(Boolean);
+          if (gcalIds.length > 0) {
+            const placeholders = gcalIds.map((_, i) => `$${i + 2}`).join(', ');
+            const apptRows = await pool.query<{ id: string; google_event_id: string }>(
+              `SELECT id, google_event_id FROM appointments
+               WHERE company_id = $1 AND google_event_id IN (${placeholders})
+               AND status != 'cancelled'`,
+              [context.companyId, ...gcalIds]
+            );
+            const apptMap = new Map(apptRows.rows.map((r) => [r.google_event_id, r.id]));
+            const enrichedEvents = result.events.map((e) => ({
+              ...e,
+              appointmentId: apptMap.get(e.id) ?? null,
+            }));
+            return JSON.stringify({ events: enrichedEvents, error: result.error });
+          }
+        }
+
+        return JSON.stringify(result);
       }
 
       case 'escalate': {
