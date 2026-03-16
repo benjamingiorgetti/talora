@@ -20,6 +20,12 @@ All notable changes to this project will be documented in this file.
 - Comprehensive tests for selector, actions, listener, and API endpoints
 
 ### Changed
+- Redesigned services settings page: split monolithic component into `ServiceEditorSheet`, `ServicesFilters`, and `ServicesList`
+- Replaced inline editing cards with side-panel Sheet for create/edit/delete flows
+- Added filtering by status (active/inactive) and professional assignment
+- Added sorting by name, price, and duration
+- Moved CSV import preview into a modal Dialog instead of inline card
+- Created reusable `Sheet` UI component based on Radix Dialog primitives
 - Slot fill listener now creates opportunity records instead of auto-sending messages
 - Removed `ClientDetailAnalytics` type from shared (moved to inline in client analytics endpoint)
 
