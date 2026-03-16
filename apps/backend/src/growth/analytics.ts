@@ -3,29 +3,50 @@ import { logger } from '../utils/logger';
 import type { ClientAnalytics } from '@talora/shared';
 
 export async function computeClientAnalytics(companyId: string): Promise<void> {
+  // Generates an analytics row for EVERY client in the company.
+  // Clients with 0-1 appointments get defaults (risk_score=0, avg_frequency=null).
+  // Clients with 2+ confirmed appointments get full frequency/risk calculations.
   const analyticsQuery = `
-    WITH appointment_gaps AS (
+    WITH client_appointments AS (
       SELECT
         a.client_id,
         a.starts_at,
-        s.price,
+        COALESCE(s.price, 0) AS price,
         LAG(a.starts_at) OVER (PARTITION BY a.client_id ORDER BY a.starts_at) AS prev_starts_at
       FROM appointments a
       LEFT JOIN services s ON a.service_id = s.id
       WHERE a.company_id = $1 AND a.status = 'confirmed' AND a.client_id IS NOT NULL
     ),
-    client_stats AS (
+    per_client AS (
       SELECT
-        client_id,
-        COUNT(*)::int AS total_appointments,
-        COALESCE(SUM(price), 0)::numeric(10,2) AS total_revenue,
-        MAX(starts_at) AS last_appointment_at,
-        EXTRACT(EPOCH FROM (NOW() - MAX(starts_at))) / 86400 AS days_since_last,
-        AVG(EXTRACT(EPOCH FROM (starts_at - prev_starts_at)) / 86400) AS avg_frequency_days
-      FROM appointment_gaps
-      WHERE prev_starts_at IS NOT NULL
-      GROUP BY client_id
-      HAVING COUNT(*) >= 2
+        c.id AS client_id,
+        COALESCE(agg.total_appointments, 0)::int AS total_appointments,
+        COALESCE(agg.total_revenue, 0)::numeric(10,2) AS total_revenue,
+        agg.last_appointment_at,
+        CASE WHEN agg.last_appointment_at IS NOT NULL
+          THEN EXTRACT(EPOCH FROM (NOW() - agg.last_appointment_at)) / 86400
+          ELSE NULL
+        END AS days_since_last,
+        freq.avg_frequency_days
+      FROM clients c
+      LEFT JOIN (
+        SELECT
+          client_id,
+          COUNT(*)::int AS total_appointments,
+          SUM(price)::numeric(10,2) AS total_revenue,
+          MAX(starts_at) AS last_appointment_at
+        FROM client_appointments
+        GROUP BY client_id
+      ) agg ON agg.client_id = c.id
+      LEFT JOIN (
+        SELECT
+          client_id,
+          AVG(EXTRACT(EPOCH FROM (starts_at - prev_starts_at)) / 86400) AS avg_frequency_days
+        FROM client_appointments
+        WHERE prev_starts_at IS NOT NULL
+        GROUP BY client_id
+      ) freq ON freq.client_id = c.id
+      WHERE c.company_id = $1 AND c.is_active = true
     )
     SELECT
       client_id,
@@ -33,25 +54,31 @@ export async function computeClientAnalytics(companyId: string): Promise<void> {
       total_revenue,
       avg_frequency_days,
       last_appointment_at,
-      ROUND(days_since_last)::int AS days_since_last,
-      GREATEST(ROUND(days_since_last - avg_frequency_days), 0)::int AS days_overdue,
-      LEAST(GREATEST(ROUND((days_since_last - avg_frequency_days) / avg_frequency_days * 100), 0), 100)::int AS risk_score
-    FROM client_stats
+      CASE WHEN days_since_last IS NOT NULL THEN ROUND(days_since_last)::int ELSE NULL END AS days_since_last,
+      CASE WHEN avg_frequency_days IS NOT NULL
+        THEN GREATEST(ROUND(days_since_last - avg_frequency_days), 0)::int
+        ELSE 0
+      END AS days_overdue,
+      CASE WHEN avg_frequency_days IS NOT NULL AND avg_frequency_days > 0
+        THEN LEAST(GREATEST(ROUND((days_since_last - avg_frequency_days) / avg_frequency_days * 100), 0), 100)::int
+        ELSE 0
+      END AS risk_score
+    FROM per_client
   `;
 
   const result = await pool.query<{
     client_id: string;
     total_appointments: number;
     total_revenue: string;
-    avg_frequency_days: string;
-    last_appointment_at: Date;
-    days_since_last: number;
+    avg_frequency_days: string | null;
+    last_appointment_at: Date | null;
+    days_since_last: number | null;
     days_overdue: number;
     risk_score: number;
   }>(analyticsQuery, [companyId]);
 
   if (result.rows.length === 0) {
-    logger.info(`[analytics] No at-risk clients found for company ${companyId}`);
+    logger.info(`[analytics] No clients found for company ${companyId}`);
     return;
   }
 
@@ -59,7 +86,7 @@ export async function computeClientAnalytics(companyId: string): Promise<void> {
   const clientIds = result.rows.map((r) => r.client_id);
   const totalAppointments = result.rows.map((r) => r.total_appointments);
   const totalRevenues = result.rows.map((r) => Number(r.total_revenue));
-  const avgFrequencies = result.rows.map((r) => Number(r.avg_frequency_days));
+  const avgFrequencies = result.rows.map((r) => r.avg_frequency_days !== null ? Number(r.avg_frequency_days) : null);
   const lastAppointments = result.rows.map((r) => r.last_appointment_at);
   const daysSinceLasts = result.rows.map((r) => r.days_since_last);
   const daysOverdues = result.rows.map((r) => r.days_overdue);
