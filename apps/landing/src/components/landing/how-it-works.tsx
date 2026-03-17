@@ -32,7 +32,7 @@ export function HowItWorks() {
 
       <div
         ref={sectionRef}
-        className="mt-4 sm:mt-8 md:mt-10 grid gap-6 sm:gap-8 md:grid-cols-3 md:gap-4 relative"
+        className="mt-10 sm:mt-12 grid gap-6 sm:gap-8 md:grid-cols-3 md:gap-5 relative"
       >
         {/* Animated connector line (desktop only) */}
         <div className="hidden md:block absolute top-[2.25rem] left-[20%] right-[20%]">
@@ -61,7 +61,7 @@ export function HowItWorks() {
           return (
             <div
               key={step.number}
-              className="relative flex flex-col items-center text-center"
+              className="relative flex flex-col items-center text-center md:bg-white md:border md:border-[#E2E4EC] md:rounded-[22px] md:shadow-card md:p-6"
             >
               {/* Mobile connector line (between steps) */}
               {i > 0 && (
@@ -82,7 +82,7 @@ export function HowItWorks() {
                 initial={{ opacity: 0, y: 8 }}
                 animate={isInView ? { opacity: 1, y: 0 } : { opacity: 0, y: 8 }}
                 transition={{ delay: contentDelay, duration: 0.3 }}
-                className="mt-3 inline-flex h-5 w-5 sm:h-6 sm:w-6 items-center justify-center rounded-full bg-surface-cool font-display text-[10px] sm:text-xs font-semibold text-ink"
+                className="mt-3 inline-flex h-5 w-5 sm:h-6 sm:w-6 items-center justify-center rounded-full bg-surface-cool md:bg-white font-display text-[10px] sm:text-xs font-semibold text-ink"
               >
                 {step.number}
               </motion.span>
