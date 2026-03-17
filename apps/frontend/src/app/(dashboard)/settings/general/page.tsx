@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import useSWR from "swr";
 import type { CompanySettings } from "@talora/shared";
-import { Clock, ToggleLeft, ToggleRight } from "lucide-react";
+import { Bell, Clock, ToggleLeft, ToggleRight } from "lucide-react";
 import { toast } from "sonner";
 import { api, companyScopedFetcher, companyScopedKey } from "@/lib/api";
 import { useAuth } from "@/lib/auth";
@@ -33,9 +33,25 @@ const DEFAULTS: CompanySettings = {
   working_days: [1, 2, 3, 4, 5],
   show_prices: false,
   timezone: "America/Argentina/Buenos_Aires",
+  reminder_enabled: false,
+  reminder_hours_before: 3,
+  reminder_message_template: null,
   created_at: "",
   updated_at: "",
 };
+
+const REMINDER_TEMPLATE_PLACEHOLDER =
+  "Hola {{client_name}}! Te recordamos que tenes turno {{time_description}} para {{service_name}} en {{company_name}}. Te esperamos!";
+
+const REMINDER_VARIABLES = [
+  "{{client_name}}",
+  "{{service_name}}",
+  "{{company_name}}",
+  "{{professional_name}}",
+  "{{time_description}}",
+  "{{date}}",
+  "{{time}}",
+];
 
 export default function GeneralSettingsPage() {
   const { activeCompanyId } = useAuth();
@@ -75,6 +91,9 @@ export default function GeneralSettingsPage() {
         working_days: form.working_days,
         show_prices: form.show_prices,
         timezone: form.timezone,
+        reminder_enabled: form.reminder_enabled,
+        reminder_hours_before: form.reminder_hours_before,
+        reminder_message_template: form.reminder_message_template,
       });
       toast.success("Configuracion guardada.");
       setDirty(false);
@@ -179,6 +198,77 @@ export default function GeneralSettingsPage() {
                     <ToggleLeft className="h-8 w-8 text-slate-300" />
                   )}
                 </button>
+              </div>
+            </CardContent>
+          </Card>
+
+          {/* Recordatorios */}
+          <Card className="rounded-[28px] border-[#e6e7ec] bg-white shadow-none">
+            <CardContent className="p-6">
+              <div className="flex items-center gap-3">
+                <div className="flex h-10 w-10 items-center justify-center rounded-[14px] border border-[#dfe3eb] bg-[#f6f7fb]">
+                  <Bell className="h-4.5 w-4.5 text-slate-600" />
+                </div>
+                <div>
+                  <p className="text-[11px] uppercase tracking-[0.18em] text-slate-400">Automatizacion</p>
+                  <h3 className="text-lg font-semibold tracking-[-0.03em] text-slate-950">Recordatorios de turno</h3>
+                </div>
+              </div>
+
+              <div className="mt-6 space-y-4">
+                <button
+                  type="button"
+                  onClick={() => updateField("reminder_enabled", !form.reminder_enabled)}
+                  className="flex w-full items-center justify-between rounded-[22px] border border-[#e2e4ec] bg-[linear-gradient(180deg,#ffffff_0%,#f7f8fc_100%)] px-5 py-4 text-left transition-colors hover:border-[#d0d3dc]"
+                >
+                  <div>
+                    <p className="text-sm font-semibold text-slate-950">Enviar recordatorios por WhatsApp</p>
+                    <p className="mt-1 text-sm text-slate-500">Envia un mensaje automatico antes de cada turno confirmado.</p>
+                  </div>
+                  {form.reminder_enabled ? (
+                    <ToggleRight className="h-8 w-8 shrink-0 text-emerald-600" />
+                  ) : (
+                    <ToggleLeft className="h-8 w-8 shrink-0 text-slate-300" />
+                  )}
+                </button>
+
+                {form.reminder_enabled && (
+                  <div className="space-y-4 pl-1">
+                    <div className="space-y-2">
+                      <Label>Horas antes del turno</Label>
+                      <Input
+                        type="number"
+                        min={1}
+                        max={48}
+                        value={form.reminder_hours_before}
+                        onChange={(e) => updateField("reminder_hours_before", Math.max(1, Math.min(48, parseInt(e.target.value) || 3)))}
+                        className="h-11 w-32 rounded-2xl border-[#dde1ea]"
+                      />
+                      <p className="text-xs text-slate-400">Entre 1 y 48 horas. Por defecto: 3 horas.</p>
+                    </div>
+
+                    <div className="space-y-2">
+                      <Label>Mensaje personalizado</Label>
+                      <textarea
+                        value={form.reminder_message_template ?? ""}
+                        onChange={(e) => updateField("reminder_message_template", e.target.value || null)}
+                        placeholder={REMINDER_TEMPLATE_PLACEHOLDER}
+                        rows={3}
+                        className="w-full rounded-2xl border border-[#dde1ea] bg-white px-4 py-3 text-sm text-slate-900 placeholder:text-slate-400 focus:border-slate-400 focus:outline-none focus:ring-0"
+                      />
+                      <div className="flex flex-wrap gap-1.5">
+                        {REMINDER_VARIABLES.map((v) => (
+                          <span
+                            key={v}
+                            className="rounded-full bg-slate-100 px-2.5 py-0.5 text-[11px] font-medium text-slate-500"
+                          >
+                            {v}
+                          </span>
+                        ))}
+                      </div>
+                    </div>
+                  </div>
+                )}
               </div>
             </CardContent>
           </Card>
