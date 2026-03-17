@@ -203,28 +203,29 @@ growthRouter.get('/stats', async (req, res) => {
 
     const result = await pool.query<{
       clients_at_risk: number;
+      clients_contacted: number;
       messages_sent: number;
-      clients_reactivated: number;
-      conversion_rate: string;
-      revenue_attributed: string;
-      avg_days_to_convert: string;
+      messages_failed: number;
+      delivery_rate: string;
     }>(
       `SELECT
         (SELECT COUNT(*)::int FROM client_analytics WHERE company_id = $1 AND risk_score > 0) AS clients_at_risk,
+        (COUNT(DISTINCT rm.client_id) FILTER (WHERE rm.status IN ('sent', 'converted')))::int AS clients_contacted,
         (COUNT(*) FILTER (WHERE rm.status IN ('sent', 'converted')))::int AS messages_sent,
-        (COUNT(*) FILTER (WHERE rm.status = 'converted'))::int AS clients_reactivated,
-        CASE WHEN COUNT(*) FILTER (WHERE rm.status IN ('sent', 'converted')) > 0
-          THEN ROUND(COUNT(*) FILTER (WHERE rm.status = 'converted')::numeric / COUNT(*) FILTER (WHERE rm.status IN ('sent', 'converted')) * 100, 1)
+        (COUNT(*) FILTER (WHERE rm.status = 'failed'))::int AS messages_failed,
+        CASE WHEN COUNT(*) FILTER (WHERE rm.status IN ('sent', 'converted', 'failed')) > 0
+          THEN ROUND(
+            (COUNT(*) FILTER (WHERE rm.status IN ('sent', 'converted')))::numeric
+            / COUNT(*) FILTER (WHERE rm.status IN ('sent', 'converted', 'failed'))
+            * 100,
+            1
+          )
           ELSE 0
-        END AS conversion_rate,
-        COALESCE(SUM(s.price) FILTER (WHERE rm.status = 'converted' AND a.status = 'confirmed'), 0) AS revenue_attributed,
-        COALESCE(AVG(EXTRACT(EPOCH FROM (rm.converted_at - rm.sent_at)) / 86400) FILTER (WHERE rm.status = 'converted'), 0) AS avg_days_to_convert
+       END AS delivery_rate
        FROM reactivation_messages rm
-       LEFT JOIN appointments a ON rm.attributed_appointment_id = a.id
-       LEFT JOIN services s ON a.service_id = s.id
        WHERE rm.company_id = $1
-         AND rm.sent_at >= $2
-         AND rm.sent_at < $3`,
+         AND COALESCE(rm.sent_at, rm.created_at) >= $2
+         AND COALESCE(rm.sent_at, rm.created_at) < $3`,
       [companyId, from, to]
     );
 
@@ -232,11 +233,10 @@ growthRouter.get('/stats', async (req, res) => {
     const stats: GrowthStats = {
       period: { from, to },
       clients_at_risk: row?.clients_at_risk ?? 0,
+      clients_contacted: row?.clients_contacted ?? 0,
       messages_sent: row?.messages_sent ?? 0,
-      clients_reactivated: row?.clients_reactivated ?? 0,
-      conversion_rate: Number(row?.conversion_rate ?? 0),
-      revenue_attributed: Number(row?.revenue_attributed ?? 0),
-      avg_days_to_convert: Number(row?.avg_days_to_convert ?? 0),
+      messages_failed: row?.messages_failed ?? 0,
+      delivery_rate: Number(row?.delivery_rate ?? 0),
     };
 
     res.json({ data: stats });

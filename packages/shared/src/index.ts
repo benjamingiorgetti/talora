@@ -382,11 +382,10 @@ export interface ReactivationMessage {
 export interface GrowthStats {
   period: { from: string; to: string };
   clients_at_risk: number;
+  clients_contacted: number;
   messages_sent: number;
-  clients_reactivated: number;
-  conversion_rate: number;
-  revenue_attributed: number;
-  avg_days_to_convert: number;
+  messages_failed: number;
+  delivery_rate: number;
 }
 
 export interface ReactivationSettings {

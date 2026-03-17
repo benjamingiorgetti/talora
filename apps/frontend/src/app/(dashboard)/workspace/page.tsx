@@ -289,8 +289,8 @@ export default function WorkspaceDashboardPage() {
       >
         <div>
           <p className="text-[11px] uppercase tracking-[0.16em] text-slate-400">Crecimiento</p>
-          <p className="mt-1 text-lg font-semibold text-slate-950">Metricas de reactivacion</p>
-          <p className="mt-1 text-sm text-slate-500">Clientes recuperados, revenue atribuido y mas.</p>
+          <p className="mt-1 text-lg font-semibold text-slate-950">Actividad de reactivacion</p>
+          <p className="mt-1 text-sm text-slate-500">Mensajes enviados, entregabilidad y estado operativo.</p>
         </div>
         <ArrowRight className="h-5 w-5 shrink-0 text-slate-400" />
       </Link>
