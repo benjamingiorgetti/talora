@@ -14,9 +14,12 @@ export function Providers({ children }: { children: React.ReactNode }) {
         onErrorRetry: (error, _key, _config, revalidate, { retryCount }) => {
           // Never retry on 401 — the api.ts interceptor already handles redirect.
           if (error?.status === 401) return;
-          // Stop retrying after 3 attempts for all other errors.
-          if (retryCount >= 3) return;
-          setTimeout(() => revalidate({ retryCount }), 5000);
+          // Never retry on 404 — resource doesn't exist.
+          if (error?.status === 404) return;
+          // Exponential backoff: 5s, 10s, 20s, 30s (cap) — retries indefinitely
+          // so sections auto-recover when backend comes back.
+          const delay = Math.min(5000 * Math.pow(2, retryCount), 30_000);
+          setTimeout(() => revalidate({ retryCount }), delay);
         },
       }}
     >

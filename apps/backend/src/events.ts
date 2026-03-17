@@ -18,3 +18,7 @@ export interface AppointmentCancelledEvent {
 }
 
 export const appEvents = new EventEmitter();
+appEvents.setMaxListeners(20);
+appEvents.on('error', (err) => {
+  console.error('[appEvents] Unhandled event error:', err);
+});

@@ -208,3 +208,15 @@ function gracefulShutdown(signal: string) {
 
 process.on('SIGTERM', () => gracefulShutdown('SIGTERM'));
 process.on('SIGINT', () => gracefulShutdown('SIGINT'));
+
+process.on('unhandledRejection', (reason) => {
+  logger.error('Unhandled promise rejection — NOT crashing:', reason instanceof Error ? reason : new Error(String(reason)));
+});
+
+process.on('uncaughtException', (err) => {
+  logger.error('Uncaught exception — shutting down:', err);
+  // Force exit after 5s if graceful shutdown hangs (e.g. pool.end() never resolves).
+  // After uncaughtException the process is in undefined state — must not stay alive.
+  setTimeout(() => process.exit(1), 5_000).unref();
+  gracefulShutdown('uncaughtException');
+});

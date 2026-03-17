@@ -431,7 +431,8 @@ async function processMessage(
       if (hasCalendarTool) {
         // Sequential execution for calendar tools to avoid race conditions
         for (const tc of toolCalls) {
-          const args = JSON.parse(tc.function.arguments) as Record<string, unknown>;
+          const parsedArgs = safeJsonParse(tc.function.arguments);
+          const args = typeof parsedArgs === 'string' ? {} as Record<string, unknown> : parsedArgs;
           const result = await withTimeout(
             executeTool(tc.function.name, args, {
               companyId: conversation.company_id,
@@ -466,7 +467,8 @@ async function processMessage(
         // Parallel execution for non-calendar tools
         const results = await Promise.all(
           toolCalls.map(async (tc) => {
-            const args = JSON.parse(tc.function.arguments) as Record<string, unknown>;
+            const parsedArgs = safeJsonParse(tc.function.arguments);
+            const args = typeof parsedArgs === 'string' ? {} as Record<string, unknown> : parsedArgs;
             const result = await withTimeout(
               executeTool(tc.function.name, args, {
                 companyId: conversation.company_id,
@@ -543,7 +545,11 @@ async function processMessage(
 
     // Send response via EvolutionAPI
     if (responseText) {
-      await evolution.sendText(instanceName, conversation.phone_number, responseText);
+      try {
+        await evolution.sendText(instanceName, conversation.phone_number, responseText);
+      } catch (sendErr) {
+        logger.error(`Failed to send agent response via WhatsApp for conversation ${conversationId}:`, sendErr);
+      }
     }
   } catch (err) {
     logger.error('Error handling incoming message:', err);
