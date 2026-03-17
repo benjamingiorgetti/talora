@@ -121,6 +121,7 @@ const {
   handleConnectionUpdate,
   handleQrCodeUpdate,
   messageBuffers,
+  MAX_MESSAGE_BUFFERS,
 } = await import('../webhook');
 
 // ---------------------------------------------------------------------------
@@ -1154,5 +1155,111 @@ describe('handleMessagesUpsert — message buffer', () => {
 
     // Two separate agent calls — one for each conversation turn
     expect(mockHandleIncomingMessage).toHaveBeenCalledTimes(2);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// messageBuffers eviction
+// ---------------------------------------------------------------------------
+describe('messageBuffers eviction', () => {
+  beforeEach(() => {
+    // Clear all buffers and timers
+    for (const [, buf] of messageBuffers) {
+      clearTimeout(buf.timer);
+    }
+    messageBuffers.clear();
+  });
+
+  it('evicts the oldest buffer when at capacity', async () => {
+    // Fill the map to capacity with synthetic entries
+    for (let i = 0; i < MAX_MESSAGE_BUFFERS; i++) {
+      messageBuffers.set(`key-${i}`, {
+        timer: setTimeout(() => {}, 999_999),
+        firstMessageAt: 1000 + i, // ascending timestamps
+        messageCount: 1,
+        conversationId: `conv-${i}`,
+        instanceName: 'inst',
+      });
+    }
+
+    expect(messageBuffers.size).toBe(MAX_MESSAGE_BUFFERS);
+    expect(messageBuffers.has('key-0')).toBe(true); // oldest entry
+
+    // Set up SQL pattern-based query mocks for the full handleMessagesUpsert flow
+    setupQueryMock(mockQuery, [
+      ['whatsapp_instances WHERE evolution_instance_name', [instanceRow]],
+      ['bot_enabled', [{ bot_enabled: true }]],
+      ['FROM clients', []],
+      ['FROM conversations', [{ id: CONV_ID, archived_at: null, last_message_at: FIXED_NOW }]],
+      ['INSERT INTO conversations', [conversationRow]],
+      ['INSERT INTO messages', [messageRow]],
+      ['UPDATE whatsapp_instances', [instanceRow]],
+    ]);
+
+    const body = makeWebhookBody({
+      data: {
+        key: { id: 'ev-evict-1', remoteJid: `${PHONE}@s.whatsapp.net`, fromMe: false },
+        message: { conversation: 'Trigger eviction' },
+        pushName: 'Test Client',
+      },
+    });
+
+    await handleMessagesUpsert(body);
+
+    // The oldest entry (key-0, firstMessageAt=1000) should have been evicted
+    expect(messageBuffers.has('key-0')).toBe(false);
+    // The new entry should exist
+    const newKey = `${INSTANCE_NAME}:${PHONE}`;
+    expect(messageBuffers.has(newKey)).toBe(true);
+    // Size should still be at capacity (evicted one, added one)
+    expect(messageBuffers.size).toBe(MAX_MESSAGE_BUFFERS);
+
+    // Clean up all timers
+    for (const [, buf] of messageBuffers) {
+      clearTimeout(buf.timer);
+    }
+    messageBuffers.clear();
+  });
+
+  it('does not evict when under capacity', async () => {
+    messageBuffers.set('existing-key', {
+      timer: setTimeout(() => {}, 999_999),
+      firstMessageAt: 1000,
+      messageCount: 1,
+      conversationId: 'conv-existing',
+      instanceName: 'inst',
+    });
+
+    expect(messageBuffers.size).toBe(1);
+
+    setupQueryMock(mockQuery, [
+      ['whatsapp_instances WHERE evolution_instance_name', [instanceRow]],
+      ['bot_enabled', [{ bot_enabled: true }]],
+      ['FROM clients', []],
+      ['FROM conversations', [{ id: CONV_ID, archived_at: null, last_message_at: FIXED_NOW }]],
+      ['INSERT INTO conversations', [conversationRow]],
+      ['INSERT INTO messages', [messageRow]],
+      ['UPDATE whatsapp_instances', [instanceRow]],
+    ]);
+
+    const body = makeWebhookBody({
+      data: {
+        key: { id: 'ev-no-evict-1', remoteJid: `${PHONE}@s.whatsapp.net`, fromMe: false },
+        message: { conversation: 'No eviction needed' },
+        pushName: 'Test Client',
+      },
+    });
+
+    await handleMessagesUpsert(body);
+
+    // Both entries should exist
+    expect(messageBuffers.has('existing-key')).toBe(true);
+    expect(messageBuffers.size).toBe(2);
+
+    // Clean up
+    for (const [, buf] of messageBuffers) {
+      clearTimeout(buf.timer);
+    }
+    messageBuffers.clear();
   });
 });

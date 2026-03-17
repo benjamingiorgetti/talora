@@ -62,6 +62,10 @@ export function setupWebSocket(server: Server) {
     });
   }, HEARTBEAT_INTERVAL);
 
+  wss.on('error', (err) => {
+    logger.error('WebSocket server error:', err);
+  });
+
   wss.on('close', () => clearInterval(heartbeat));
 
   wss.on('connection', async (ws, request) => {
@@ -72,6 +76,11 @@ export function setupWebSocket(server: Server) {
     ext.companyId = session?.companyId ?? null;
     ext.professionalId = session?.professionalId ?? null;
     ext.role = session?.role;
+
+    ws.on('error', (err) => {
+      logger.error('WebSocket client error:', err);
+      try { ws.terminate(); } catch { /* already terminated */ }
+    });
 
     ws.on('pong', () => {
       ext.isAlive = true;

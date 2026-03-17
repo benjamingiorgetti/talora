@@ -6,12 +6,10 @@ import type { WsEvent } from "@talora/shared";
 const WS_URL = process.env.NEXT_PUBLIC_WS_URL ?? "ws://localhost:3001/ws";
 const BASE_DELAY = 3000;
 const MAX_DELAY = 30000;
-const MAX_RETRIES = 10;
 
 export function useWebSocket() {
   const [lastEvent, setLastEvent] = useState<WsEvent | null>(null);
   const [isConnected, setIsConnected] = useState(false);
-  const [retriesExhausted, setRetriesExhausted] = useState(false);
   const wsRef = useRef<WebSocket | null>(null);
   const reconnectTimer = useRef<ReturnType<typeof setTimeout>>();
   const retryCount = useRef(0);
@@ -31,7 +29,6 @@ export function useWebSocket() {
 
     ws.onopen = () => {
       retryCount.current = 0;
-      setRetriesExhausted(false);
       setIsConnected(true);
     };
 
@@ -47,11 +44,7 @@ export function useWebSocket() {
     ws.onclose = () => {
       setIsConnected(false);
 
-      if (retryCount.current >= MAX_RETRIES) {
-        setRetriesExhausted(true);
-        return;
-      }
-
+      // Always reconnect with exponential backoff (cap at 30s)
       const delay = Math.min(BASE_DELAY * Math.pow(2, retryCount.current), MAX_DELAY);
       const jitter = Math.random() * 1000;
       retryCount.current += 1;
@@ -67,12 +60,11 @@ export function useWebSocket() {
     wsRef.current = ws;
   }, []);
 
-  // Manual reconnect: resets exhausted state and retry counter so the
+  // Manual reconnect: resets retry counter so the
   // exponential-backoff loop starts fresh.
   const reconnect = useCallback(() => {
     clearTimeout(reconnectTimer.current);
     retryCount.current = 0;
-    setRetriesExhausted(false);
     connect();
   }, [connect]);
 
@@ -84,5 +76,5 @@ export function useWebSocket() {
     };
   }, [connect]);
 
-  return { lastEvent, isConnected, retriesExhausted, reconnect };
+  return { lastEvent, isConnected, reconnect };
 }

@@ -26,6 +26,8 @@ const evolution = new EvolutionClient();
 //   ... 10s after last message ...
 //   Timer fires → Lock → re-check bot_paused → Agent → Release Lock
 //
+const MAX_MESSAGE_BUFFERS = 5_000;
+
 const messageBuffers = new Map<string, {
   timer: ReturnType<typeof setTimeout>;
   firstMessageAt: number;
@@ -99,6 +101,24 @@ function scheduleAgentResponse(
     });
   }, delay);
 
+  // Evict oldest buffer if at capacity
+  if (!existing && messageBuffers.size >= MAX_MESSAGE_BUFFERS) {
+    let oldestKey: string | null = null;
+    let oldestTime = Infinity;
+    for (const [key, buf] of messageBuffers) {
+      if (buf.firstMessageAt < oldestTime) {
+        oldestTime = buf.firstMessageAt;
+        oldestKey = key;
+      }
+    }
+    if (oldestKey) {
+      const old = messageBuffers.get(oldestKey);
+      if (old) clearTimeout(old.timer);
+      messageBuffers.delete(oldestKey);
+      logger.warn(`Evicted oldest message buffer (${oldestKey}) due to size limit`);
+    }
+  }
+
   messageBuffers.set(lockKey, {
     timer,
     firstMessageAt,
@@ -124,7 +144,7 @@ function cancelMessageBuffer(lockKey: string) {
 }
 
 // Export for testing
-export { messageBuffers, scheduleAgentResponse, cancelMessageBuffer };
+export { messageBuffers, scheduleAgentResponse, cancelMessageBuffer, MAX_MESSAGE_BUFFERS };
 
 interface EvolutionWebhookBody {
   event: string;
@@ -296,7 +316,10 @@ webhookRouter.post('/evolution/:event?', (req, res) => {
     } catch (err) {
       logger.error('Webhook processing error:', err);
     }
-  })();
+  })().catch((err) => {
+    // Safety net: catch anything that escapes the inner try/catch
+    logger.error('Webhook processing escaped error:', err);
+  });
 });
 
 export async function handleMessagesUpsert(body: EvolutionWebhookBody) {
