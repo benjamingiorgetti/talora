@@ -921,8 +921,8 @@ export async function executeTool(
         }
 
         const clientInfo = context.contactName
-          ? `${context.contactName} (${context.phoneNumber})`
-          : context.phoneNumber ?? 'desconocido';
+          ? `${context.contactName} (https://wa.me/${context.phoneNumber})`
+          : context.phoneNumber ? `https://wa.me/${context.phoneNumber}` : 'desconocido';
         const escalationMessage = `⚠️ *Escalación — ${companyRow.rows[0].name}*\n\nCliente: ${clientInfo}\nMotivo: ${reason}`;
 
         const evolution = new EvolutionClient();
