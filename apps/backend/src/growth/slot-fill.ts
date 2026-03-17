@@ -3,6 +3,7 @@ import { pool } from '../db/pool';
 import { logger } from '../utils/logger';
 import { broadcast } from '../ws/server';
 import { selectSlotFillCandidates } from './slot-fill-selector';
+import { sendOpportunityCandidate } from './slot-fill-sender';
 
 const MIN_HOURS_BEFORE_SLOT = 2;
 
@@ -18,14 +19,16 @@ export function initSlotFillListener(): void {
       const settingsResult = await pool.query<{
         slot_fill_enabled: boolean;
         slot_fill_max_candidates: number;
+        slot_fill_manual_review: boolean;
       }>(
-        `SELECT slot_fill_enabled, slot_fill_max_candidates
+        `SELECT slot_fill_enabled, slot_fill_max_candidates, slot_fill_manual_review
          FROM company_settings WHERE company_id = $1`,
         [event.companyId]
       );
       if (!settingsResult.rows[0]?.slot_fill_enabled) return;
 
       const maxCandidates = settingsResult.rows[0].slot_fill_max_candidates ?? 3;
+      const manualReview = settingsResult.rows[0].slot_fill_manual_review ?? true;
 
       // Load context for opportunity record
       const contextResult = await pool.query<{
@@ -75,12 +78,15 @@ export function initSlotFillListener(): void {
       const opportunityId = oppResult.rows[0].id;
 
       // Insert candidates one by one (max 3, no perf concern)
+      let topCandidateId: string | null = null;
       for (const candidate of candidates) {
-        await pool.query(
+        const candResult = await pool.query<{ id: string }>(
           `INSERT INTO slot_fill_candidates (opportunity_id, client_id, score, match_reasons)
-           VALUES ($1, $2, $3, $4)`,
+           VALUES ($1, $2, $3, $4)
+           RETURNING id`,
           [opportunityId, candidate.client_id, candidate.score, candidate.match_reasons]
         );
+        if (!topCandidateId) topCandidateId = candResult.rows[0]?.id ?? null;
       }
 
       // Broadcast WebSocket event
@@ -96,6 +102,20 @@ export function initSlotFillListener(): void {
       logger.info(
         `[slot-fill] Created opportunity ${opportunityId} with ${candidates.length} candidates for cancelled appointment ${event.appointmentId}`
       );
+
+      // Auto-send to top candidate if manual review is disabled
+      if (!manualReview && topCandidateId) {
+        try {
+          const result = await sendOpportunityCandidate(event.companyId, opportunityId, topCandidateId);
+          if (result.success) {
+            logger.info(`[slot-fill] Auto-sent to top candidate for opportunity ${opportunityId}`);
+          } else {
+            logger.warn(`[slot-fill] Auto-send failed for ${opportunityId}: ${result.error} — falling back to manual review`);
+          }
+        } catch (autoSendErr) {
+          logger.warn('[slot-fill] Auto-send error, falling back to manual review:', autoSendErr);
+        }
+      }
     } catch (err) {
       // Slot-fill failures must NEVER propagate to the cancellation flow
       logger.error('[slot-fill] Error processing cancellation:', err);

@@ -2,11 +2,12 @@
 
 import { useState } from "react";
 import useSWR from "swr";
-import type { ClientAnalytics, SlotFillOpportunity } from "@talora/shared";
+import type { ClientAnalytics, SlotFillOpportunity, SlotFillSettings } from "@talora/shared";
 import {
   Phone,
   RefreshCw,
   Send,
+  Zap,
 } from "lucide-react";
 import { toast } from "sonner";
 import { api, companyScopedFetcher, companyScopedKey } from "@/lib/api";
@@ -163,10 +164,10 @@ function KanbanColumnView({
           className="h-2 w-2 shrink-0 rounded-full"
           style={{ backgroundColor: column.dotColor }}
         />
-        <p className="text-[11px] uppercase tracking-[0.16em] text-slate-400 flex-1 truncate">
+        <p className="text-[11px] uppercase tracking-[0.16em] text-slate-900 font-semibold flex-1 truncate">
           {column.title}
         </p>
-        <span className="rounded-full bg-white border border-[#e6e7ec] px-2 py-0.5 text-[11px] font-semibold text-slate-600">
+        <span className="rounded-full bg-white border border-[#e6e7ec] px-2 py-0.5 text-[11px] font-bold text-slate-900">
           {column.clients.length}
         </span>
       </div>
@@ -320,6 +321,14 @@ export default function GrowthPage() {
 
   const opportunities = opportunitiesData?.data ?? [];
 
+  const {
+    data: growthSettings,
+    mutate: mutateSettings,
+  } = useSWR(
+    companyScopedKey("/growth/settings", activeCompanyId),
+    companyScopedFetcher<SlotFillSettings>
+  );
+
   // ── Handlers (all declared before useEffect and early returns) ─────────────
 
   const handleRefresh = async () => {
@@ -351,6 +360,17 @@ export default function GrowthPage() {
 
   const handleSlotFillSend = (opportunityId: string, candidateId: string, clientName: string) => {
     setSlotFillTarget({ opportunityId, candidateId, clientName });
+  };
+
+  const handleToggleAutoSend = async () => {
+    const newValue = !(growthSettings?.slot_fill_manual_review === false);
+    try {
+      await api.put("/growth/settings", { slot_fill_manual_review: !newValue });
+      void mutateSettings();
+      toast.success(newValue ? "Envio automatico activado" : "Envio automatico desactivado");
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "No se pudo actualizar.");
+    }
   };
 
   const handleSlotFillDismiss = async (opportunityId: string) => {
@@ -405,6 +425,21 @@ export default function GrowthPage() {
           >
             <RefreshCw className={cn("mr-2 h-4 w-4", refreshing && "animate-spin")} />
             Actualizar
+          </Button>
+
+          {/* Auto-send toggle */}
+          <Button
+            variant="outline"
+            onClick={() => void handleToggleAutoSend()}
+            className={cn(
+              "h-10 rounded-2xl border-[#dde1ea] px-4 text-sm transition-colors",
+              growthSettings?.slot_fill_manual_review === false
+                ? "bg-emerald-50 border-emerald-200 text-emerald-700 hover:bg-emerald-100"
+                : "bg-white text-slate-500 hover:bg-[#f6f7fb]"
+            )}
+          >
+            <Zap className="mr-2 h-4 w-4" />
+            {growthSettings?.slot_fill_manual_review === false ? "Envio auto ON" : "Envio auto OFF"}
           </Button>
         </div>
 
