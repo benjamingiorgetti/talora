@@ -513,6 +513,7 @@ ALTER TABLE conversations ADD COLUMN IF NOT EXISTS professional_id UUID;
 ALTER TABLE conversations ADD COLUMN IF NOT EXISTS bot_paused BOOLEAN NOT NULL DEFAULT false;
 ALTER TABLE conversations ADD COLUMN IF NOT EXISTS paused_at TIMESTAMPTZ;
 ALTER TABLE conversations ADD COLUMN IF NOT EXISTS paused_by_user_id UUID REFERENCES users(id) ON DELETE SET NULL;
+ALTER TABLE conversations ADD COLUMN IF NOT EXISTS auto_resume_at TIMESTAMPTZ;
 
 DO $$ BEGIN
   ALTER TABLE users DROP CONSTRAINT IF EXISTS fk_users_professional_id;
@@ -541,8 +542,13 @@ CREATE TABLE IF NOT EXISTS conversation_pauses (
   company_id UUID NOT NULL REFERENCES companies(id) ON DELETE CASCADE,
   paused_by_user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
   paused_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  auto_resume_at TIMESTAMPTZ,
+  pause_source TEXT NOT NULL DEFAULT 'manual',
   resumed_at TIMESTAMPTZ
 );
+
+ALTER TABLE conversation_pauses ADD COLUMN IF NOT EXISTS auto_resume_at TIMESTAMPTZ;
+ALTER TABLE conversation_pauses ADD COLUMN IF NOT EXISTS pause_source TEXT NOT NULL DEFAULT 'manual';
 
 WITH default_company AS (
   SELECT id FROM companies WHERE slug = 'talora-base' LIMIT 1

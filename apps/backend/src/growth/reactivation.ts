@@ -198,6 +198,7 @@ export async function sendOutboundMessage(
         professional_id: conversation.professional_id ?? null,
         last_message_at: conversation.last_message_at,
         bot_paused: conversation.bot_paused,
+        auto_resume_at: conversation.auto_resume_at ?? null,
         archived_at: conversation.archived_at,
         archive_reason: conversation.archive_reason,
       },
