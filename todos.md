@@ -28,6 +28,11 @@
 _(vacío — nada en progreso activo)_
 
 ## To-do
+- [ ] `REMIND-2 · Flujo de confirmación por WhatsApp (Phase 2)`
+  - Resultado esperado: el cliente recibe el reminder y puede responder SI/NO. Si responde NO o no responde en X tiempo, el turno se cancela automáticamente y se libera el slot.
+  - Requiere: state machine en appointments (pending_confirmation), webhook handler para respuestas al reminder, lógica de auto-cancel con timeout.
+  - Prioridad: P2 — mejora significativa del no-show rate, pero requiere trabajo no trivial.
+
 - [ ] `CRM-1 · KPI cards de analíticas por cliente`
   - Resultado esperado: la vista de detalle de cliente muestra 8 KPI cards con data real (último turno, ticket promedio, frecuencia, total turnos, revenue, mensajes enviados, tasa de respuesta, tasa de conversión).
   - Qué ya existe: `client_analytics` table con total_appointments/revenue/frequency/risk_score, `reactivation_messages` con tracking de sent/converted.

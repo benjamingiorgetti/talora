@@ -2,6 +2,22 @@
 
 All notable changes to this project will be documented in this file.
 
+## [1.0.6.0] - 2026-03-17
+
+### Added
+- Appointment reminder system: automatic WhatsApp reminders sent before confirmed appointments
+- Reminder scheduler polling every 5 minutes with batch processing (limit 100), rate limit awareness (429 stops cycle), and graceful shutdown
+- Configurable per-company: `reminder_enabled`, `reminder_hours_before` (1-48, default 3), `reminder_message_template` with template variables (`{{client_name}}`, `{{service_name}}`, `{{time_description}}`, etc.)
+- Smart time descriptions: "hoy a las HH:MM", "manana a las HH:MM", or "el DD/MM a las HH:MM" based on appointment date relative to now
+- Timezone-aware formatting with fallback to `America/Argentina/Buenos_Aires`
+- DB migration: `reminder_enabled`, `reminder_hours_before`, `reminder_message_template` on `company_settings`; `reminder_sent_at` on `appointments`; partial index for efficient polling
+- Frontend reminder settings card in general settings page with toggle, hours input, and custom message textarea with variable chips
+- Company settings API validation for `reminder_hours_before` (integer, 1-48 range)
+- 23 new tests: 17 for scheduler (send, rate limit, batch update, custom/default template, multi-company, error handling) + 6 for settings API
+
+### Changed
+- Renamed `sendReactivationMessage` to `sendOutboundMessage` across codebase for reuse by both reactivation and reminder systems
+
 ## [1.0.5.0] - 2026-03-16
 
 ### Added
