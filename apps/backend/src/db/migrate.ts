@@ -930,6 +930,21 @@ CREATE UNIQUE INDEX IF NOT EXISTS idx_slot_fill_candidates_opportunity_client
 ALTER TABLE company_settings
   ADD COLUMN IF NOT EXISTS slot_fill_manual_review BOOLEAN NOT NULL DEFAULT true,
   ADD COLUMN IF NOT EXISTS slot_fill_max_candidates INT NOT NULL DEFAULT 3;
+
+-- Reminders: company settings
+ALTER TABLE company_settings
+  ADD COLUMN IF NOT EXISTS reminder_enabled BOOLEAN NOT NULL DEFAULT false,
+  ADD COLUMN IF NOT EXISTS reminder_hours_before INT NOT NULL DEFAULT 3,
+  ADD COLUMN IF NOT EXISTS reminder_message_template TEXT;
+
+-- Reminders: tracking on appointments
+ALTER TABLE appointments
+  ADD COLUMN IF NOT EXISTS reminder_sent_at TIMESTAMPTZ;
+
+-- Partial index for efficient polling query
+CREATE INDEX IF NOT EXISTS idx_appointments_reminder_pending
+  ON appointments(company_id, starts_at)
+  WHERE status = 'confirmed' AND reminder_sent_at IS NULL;
 `;
 
 async function run() {
