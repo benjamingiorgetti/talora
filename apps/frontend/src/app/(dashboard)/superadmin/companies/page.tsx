@@ -402,6 +402,7 @@ export default function SuperadminCompaniesPage() {
       {selectedCompanyId && selectedCompany ? (
         <CompanyEditView
           company={selectedCompany}
+          onCompanyUpdated={() => void mutateCompanies()}
           activeTab={activeTab}
           setActiveTab={setActiveTab}
           onBack={handleBack}

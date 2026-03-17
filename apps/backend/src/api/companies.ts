@@ -81,6 +81,25 @@ companiesRouter.put('/current/bot', authMiddleware, requireSuperadmin, requireCo
   }
 });
 
+companiesRouter.patch('/current/escalation-number', authMiddleware, requireCompanyScope, async (req, res) => {
+  try {
+    const companyId = getRequestCompanyId(req)!;
+    const { escalation_number } = req.body;
+    if (escalation_number !== null && (typeof escalation_number !== 'string' || escalation_number.length > 30)) {
+      res.status(400).json({ error: 'escalation_number must be a string (max 30 chars) or null' });
+      return;
+    }
+    await pool.query(
+      'UPDATE companies SET escalation_number = $1, updated_at = NOW() WHERE id = $2',
+      [escalation_number || null, companyId]
+    );
+    res.json({ data: { escalation_number: escalation_number || null } });
+  } catch (err) {
+    logger.error('Error updating escalation number:', err);
+    res.status(500).json({ error: 'Failed to update escalation number' });
+  }
+});
+
 companiesRouter.post('/', authMiddleware, requireSuperadmin, validateBody(createCompanySchema), async (req, res) => {
   const {
     name,

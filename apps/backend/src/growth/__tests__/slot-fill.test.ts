@@ -35,6 +35,12 @@ mock.module('../../ws/server', () => ({
   broadcast: mockBroadcast,
 }));
 
+const mockSendOpportunityCandidate = mock(() => Promise.resolve({ success: true, reactivationId: 'react-111' }));
+
+mock.module('../slot-fill-sender', () => ({
+  sendOpportunityCandidate: mockSendOpportunityCandidate,
+}));
+
 // Real EventEmitter to test the listener
 import { EventEmitter } from 'events';
 const testAppEvents = new EventEmitter();
@@ -66,6 +72,7 @@ const FUTURE_SLOT = new Date(Date.now() + 24 * 3_600_000).toISOString();
 const SOON_SLOT = new Date(Date.now() + 1 * 3_600_000).toISOString();
 
 const OPP_ID = 'opp-aaaa-1111-2222-333333333333';
+const CAND_ID = 'cand-aaaa-1111-2222-333333333333';
 
 function baseEvent() {
   return {
@@ -98,6 +105,8 @@ beforeEach(() => {
   mockLogger.error.mockReset();
   mockLogger.warn.mockReset();
   mockLogger.info.mockReset();
+  mockSendOpportunityCandidate.mockReset();
+  mockSendOpportunityCandidate.mockImplementation(() => Promise.resolve({ success: true, reactivationId: 'react-111' }));
   testAppEvents.removeAllListeners('appointment:cancelled');
 });
 
@@ -113,13 +122,14 @@ async function emitAndWait(event: string, payload: unknown) {
 // Standard query mock setup for happy path
 // ---------------------------------------------------------------------------
 
-function setupHappyPathMocks(candidates = DEFAULT_CANDIDATES) {
+function setupHappyPathMocks(candidates = DEFAULT_CANDIDATES, manualReview = true) {
+  let candInsertCount = 0;
   mockQuery.mockImplementation((sql: string) => {
     const s = String(sql);
     // company_settings check
     if (s.includes('slot_fill_enabled')) {
       return Promise.resolve({
-        rows: [{ slot_fill_enabled: true, slot_fill_max_candidates: 3 }],
+        rows: [{ slot_fill_enabled: true, slot_fill_max_candidates: 3, slot_fill_manual_review: manualReview }],
         rowCount: 1,
       });
     }
@@ -134,9 +144,10 @@ function setupHappyPathMocks(candidates = DEFAULT_CANDIDATES) {
         rowCount: 1,
       });
     }
-    // INSERT candidate
+    // INSERT candidate — return ID for first candidate
     if (s.includes('INSERT INTO slot_fill_candidates')) {
-      return Promise.resolve({ rows: [], rowCount: 1 });
+      candInsertCount++;
+      return Promise.resolve({ rows: [{ id: candInsertCount === 1 ? CAND_ID : `cand-${candInsertCount}` }], rowCount: 1 });
     }
     return Promise.resolve({ rows: [], rowCount: 0 });
   });
@@ -287,7 +298,7 @@ describe('initSlotFillListener', () => {
       const s = String(sql);
       if (s.includes('slot_fill_enabled')) {
         return Promise.resolve({
-          rows: [{ slot_fill_enabled: true, slot_fill_max_candidates: 5 }],
+          rows: [{ slot_fill_enabled: true, slot_fill_max_candidates: 5, slot_fill_manual_review: true }],
           rowCount: 1,
         });
       }
@@ -301,7 +312,7 @@ describe('initSlotFillListener', () => {
         return Promise.resolve({ rows: [{ id: OPP_ID }], rowCount: 1 });
       }
       if (s.includes('INSERT INTO slot_fill_candidates')) {
-        return Promise.resolve({ rows: [], rowCount: 1 });
+        return Promise.resolve({ rows: [{ id: CAND_ID }], rowCount: 1 });
       }
       return Promise.resolve({ rows: [], rowCount: 0 });
     });
@@ -311,5 +322,64 @@ describe('initSlotFillListener', () => {
 
     const selectorInput = mockSelectSlotFillCandidates.mock.calls[0][0];
     expect(selectorInput.maxCandidates).toBe(5);
+  });
+
+  // ── Auto-send tests ────────────────────────────────────────────────────────
+
+  it('should auto-send to top candidate when manual_review is false', async () => {
+    initSlotFillListener();
+    setupHappyPathMocks(DEFAULT_CANDIDATES, false); // manual_review = false
+
+    await emitAndWait('appointment:cancelled', baseEvent());
+
+    expect(mockSendOpportunityCandidate).toHaveBeenCalledTimes(1);
+    expect(mockSendOpportunityCandidate).toHaveBeenCalledWith(COMPANY_ID, OPP_ID, CAND_ID);
+    // Should log success
+    const infoLogs = mockLogger.info.mock.calls.map(c => String(c[0]));
+    expect(infoLogs.some(l => l.includes('Auto-sent'))).toBe(true);
+  });
+
+  it('should NOT auto-send when manual_review is true', async () => {
+    initSlotFillListener();
+    setupHappyPathMocks(DEFAULT_CANDIDATES, true); // manual_review = true (default)
+
+    await emitAndWait('appointment:cancelled', baseEvent());
+
+    expect(mockSendOpportunityCandidate).not.toHaveBeenCalled();
+  });
+
+  it('should gracefully handle auto-send failure without throwing', async () => {
+    initSlotFillListener();
+    setupHappyPathMocks(DEFAULT_CANDIDATES, false);
+    mockSendOpportunityCandidate.mockImplementation(() =>
+      Promise.resolve({ success: false, error: 'WhatsApp not connected', status: 503 })
+    );
+
+    // Should NOT throw
+    await emitAndWait('appointment:cancelled', baseEvent());
+
+    expect(mockSendOpportunityCandidate).toHaveBeenCalledTimes(1);
+    // Should log warning
+    const warnLogs = mockLogger.warn.mock.calls.map(c => String(c[0]));
+    expect(warnLogs.some(l => l.includes('Auto-send failed'))).toBe(true);
+    // Opportunity should still have been created
+    const oppInsert = mockQuery.mock.calls.find(c => String(c[0]).includes('INSERT INTO slot_fill_opportunities'));
+    expect(oppInsert).toBeDefined();
+  });
+
+  it('should handle auto-send throwing an exception', async () => {
+    initSlotFillListener();
+    setupHappyPathMocks(DEFAULT_CANDIDATES, false);
+    mockSendOpportunityCandidate.mockImplementation(() => {
+      throw new Error('Network error');
+    });
+
+    // Should NOT throw
+    await emitAndWait('appointment:cancelled', baseEvent());
+
+    expect(mockSendOpportunityCandidate).toHaveBeenCalledTimes(1);
+    // Should log warning, not error
+    const warnLogs = mockLogger.warn.mock.calls.map(c => String(c[0]));
+    expect(warnLogs.some(l => l.includes('Auto-send error'))).toBe(true);
   });
 });

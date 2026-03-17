@@ -12,6 +12,7 @@ import { TabServicios } from "./tab-servicios";
 
 export function CompanyEditView({
   company,
+  onCompanyUpdated,
   activeTab,
   setActiveTab,
   onBack,
@@ -51,6 +52,7 @@ export function CompanyEditView({
   onDeleteService,
 }: {
   company: CompanyOverview;
+  onCompanyUpdated: () => void;
   activeTab: string;
   setActiveTab: (tab: string) => void;
   onBack: () => void;
@@ -132,7 +134,7 @@ export function CompanyEditView({
 
         <div className="mx-auto mt-4 max-w-3xl">
           <TabsContent value="general">
-            <TabGeneral company={company} />
+            <TabGeneral company={company} onUpdated={onCompanyUpdated} />
           </TabsContent>
 
           <TabsContent value="whatsapp">
