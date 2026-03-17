@@ -23,12 +23,12 @@ mock.module('../../utils/logger', () => ({
   logger: mockLogger,
 }));
 
-const mockSendReactivationMessage = mock(() =>
+const mockSendOutboundMessage = mock(() =>
   Promise.resolve({ success: true, reactivationId: 'react-111' })
 );
 
 mock.module('../reactivation', () => ({
-  sendReactivationMessage: mockSendReactivationMessage,
+  sendOutboundMessage: mockSendOutboundMessage,
   generateReactivationMessage: mock(() => 'generated message'),
 }));
 
@@ -59,8 +59,8 @@ const PAST_SLOT = new Date(Date.now() - 1 * 3_600_000).toISOString();
 beforeEach(() => {
   mockQuery.mockReset();
   mockQuery.mockImplementation(() => Promise.resolve({ rows: [], rowCount: 0 }));
-  mockSendReactivationMessage.mockReset();
-  mockSendReactivationMessage.mockImplementation(() =>
+  mockSendOutboundMessage.mockReset();
+  mockSendOutboundMessage.mockImplementation(() =>
     Promise.resolve({ success: true, reactivationId: 'react-111' })
   );
 });
@@ -168,9 +168,9 @@ describe('sendOpportunityCandidate', () => {
       expect(result.reactivationId).toBe('react-111');
     }
 
-    // Should have called sendReactivationMessage
-    expect(mockSendReactivationMessage).toHaveBeenCalledTimes(1);
-    const sendArgs = mockSendReactivationMessage.mock.calls[0] as unknown[];
+    // Should have called sendOutboundMessage
+    expect(mockSendOutboundMessage).toHaveBeenCalledTimes(1);
+    const sendArgs = mockSendOutboundMessage.mock.calls[0] as unknown[];
     expect(sendArgs[0]).toBe(COMPANY_ID);
     expect(sendArgs[1]).toBe(CLIENT_A);
 
@@ -267,8 +267,8 @@ describe('sendOpportunityCandidate', () => {
     if (!result.success) {
       expect(result.status).toBe(409);
     }
-    // Should NOT have called sendReactivationMessage
-    expect(mockSendReactivationMessage).not.toHaveBeenCalled();
+    // Should NOT have called sendOutboundMessage
+    expect(mockSendOutboundMessage).not.toHaveBeenCalled();
   });
 
   it('should use custom messageText when provided', async () => {
@@ -276,13 +276,13 @@ describe('sendOpportunityCandidate', () => {
 
     await sendOpportunityCandidate(COMPANY_ID, OPP_ID, CAND_ID, 'Custom message');
 
-    const sendArgs = mockSendReactivationMessage.mock.calls[0] as unknown[];
+    const sendArgs = mockSendOutboundMessage.mock.calls[0] as unknown[];
     expect(sendArgs[2]).toBe('Custom message');
   });
 
   it('should rollback candidate claim when send fails', async () => {
     setupSendMocks();
-    mockSendReactivationMessage.mockImplementation(() =>
+    mockSendOutboundMessage.mockImplementation(() =>
       Promise.resolve({ success: false, error: 'Rate limit', status: 429 })
     );
 

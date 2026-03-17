@@ -224,6 +224,7 @@ export interface Appointment {
   source: 'bot' | 'manual' | 'google_calendar';
   title: string;
   notes: string;
+  reminder_sent_at: string | null;
   created_at: string;
   updated_at: string;
 }
@@ -325,6 +326,9 @@ export interface CompanySettings {
   working_days: number[];
   show_prices: boolean;
   timezone: string;
+  reminder_enabled: boolean;
+  reminder_hours_before: number;
+  reminder_message_template: string | null;
   created_at: string;
   updated_at: string;
 }

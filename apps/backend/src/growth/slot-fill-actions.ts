@@ -1,6 +1,6 @@
 import { pool } from '../db/pool';
 import { logger } from '../utils/logger';
-import { sendReactivationMessage } from './reactivation';
+import { sendOutboundMessage } from './reactivation';
 import type { SlotFillOpportunity, SlotFillCandidate } from '@talora/shared';
 
 export async function listPendingOpportunities(
@@ -153,7 +153,7 @@ export async function sendOpportunityCandidate(
   }
 
   // Send via reactivation system (candidate already claimed — no duplicate risk)
-  const sendResult = await sendReactivationMessage(companyId, row.candidate_client_id, finalMessage);
+  const sendResult = await sendOutboundMessage(companyId, row.candidate_client_id, finalMessage);
 
   if (!sendResult.success) {
     // Rollback candidate claim on send failure
