@@ -6,7 +6,7 @@ import { Phone, Video, Paperclip, Mic, TrendingUp, CheckCircle2 } from "lucide-r
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { hero } from "@/lib/content";
-import { fadeUp, scaleIn, slideFromRight } from "@/lib/animations";
+import { fadeUp, scaleIn, slideFromRight, float } from "@/lib/animations";
 
 // ─── Conversation data ──────────────────────────────────────────────────────
 
@@ -301,7 +301,7 @@ function AnimatedCounter({ value, delay = 0 }: { value: string; delay?: number }
 
 function ResultsPanelMockup() {
   return (
-    <div className="w-full max-w-[280px] sm:max-w-[300px] rounded-2xl border border-[#E2E4EC] bg-white shadow-xl shadow-ink/5 ring-1 ring-black/[0.03] overflow-hidden">
+    <div className="w-full max-w-[280px] sm:max-w-[300px] rounded-2xl border border-[#E2E4EC] bg-white shadow-card overflow-hidden">
       {/* Header */}
       <motion.div
         initial={{ opacity: 0 }}
@@ -394,113 +394,132 @@ const heroStagger = {
 
 export function Hero() {
   return (
-    <section className="relative overflow-hidden bg-white">
-      {/* Subtle radial gradient behind mockup area */}
-      <div className="absolute bottom-0 left-1/2 -translate-x-1/2 w-[800px] h-[600px] bg-[radial-gradient(ellipse_at_center,_rgba(239,233,255,0.15)_0%,_rgba(232,246,235,0.1)_40%,_transparent_70%)] pointer-events-none" />
+    <section className="relative overflow-hidden bg-[#f8f9fc]">
+      {/* Subtle radial gradient */}
+      <div className="absolute bottom-0 left-1/2 -translate-x-1/2 w-[800px] h-[600px] bg-[radial-gradient(ellipse_at_center,_rgba(239,233,255,0.12)_0%,_rgba(232,246,235,0.08)_40%,_transparent_70%)] pointer-events-none" />
 
-      <div className="container mx-auto max-w-[1200px] px-4 sm:px-6 pb-6 pt-2 sm:pb-8 sm:pt-8 md:pb-12 md:pt-16">
+      <div className="container mx-auto max-w-[1200px] px-4 sm:px-6 pb-10 pt-4 sm:pb-16 sm:pt-8 md:pb-20 md:pt-16">
         <motion.div
           variants={heroStagger}
           initial="hidden"
           animate="visible"
-          className="flex flex-col items-center text-center"
+          className="flex flex-col items-center text-center lg:flex-row lg:items-center lg:gap-16 lg:text-left"
         >
-          {/* Badge */}
-          <motion.div variants={fadeUp}>
-            <Badge variant="outline" className="mb-4 sm:mb-6">
-              {hero.badge}
-            </Badge>
-          </motion.div>
+          {/* ── Left column: text ── */}
+          <div className="flex flex-col items-center lg:items-start lg:w-1/2 lg:flex-shrink-0">
+            {/* Badge */}
+            <motion.div variants={fadeUp}>
+              <Badge variant="outline" className="mb-4 sm:mb-6">
+                {hero.badge}
+              </Badge>
+            </motion.div>
 
-          {/* Headline */}
-          <motion.h1
-            variants={fadeUp}
-            className="font-display text-hero-mobile md:text-hero font-semibold text-text-strong max-w-3xl"
-          >
-            {hero.headline.before}
-            <span className="border-b-[3px] border-mint pb-0.5">
-              {hero.headline.highlight}
-            </span>
-            {hero.headline.after}
-          </motion.h1>
-
-          {/* Subheadline */}
-          <motion.p
-            variants={fadeUp}
-            className="mt-5 max-w-lg text-base sm:text-body-lg text-gray-600"
-          >
-            {hero.subheadline}
-          </motion.p>
-
-          {/* CTAs — primary is Calendly demo, secondary is scroll link */}
-          <motion.div variants={fadeUp} className="mt-7 sm:mt-8 flex flex-col sm:flex-row gap-3 w-full sm:w-auto">
-            <Button size="lg" className="w-full sm:w-auto" asChild>
-              <a
-                href={hero.ctaPrimaryHref}
-                target="_blank"
-                rel="noopener noreferrer"
-              >
-                {hero.ctaPrimary}
-              </a>
-            </Button>
-            <Button size="lg" variant="secondary" className="w-full sm:w-auto" asChild>
-              <a href={hero.ctaSecondaryHref}>{hero.ctaSecondary}</a>
-            </Button>
-          </motion.div>
-
-          {/* Microcopy pills */}
-          <motion.div
-            variants={fadeUp}
-            className="mt-4 flex flex-wrap justify-center gap-x-5 gap-y-1.5"
-          >
-            {hero.microcopy.map((item) => (
-              <span
-                key={item}
-                className="flex items-center gap-1.5 text-[12px] text-gray-medium"
-              >
-                <CheckCircle2 className="h-3.5 w-3.5 text-emerald-500 flex-shrink-0" />
-                {item}
+            {/* Headline */}
+            <motion.h1
+              variants={fadeUp}
+              className="font-display text-hero-mobile md:text-hero font-semibold text-text-strong max-w-3xl"
+            >
+              {hero.headline.before}
+              <span className="border-b-[3px] border-mint pb-0.5">
+                {hero.headline.highlight}
               </span>
-            ))}
-          </motion.div>
+              {hero.headline.after}
+            </motion.h1>
 
-          {/* Mockup composition */}
+            {/* Subheadline */}
+            <motion.p
+              variants={fadeUp}
+              className="mt-5 max-w-lg text-base sm:text-body-lg text-gray-medium"
+            >
+              {hero.subheadline}
+            </motion.p>
+
+            {/* CTAs */}
+            <motion.div variants={fadeUp} className="mt-7 sm:mt-8 flex flex-col sm:flex-row gap-3 w-full sm:w-auto">
+              <Button size="lg" className="w-full sm:w-auto" asChild>
+                <a
+                  href={hero.ctaPrimaryHref}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                >
+                  {hero.ctaPrimary}
+                </a>
+              </Button>
+              <Button size="lg" variant="secondary" className="w-full sm:w-auto" asChild>
+                <a href={hero.ctaSecondaryHref}>{hero.ctaSecondary}</a>
+              </Button>
+            </motion.div>
+
+            {/* Microcopy pills */}
+            <motion.div
+              variants={fadeUp}
+              className="mt-4 flex flex-wrap justify-center lg:justify-start gap-x-5 gap-y-1.5"
+            >
+              {hero.microcopy.map((item) => (
+                <span
+                  key={item}
+                  className="flex items-center gap-2 text-[13px] font-medium text-gray-medium"
+                >
+                  <CheckCircle2 className="h-3.5 w-3.5 text-emerald-500 flex-shrink-0" />
+                  {item}
+                </span>
+              ))}
+            </motion.div>
+          </div>
+
+          {/* ── Right column: mockups ── */}
           <motion.div
             variants={scaleIn}
-            className="relative mt-12 sm:mt-14 md:mt-16"
+            className="relative mt-12 sm:mt-14 lg:mt-0 lg:w-1/2 lg:flex-shrink-0"
           >
             {/* Background glow */}
             <div className="absolute inset-0 sm:-m-8 md:-m-12 rounded-3xl bg-gradient-to-b from-surface-cool via-surface-cool/50 to-transparent" />
             {/* Dot grid background */}
             <div className="absolute inset-0 sm:-m-4 md:-m-8 dot-grid opacity-40 rounded-3xl" />
 
-            <div className="relative flex flex-col md:flex-row items-center justify-center gap-4 sm:gap-6 md:gap-10">
+            <div className="relative flex flex-col md:flex-row items-center justify-center gap-4 sm:gap-6 md:gap-4">
               <WhatsAppMockup />
-
-              {/* Connector arrow */}
-              <div className="hidden md:flex flex-col items-center gap-2 text-gray-soft">
-                <svg width="48" height="24" viewBox="0 0 48 24" fill="none">
-                  <path
-                    d="M0 12h40m0 0l-6-6m6 6l-6 6"
-                    stroke="#E2E4EC"
-                    strokeWidth="1.5"
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                    strokeDasharray="4 4"
-                  />
-                </svg>
-              </div>
 
               <motion.div
                 variants={slideFromRight}
                 initial="hidden"
                 whileInView="visible"
                 viewport={{ once: true, margin: "-64px" }}
-                className="block"
+                className="block md:-ml-8"
               >
                 <ResultsPanelMockup />
               </motion.div>
             </div>
+
+            {/* Floating card 1 — Agenda del dia (lilac, top-right) */}
+            <motion.div
+              animate={{ y: [-6, 6] }}
+              transition={{ y: { duration: 2.5, repeat: Infinity, repeatType: "reverse", ease: "easeInOut" } }}
+              className="hidden lg:flex floating-card absolute -top-4 -right-6 items-center gap-2 px-3.5 py-2 bg-lilac"
+            >
+              <span className="h-2 w-2 rounded-full bg-violet-400 flex-shrink-0" />
+              <span className="text-xs font-medium text-[#1C1D22] whitespace-nowrap">Agenda del dia</span>
+            </motion.div>
+
+            {/* Floating card 2 — 4h ahorradas (sand, bottom-left) */}
+            <motion.div
+              animate={{ y: [-6, 6] }}
+              transition={{ y: { duration: 3, repeat: Infinity, repeatType: "reverse", ease: "easeInOut" } }}
+              className="hidden lg:flex floating-card absolute -bottom-4 -left-6 items-center gap-2 px-3.5 py-2 bg-sand"
+            >
+              <span className="h-2 w-2 rounded-full bg-amber-400 flex-shrink-0" />
+              <span className="text-xs font-medium text-[#1C1D22] whitespace-nowrap">4h ahorradas esta semana</span>
+            </motion.div>
+
+            {/* Floating card 3 — Online 24/7 (mint, bottom-right) */}
+            <motion.div
+              animate={{ y: [-6, 6] }}
+              transition={{ y: { duration: 3.5, repeat: Infinity, repeatType: "reverse", ease: "easeInOut" } }}
+              className="hidden lg:flex floating-card absolute bottom-16 -right-6 items-center gap-2 px-3.5 py-2 bg-mint"
+            >
+              <span className="h-2 w-2 rounded-full bg-emerald-400 flex-shrink-0" />
+              <span className="text-xs font-medium text-[#1C1D22] whitespace-nowrap">Online 24/7</span>
+            </motion.div>
           </motion.div>
         </motion.div>
       </div>

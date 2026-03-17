@@ -62,6 +62,9 @@ const config: Config = {
         "section-mobile": ["1.75rem", { lineHeight: "1.2", letterSpacing: "-0.02em" }],
         "body-lg": ["1.125rem", { lineHeight: "1.6" }],
       },
+      boxShadow: {
+        'card': '0 14px 28px rgba(15,23,42,0.04)',
+      },
       borderRadius: {
         lg: "var(--radius)",
         md: "calc(var(--radius) - 2px)",

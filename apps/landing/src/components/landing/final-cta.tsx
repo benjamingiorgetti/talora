@@ -28,7 +28,7 @@ export function FinalCTA() {
           <h2 className="font-display text-section-mobile md:text-section font-semibold text-white">
             {finalCta.headline}
           </h2>
-          <p className="mt-4 text-sm sm:text-base md:text-body-lg text-white/50">
+          <p className="mt-4 text-sm sm:text-base md:text-body-lg text-white/60">
             {finalCta.subheadline}
           </p>
           <div className="mt-6 sm:mt-8">
@@ -40,9 +40,9 @@ export function FinalCTA() {
             {finalCta.trust.map((item) => (
               <span
                 key={item}
-                className="flex items-center gap-2 text-xs sm:text-sm text-white/50"
+                className="flex items-center gap-2 text-xs sm:text-sm text-white/60"
               >
-                <CheckCircle2 className="h-3.5 w-3.5 sm:h-4 sm:w-4 text-white/60" />
+                <CheckCircle2 className="h-3.5 w-3.5 sm:h-4 sm:w-4 text-emerald-400/70" />
                 {item}
               </span>
             ))}

@@ -37,7 +37,7 @@ export function QueCambia() {
         initial="hidden"
         whileInView="visible"
         viewport={{ once: true, margin: "-64px" }}
-        className="mt-8 sm:mt-10 grid grid-cols-1 md:grid-cols-3 gap-6"
+        className="mt-10 sm:mt-12 grid grid-cols-1 md:grid-cols-3 gap-5"
       >
         {queCambia.items.map((item) => {
           const Icon = iconMap[item.icon as IconKey];
@@ -46,15 +46,20 @@ export function QueCambia() {
             <motion.div
               key={item.title}
               variants={fadeUp}
-              className="rounded-2xl border border-[#E2E4EC] bg-surface-cool/50 p-6 sm:p-7 card-interactive shadow-sm"
+              className="rounded-[22px] border border-[#E2E4EC] bg-white p-6 card-interactive shadow-card flex flex-col"
             >
-              <div className={`inline-flex h-11 w-11 items-center justify-center rounded-2xl ${colors.bg} ring-4 ${colors.ring}`}>
+              <div className={`inline-flex h-11 w-11 items-center justify-center rounded-full ${colors.bg} ring-4 ${colors.ring}`}>
                 <Icon className="h-5 w-5 text-ink" strokeWidth={1.5} />
               </div>
               <h3 className="mt-4 font-display text-lg font-bold text-ink">
                 {item.title}
               </h3>
-              <p className="mt-2 text-sm leading-relaxed text-gray-600">
+              {item.metric && (
+                <span className={`mt-3 inline-block rounded-full px-2.5 py-0.5 text-xs font-semibold text-ink ${colors.bg}`}>
+                  {item.metric}
+                </span>
+              )}
+              <p className="mt-2 flex-1 text-sm leading-relaxed text-gray-600">
                 {item.description}
               </p>
               <p className="mt-3 text-sm font-semibold text-ink">

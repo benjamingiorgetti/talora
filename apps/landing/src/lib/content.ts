@@ -35,9 +35,21 @@ export const problem = {
   badgeColor: "text-rose-600" as const,
   title: "Tu agenda no se vacia solo por falta de demanda.",
   painPoints: [
-    "Clientas que preguntan y no reservan",
-    "Clientas que deberian volver y nadie contacta",
-    "Tiempo perdido respondiendo lo mismo una y otra vez",
+    {
+      title: "Clientas que preguntan y no reservan",
+      description: "Muchas conversaciones quedan sin cierre.",
+      color: "lilac" as const,
+    },
+    {
+      title: "Clientas que deberian volver y nadie contacta",
+      description: "Pero nadie las reactiva a tiempo.",
+      color: "sand" as const,
+    },
+    {
+      title: "Tiempo perdido respondiendo lo mismo una y otra vez",
+      description: "Tu equipo repite las mismas respuestas todos los dias.",
+      color: "sky" as const,
+    },
   ],
 };
 
@@ -52,6 +64,7 @@ export const queCambia = {
       benefit: "Mas turnos confirmados, menos tiempo coordinando mensajes.",
       icon: "CalendarCheck" as const,
       color: "mint" as const,
+      metric: "24/7",
     },
     {
       title: "Reactivacion",
@@ -59,6 +72,7 @@ export const queCambia = {
       benefit: "Clientas recuperadas sin seguimiento manual.",
       icon: "UserPlus" as const,
       color: "lilac" as const,
+      metric: "+30%",
     },
     {
       title: "Upsell inteligente",
@@ -66,6 +80,7 @@ export const queCambia = {
       benefit: "Mas ticket promedio por visita.",
       icon: "Sparkles" as const,
       color: "sand" as const,
+      metric: "+23%",
     },
   ],
 };
@@ -125,9 +140,9 @@ export const faq = {
 
 export const finalCta = {
   headline:
-    "Si hoy tu agenda depende de contestar mensajes a mano, ya estas perdiendo turnos.",
+    "Si hoy respondes todo a mano, estas perdiendo turnos.",
   subheadline:
-    "Talora ayuda a peluquerias y salones de belleza a vender mas por WhatsApp sin sumar trabajo manual.",
+    "Talora agenda, reactiva y responde por WhatsApp sin sumar trabajo manual.",
   cta: "Agendar demo",
   ctaHref: "https://calendly.com/giorgettibenjamin/30min",
   trust: [
