@@ -5,7 +5,7 @@ import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import useSWR from "swr";
 import type { Appointment, Company, Conversation, DashboardMetrics, WhatsAppInstance } from "@talora/shared";
-import { ArrowRight, CalendarCheck2, CalendarDays, Clock3, MessageSquareText, Timer, Users } from "lucide-react";
+import { ArrowRight, CalendarCheck2, CalendarDays, ChartColumnIncreasing, Clock3, MessageSquareText, Timer } from "lucide-react";
 import { companyScopedFetcher, companyScopedKey } from "@/lib/api";
 import { Card, CardContent } from "@/components/ui/card";
 import { LoadingSpinner } from "@/components/ui/loading-spinner";
@@ -23,6 +23,13 @@ type WorkspaceAppointment = Appointment & {
 
 function formatMetric(value: number, suffix = "") {
   return `${new Intl.NumberFormat("es-AR").format(value)}${suffix}`;
+}
+
+function formatDecimalMetric(value: number) {
+  return new Intl.NumberFormat("es-AR", {
+    minimumFractionDigits: value % 1 === 0 ? 0 : 1,
+    maximumFractionDigits: 1,
+  }).format(value);
 }
 
 function isSameDay(value: string, target: Date) {
@@ -126,7 +133,16 @@ export default function WorkspaceDashboardPage() {
     return <LoadingSpinner className="min-h-[70vh]" />;
   }
 
-  const uniqueClientsToday = new Set(todayAppointments.map((a) => a.client_name)).size;
+  const relativeDemand = metrics?.relative_demand;
+  const hasZeroBaseline = (relativeDemand?.sample_size ?? 0) > 0 && (relativeDemand?.historical_avg_count ?? 0) === 0;
+  const relativeDemandValue = relativeDemand?.has_enough_data
+    ? formatMetric(relativeDemand.ratio_pct, "%")
+    : "Sin base";
+  const relativeDemandCaption = relativeDemand?.has_enough_data
+    ? `${relativeDemand.today_count} hoy vs ${formatDecimalMetric(relativeDemand.historical_avg_count)} promedio. Ultimos ${relativeDemand.sample_size} dias comparables hasta esta hora.`
+    : hasZeroBaseline
+      ? `Hoy van ${relativeDemand?.today_count ?? 0} turnos confirmados. El historico comparable venia en 0, asi que no hay base para porcentajes.`
+    : `Hoy van ${relativeDemand?.today_count ?? 0} turnos confirmados. Falta historial comparable para marcar un ritmo confiable.`;
 
   const dashboardMetrics = [
     {
@@ -151,11 +167,11 @@ export default function WorkspaceDashboardPage() {
       caption: "Estimado por gestion automatizada.",
     },
     {
-      label: "Clientes atendidos hoy",
-      value: formatMetric(uniqueClientsToday),
-      tone: "mint" as const,
-      icon: Users,
-      caption: "Clientes unicos con turno hoy.",
+      label: "Demanda hoy",
+      value: relativeDemandValue,
+      tone: "sky" as const,
+      icon: ChartColumnIncreasing,
+      caption: relativeDemandCaption,
     },
   ];
 
