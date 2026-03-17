@@ -6,6 +6,14 @@ user_invocable: true
 
 Run the following checklist to launch the Talora development environment. Stop and report if any step fails.
 
+## Step 0: Sync with main
+
+Pull latest changes and merge `main` into the current branch to stay up to date:
+
+1. Run `git fetch origin`
+2. Run `git merge origin/main --no-edit`
+3. If the merge has conflicts, stop and report them to the user — do NOT auto-resolve.
+
 ## Step 1: Copy and verify .env files
 
 Conductor workspaces are git worktrees — `.env` files (gitignored) are never present in new workspaces.

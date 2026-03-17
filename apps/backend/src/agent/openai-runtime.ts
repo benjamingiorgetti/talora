@@ -57,5 +57,20 @@ export function buildOpenAiMessages(
     }
   }
 
-  return openaiMessages;
+  // Sanitize: drop orphaned tool messages whose tool_call_id has no matching assistant
+  const validToolCallIds = new Set<string>();
+  for (const msg of openaiMessages) {
+    if (msg.role === 'assistant' && 'tool_calls' in msg && msg.tool_calls) {
+      for (const tc of msg.tool_calls) {
+        validToolCallIds.add(tc.id);
+      }
+    }
+  }
+
+  return openaiMessages.filter((msg) => {
+    if (msg.role === 'tool') {
+      return validToolCallIds.has((msg as { tool_call_id: string }).tool_call_id);
+    }
+    return true;
+  });
 }
