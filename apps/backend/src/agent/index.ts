@@ -586,12 +586,14 @@ async function processMessage(
       }
     }
 
-    // Save error as alert
-    await pool.query(
-      `INSERT INTO alerts (type, message)
-       VALUES ('agent_error', $1)`,
-      [err instanceof Error ? err.message : 'Unknown error in agent']
-    ).catch((dbErr) => logger.error('Failed to save error alert:', dbErr));
+    // Save error as alert (requires company_id — skip if not yet resolved)
+    if (traceState.companyId) {
+      await pool.query(
+        `INSERT INTO alerts (company_id, type, message)
+         VALUES ($1, 'agent_error', $2)`,
+        [traceState.companyId, err instanceof Error ? err.message : 'Unknown error in agent']
+      ).catch((dbErr) => logger.error('Failed to save error alert:', dbErr));
+    }
   } finally {
     clearTimeout(overallTimer);
   }
