@@ -22,6 +22,7 @@ import { companySettingsRouter } from './api/company-settings';
 import { growthRouter } from './api/growth';
 import { initAttributionListener } from './growth/attribution';
 import { initSlotFillListener } from './growth/slot-fill';
+import { initReminderScheduler, stopReminderScheduler } from './reminders/scheduler';
 import { requestIdMiddleware } from './api/request-id';
 import { createRateLimiter } from './api/rate-limit';
 import { pool } from './db/pool';
@@ -143,6 +144,7 @@ setupWebSocket(server);
 // Growth: attribution listener
 initAttributionListener();
 initSlotFillListener();
+initReminderScheduler();
 
 server.listen(config.port, () => {
   logger.info(`Backend running on port ${config.port}`);
@@ -169,6 +171,7 @@ const SHUTDOWN_TIMEOUT_MS = 30_000;
 
 function gracefulShutdown(signal: string) {
   logger.info(`Received ${signal}. Shutting down gracefully...`);
+  stopReminderScheduler();
 
   // Force exit after timeout
   const forceExit = setTimeout(() => {
