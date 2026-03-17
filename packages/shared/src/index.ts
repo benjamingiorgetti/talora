@@ -141,6 +141,7 @@ export interface Conversation {
   phone_number: string;
   contact_name: string | null;
   bot_paused: boolean;
+  auto_resume_at: string | null;
   last_message_at: string | null;
   memory_reset_at: string | null;
   archived_at: string | null;
@@ -234,6 +235,7 @@ export interface ConversationPauseState {
   paused: boolean;
   paused_at: string | null;
   paused_by_user_id: string | null;
+  auto_resume_at: string | null;
 }
 
 export interface DashboardMetrics {
@@ -452,7 +454,7 @@ export type AppointmentWsPayload = {
 export type WsEvent =
   | { type: 'instance:status'; payload: { id: string; status: WhatsAppInstance['status']; qr_code: string | null; phone_number: string | null; company_id?: string } }
   | { type: 'alert:new'; payload: Alert }
-  | { type: 'conversation:updated'; payload: Pick<Conversation, 'id' | 'company_id' | 'instance_id' | 'professional_id' | 'last_message_at' | 'bot_paused' | 'archived_at' | 'archive_reason'> }
+  | { type: 'conversation:updated'; payload: Pick<Conversation, 'id' | 'company_id' | 'instance_id' | 'professional_id' | 'last_message_at' | 'bot_paused' | 'auto_resume_at' | 'archived_at' | 'archive_reason'> }
   | { type: 'message:new'; payload: Message & { company_id?: string } }
   | { type: 'appointment:created'; payload: AppointmentWsPayload }
   | { type: 'appointment:confirmed'; payload: AppointmentWsPayload }

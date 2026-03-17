@@ -1056,6 +1056,30 @@ describe('handleMessagesUpsert — message buffer', () => {
     expect(mockHandleIncomingMessage).not.toHaveBeenCalled();
   });
 
+  it('should keep skipping the buffered agent when auto-pause cleanup does not clear the row yet', async () => {
+    setupQueryMock(mockQuery, [
+      ['SELECT bot_paused, auto_resume_at', [{ bot_paused: true, auto_resume_at: '2000-01-01T00:00:00.000Z' }]],
+      ['UPDATE conversations', []],
+      ['whatsapp_instances WHERE evolution_instance_name', [instanceRow]],
+      ['FROM clients', []],
+      ['FROM conversations', [{ id: CONV_ID, archived_at: null, last_message_at: FIXED_NOW }]],
+      ['INSERT INTO conversations', [{ ...conversationRow, bot_paused: false, auto_resume_at: null }]],
+      ['INSERT INTO messages', [messageRow]],
+    ]);
+
+    await handleMessagesUpsert(makeWebhookBody({
+      data: {
+        key: { id: 'ev-paused-race', remoteJid: `${PHONE}@s.whatsapp.net`, fromMe: false },
+        message: { conversation: 'Hola' },
+        pushName: 'Test Client',
+      },
+    }));
+
+    await waitForBuffer();
+
+    expect(mockHandleIncomingMessage).not.toHaveBeenCalled();
+  });
+
   it('should fire at max window when messages keep arriving within buffer delay', async () => {
     setupDefaultQueryMock();
 

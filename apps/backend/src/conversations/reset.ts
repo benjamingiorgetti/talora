@@ -31,6 +31,7 @@ export async function resetConversationMemory(
            bot_paused = false,
            paused_at = NULL,
            paused_by_user_id = NULL,
+           auto_resume_at = NULL,
            memory_reset_at = NOW(),
            archived_at = NOW(),
            archive_reason = 'manual_reset',

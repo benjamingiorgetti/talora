@@ -9,6 +9,8 @@ import { logger } from '../utils/logger';
 import { withTimeout } from '../utils/timeout';
 import { isResetCommand, resetConversationMemory } from '../conversations/reset';
 import { isConversationInactive } from '../conversations/archive';
+import { clearExpiredAutoPause, isAutoPauseExpired } from '../conversations/pause';
+import type { ConversationPausePayload } from '../conversations/pause';
 import { transcribeAudio } from '../agent/transcribe';
 import type { WhatsAppInstance } from '@talora/shared';
 
@@ -50,6 +52,23 @@ const messageBuffers = new Map<string, {
   instanceName: string;
 }>();
 
+function broadcastConversationUpdated(conversation: ConversationPausePayload) {
+  broadcast({
+    type: 'conversation:updated',
+    payload: {
+      id: conversation.id,
+      company_id: conversation.company_id,
+      instance_id: conversation.instance_id,
+      professional_id: conversation.professional_id ?? null,
+      last_message_at: conversation.last_message_at,
+      bot_paused: conversation.bot_paused,
+      auto_resume_at: conversation.auto_resume_at,
+      archived_at: conversation.archived_at,
+      archive_reason: conversation.archive_reason,
+    },
+  });
+}
+
 function scheduleAgentResponse(
   lockKey: string,
   conversationId: string,
@@ -77,11 +96,20 @@ function scheduleAgentResponse(
     withConversationLock(lockKey, async () => {
       // Re-check bot_paused at invocation time — state may have changed
       // since the message was received
-      const conv = await pool.query<{ bot_paused: boolean }>(
-        'SELECT bot_paused FROM conversations WHERE id = $1',
+      const conv = await pool.query<{ bot_paused: boolean; auto_resume_at: string | null }>(
+        'SELECT bot_paused, auto_resume_at FROM conversations WHERE id = $1',
         [conversationId]
       );
-      if (conv.rows[0]?.bot_paused) {
+      const currentConversation = conv.rows[0];
+      if (currentConversation?.bot_paused && isAutoPauseExpired(currentConversation.auto_resume_at)) {
+        const resumedConversation = await clearExpiredAutoPause(conversationId);
+        if (resumedConversation) {
+          broadcastConversationUpdated(resumedConversation);
+        } else {
+          logger.info(`Conversation ${conversationId} auto pause could not be cleared yet; skipping buffered agent response`);
+          return;
+        }
+      } else if (currentConversation?.bot_paused) {
         logger.info(`Conversation ${conversationId} is paused; skipping buffered agent response`);
         return;
       }
@@ -480,6 +508,7 @@ export async function handleMessagesUpsert(body: EvolutionWebhookBody) {
           professional_id: resetResult.conversation.professional_id ?? null,
           last_message_at: resetResult.conversation.last_message_at,
           bot_paused: resetResult.conversation.bot_paused,
+          auto_resume_at: resetResult.conversation.auto_resume_at,
           archived_at: resetResult.conversation.archived_at,
           archive_reason: resetResult.conversation.archive_reason,
         },
@@ -517,6 +546,16 @@ export async function handleMessagesUpsert(body: EvolutionWebhookBody) {
       return;
     }
 
+    if (conversation.bot_paused && isAutoPauseExpired(conversation.auto_resume_at)) {
+      const resumedConversation = await clearExpiredAutoPause(conversation.id);
+      if (resumedConversation) {
+        conversation = {
+          ...conversation,
+          ...resumedConversation,
+        };
+      }
+    }
+
     // Save user message
     const messageResult = await pool.query<{ id: string; created_at: string }>(
       `INSERT INTO messages (conversation_id, role, content)
@@ -526,19 +565,7 @@ export async function handleMessagesUpsert(body: EvolutionWebhookBody) {
     );
 
     // Broadcast conversation update and new message via WebSocket
-    broadcast({
-      type: 'conversation:updated',
-      payload: {
-        id: conversation.id,
-        company_id: conversation.company_id,
-        instance_id: conversation.instance_id,
-        professional_id: conversation.professional_id ?? null,
-        last_message_at: conversation.last_message_at,
-        bot_paused: conversation.bot_paused,
-        archived_at: conversation.archived_at,
-        archive_reason: conversation.archive_reason,
-      },
-    });
+    broadcastConversationUpdated(conversation);
 
     if (messageResult.rows[0]) {
       broadcast({

@@ -35,6 +35,22 @@ function formatArchiveReason(conversation: Conversation) {
   return "Archivada";
 }
 
+function formatAutoResumeTime(autoResumeAt: string | null) {
+  if (!autoResumeAt) return null;
+  return new Date(autoResumeAt).toLocaleTimeString("es-AR", {
+    hour: "2-digit",
+    minute: "2-digit",
+  });
+}
+
+function formatPauseBadge(conversation: Conversation) {
+  if (!conversation.bot_paused) return "Auto";
+  if (conversation.auto_resume_at) {
+    return `Pausa hasta ${formatAutoResumeTime(conversation.auto_resume_at)}`;
+  }
+  return "Pausado";
+}
+
 export default function WorkspaceWhatsAppPage() {
   const pathname = usePathname();
   const router = useRouter();
@@ -173,7 +189,7 @@ export default function WorkspaceWhatsAppPage() {
       await api.post(`/conversations/${selectedConversation.id}/messages/manual`, { content: composer.trim() });
       setComposer("");
       await Promise.all([mutateMessages(), mutateActiveConversations()]);
-      toast.success("Mensaje manual enviado.");
+      toast.success("Mensaje manual enviado. Bot pausado 30 min.");
     } catch (error) {
       toast.error(error instanceof Error ? error.message : "No se pudo enviar el mensaje.");
     } finally {
@@ -280,7 +296,7 @@ export default function WorkspaceWhatsAppPage() {
                               isPaused ? "bg-[hsl(var(--surface-sand))] text-[#7b664a]" : "bg-[hsl(var(--surface-mint))] text-[#517261]"
                             )}
                           >
-                            {isPaused ? "Pausado" : "Auto"}
+                            {formatPauseBadge(conversation)}
                           </span>
                         )}
                       </div>
@@ -322,6 +338,13 @@ export default function WorkspaceWhatsAppPage() {
                       ) : null}
                     </div>
                     <p className="mt-1 text-sm text-slate-500">{selectedConversation.phone_number}</p>
+                    {selectedConversation.bot_paused ? (
+                      <p className="mt-1 text-sm text-amber-700">
+                        {selectedConversation.auto_resume_at
+                          ? `Bot pausado por mensaje manual hasta las ${formatAutoResumeTime(selectedConversation.auto_resume_at)}.`
+                          : "Bot pausado manualmente hasta reactivacion manual."}
+                      </p>
+                    ) : null}
                   </div>
                   {!selectedConversation.archived_at ? (
                     <Button

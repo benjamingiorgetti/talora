@@ -355,6 +355,8 @@ describe('POST /conversations/:id/messages/manual', () => {
   it('sends message via Evolution and returns 201 on success', async () => {
     const connectedConv = makeConversation({
       archived_at: null,
+      bot_paused: false,
+      auto_resume_at: null,
       evolution_instance_name: 'test-inst',
       instance_status: 'connected',
       phone_number: '5491155550000',
@@ -388,6 +390,161 @@ describe('POST /conversations/:id/messages/manual', () => {
     expect(insertCall).toBeDefined();
     const updateCall = mockQuery.mock.calls.find((c) => String(c[0]).includes('UPDATE conversations SET last_message_at'));
     expect(updateCall).toBeDefined();
+    const pauseCall = mockQuery.mock.calls.find(
+      (c) =>
+        String(c[0]).includes('SET bot_paused = true') &&
+        String(c[0]).includes("auto_resume_at = NOW() + INTERVAL '30 minutes'")
+    );
+    expect(pauseCall).toBeDefined();
+  });
+
+  it('restarts the 30 minute pause window when sending another manual message', async () => {
+    const pausedConv = makeConversation({
+      archived_at: null,
+      bot_paused: true,
+      auto_resume_at: '2026-03-17T12:10:00.000Z',
+      evolution_instance_name: 'test-inst',
+      instance_status: 'connected',
+      phone_number: '5491155550000',
+    });
+    const fakeMessage = { id: 'msg-restart', conversation_id: VALID_CONV_ID, role: 'assistant', content: 'Seguimos' };
+
+    mockQuery.mockImplementation((sql: unknown) => {
+      const s = String(sql);
+      if (s.includes('SELECT c.*')) {
+        return Promise.resolve({ rows: [pausedConv], rowCount: 1 });
+      }
+      if (s.includes('INSERT INTO messages')) {
+        return Promise.resolve({ rows: [fakeMessage], rowCount: 1 });
+      }
+      return Promise.resolve({ rows: [], rowCount: 0 });
+    });
+
+    const res = await fetch(`${baseUrl}/conversations/${VALID_CONV_ID}/messages/manual`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ content: 'Seguimos' }),
+    });
+
+    expect(res.status).toBe(201);
+    const pauseCall = mockQuery.mock.calls.find(
+      (c) =>
+        String(c[0]).includes('SET bot_paused = true') &&
+        String(c[0]).includes("auto_resume_at = NOW() + INTERVAL '30 minutes'")
+    );
+    expect(pauseCall).toBeDefined();
+  });
+
+  it('pauses the bot for 30 minutes after sending a manual message', async () => {
+    const connectedConv = makeConversation({
+      archived_at: null,
+      evolution_instance_name: 'test-inst',
+      instance_status: 'connected',
+      phone_number: '5491155550000',
+      bot_paused: false,
+    });
+    const fakeMessage = { id: 'msg-new', conversation_id: VALID_CONV_ID, role: 'assistant', content: 'Hola' };
+
+    mockQuery.mockImplementation((sql: unknown) => {
+      const s = String(sql);
+      if (s.includes('SELECT c.*')) {
+        return Promise.resolve({ rows: [connectedConv], rowCount: 1 });
+      }
+      if (s.includes('INSERT INTO messages')) {
+        return Promise.resolve({ rows: [fakeMessage], rowCount: 1 });
+      }
+      return Promise.resolve({ rows: [], rowCount: 0 });
+    });
+
+    const res = await fetch(`${baseUrl}/conversations/${VALID_CONV_ID}/messages/manual`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ content: 'Hola' }),
+    });
+
+    expect(res.status).toBe(201);
+    const pauseCall = mockQuery.mock.calls.find(
+      (c) => String(c[0]).includes('UPDATE conversations')
+        && String(c[0]).includes('bot_paused = true')
+        && String(c[0]).includes('auto_resume_at')
+    );
+    expect(pauseCall).toBeDefined();
+    expect(String(pauseCall![0])).toContain(`'30 minutes'`);
+  });
+
+  it('extends the 30 minute pause window on every manual message', async () => {
+    const pausedConv = makeConversation({
+      archived_at: null,
+      evolution_instance_name: 'test-inst',
+      instance_status: 'connected',
+      phone_number: '5491155550000',
+      bot_paused: true,
+      auto_resume_at: '2099-03-17T12:15:00.000Z',
+    });
+    const fakeMessage = { id: 'msg-new', conversation_id: VALID_CONV_ID, role: 'assistant', content: 'Seguimos' };
+
+    mockQuery.mockImplementation((sql: unknown) => {
+      const s = String(sql);
+      if (s.includes('SELECT c.*')) {
+        return Promise.resolve({ rows: [pausedConv], rowCount: 1 });
+      }
+      if (s.includes('INSERT INTO messages')) {
+        return Promise.resolve({ rows: [fakeMessage], rowCount: 1 });
+      }
+      return Promise.resolve({ rows: [], rowCount: 0 });
+    });
+
+    const res = await fetch(`${baseUrl}/conversations/${VALID_CONV_ID}/messages/manual`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ content: 'Seguimos por aca' }),
+    });
+
+    expect(res.status).toBe(201);
+    const pauseCalls = mockQuery.mock.calls.filter(
+      (c) => String(c[0]).includes('UPDATE conversations')
+        && String(c[0]).includes('bot_paused = true')
+        && String(c[0]).includes('auto_resume_at')
+    );
+    expect(pauseCalls).toHaveLength(1);
+    expect(String(pauseCalls[0][0])).toContain(`'30 minutes'`);
+  });
+
+  it('does not refresh auto_resume_at when the conversation is manually paused indefinitely', async () => {
+    const manuallyPausedConv = makeConversation({
+      archived_at: null,
+      evolution_instance_name: 'test-inst',
+      instance_status: 'connected',
+      phone_number: '5491155550000',
+      bot_paused: true,
+      auto_resume_at: null,
+    });
+    const fakeMessage = { id: 'msg-manual', conversation_id: VALID_CONV_ID, role: 'assistant', content: 'Seguimos' };
+
+    mockQuery.mockImplementation((sql: unknown) => {
+      const s = String(sql);
+      if (s.includes('SELECT c.*')) {
+        return Promise.resolve({ rows: [manuallyPausedConv], rowCount: 1 });
+      }
+      if (s.includes('INSERT INTO messages')) {
+        return Promise.resolve({ rows: [fakeMessage], rowCount: 1 });
+      }
+      return Promise.resolve({ rows: [], rowCount: 0 });
+    });
+
+    const res = await fetch(`${baseUrl}/conversations/${VALID_CONV_ID}/messages/manual`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ content: 'Seguimos por aca' }),
+    });
+
+    expect(res.status).toBe(201);
+    const temporaryPauseCall = mockQuery.mock.calls.find(
+      (c) =>
+        String(c[0]).includes('SET bot_paused = true') &&
+        String(c[0]).includes("auto_resume_at = NOW() + INTERVAL '30 minutes'")
+    );
+    expect(temporaryPauseCall).toBeUndefined();
   });
 
   it('returns 409 when instance is not connected', async () => {

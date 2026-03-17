@@ -6,6 +6,7 @@ import { authMiddleware, getRequestCompanyId, getRequestProfessionalId, requireC
 import { validateBody, manualMessageSchema, isValidUuid, parsePositiveInt } from './validation';
 import type { AgentMessageTrace, Conversation, Message } from '@talora/shared';
 import { archiveStaleConversations } from '../conversations/archive';
+import { clearExpiredAutoPause, isAutoPauseExpired } from '../conversations/pause';
 
 export const conversationsRouter = Router();
 const evolution = new EvolutionClient();
@@ -208,7 +209,7 @@ conversationsRouter.post('/:id/pause', async (req, res) => {
     const professionalId = getScopedProfessionalId(req);
     const result = await pool.query<Conversation>(
       `UPDATE conversations
-       SET bot_paused = true, paused_at = NOW(), paused_by_user_id = $1, updated_at = NOW()
+       SET bot_paused = true, paused_at = NOW(), paused_by_user_id = $1, auto_resume_at = NULL, updated_at = NOW()
        WHERE id = $2 AND company_id = $3
          AND ($4::uuid IS NULL OR professional_id = $4)
        RETURNING *`,
@@ -219,10 +220,17 @@ conversationsRouter.post('/:id/pause', async (req, res) => {
       return;
     }
     await pool.query(
-      `INSERT INTO conversation_pauses (conversation_id, company_id, paused_by_user_id, paused_at)
-       VALUES ($1, $2, $3, NOW())
+      `INSERT INTO conversation_pauses (
+         conversation_id, company_id, paused_by_user_id, paused_at, auto_resume_at, pause_source
+       )
+       VALUES ($1, $2, $3, NOW(), NULL, 'manual')
        ON CONFLICT (conversation_id)
-       DO UPDATE SET paused_by_user_id = $3, paused_at = NOW(), resumed_at = NULL`,
+       DO UPDATE SET
+         paused_by_user_id = $3,
+         paused_at = NOW(),
+         auto_resume_at = NULL,
+         pause_source = 'manual',
+         resumed_at = NULL`,
       [req.params.id, getRequestCompanyId(req), req.user!.userId]
     );
     res.json({ data: result.rows[0] });
@@ -237,7 +245,7 @@ conversationsRouter.post('/:id/resume', async (req, res) => {
     const professionalId = getScopedProfessionalId(req);
     const result = await pool.query<Conversation>(
       `UPDATE conversations
-       SET bot_paused = false, paused_at = NULL, paused_by_user_id = NULL, updated_at = NOW()
+       SET bot_paused = false, paused_at = NULL, paused_by_user_id = NULL, auto_resume_at = NULL, updated_at = NOW()
        WHERE id = $1 AND company_id = $2
          AND ($3::uuid IS NULL OR professional_id = $3)
        RETURNING *`,
@@ -262,6 +270,7 @@ conversationsRouter.post('/:id/resume', async (req, res) => {
 
 conversationsRouter.post('/:id/messages/manual', validateBody(manualMessageSchema), async (req, res) => {
   const { content } = req.body;
+  const companyId = getRequestCompanyId(req);
 
   try {
     const professionalId = getScopedProfessionalId(req);
@@ -273,14 +282,23 @@ conversationsRouter.post('/:id/messages/manual', validateBody(manualMessageSchem
        WHERE c.id = $1 AND c.company_id = $2
          AND ($3::uuid IS NULL OR c.professional_id = $3)
        LIMIT 1`,
-      [req.params.id, getRequestCompanyId(req), professionalId]
+      [req.params.id, companyId, professionalId]
     );
     if (result.rows.length === 0) {
       res.status(404).json({ error: 'Conversation not found' });
       return;
     }
 
-    const conversation = result.rows[0];
+    let conversation = result.rows[0];
+    if (conversation.bot_paused && isAutoPauseExpired(conversation.auto_resume_at)) {
+      const resumedConversation = await clearExpiredAutoPause(conversation.id);
+      if (resumedConversation) {
+        conversation = {
+          ...conversation,
+          ...resumedConversation,
+        };
+      }
+    }
     if (conversation.archived_at) {
       res.status(409).json({
         error: 'Failed to send manual message',
@@ -300,6 +318,35 @@ conversationsRouter.post('/:id/messages/manual', validateBody(manualMessageSchem
     }
 
     await evolution.sendText(conversation.evolution_instance_name, conversation.phone_number, content);
+
+    const shouldRefreshAutoPause = !conversation.bot_paused || conversation.auto_resume_at !== null;
+    if (shouldRefreshAutoPause) {
+      await pool.query(
+        `UPDATE conversations
+         SET bot_paused = true,
+             paused_at = NOW(),
+             paused_by_user_id = $1,
+             auto_resume_at = NOW() + INTERVAL '30 minutes',
+             updated_at = NOW()
+         WHERE id = $2 AND company_id = $3`,
+        [req.user!.userId, conversation.id, companyId]
+      );
+      await pool.query(
+        `INSERT INTO conversation_pauses (
+           conversation_id, company_id, paused_by_user_id, paused_at, auto_resume_at, pause_source
+         )
+         VALUES ($1, $2, $3, NOW(), NOW() + INTERVAL '30 minutes', 'manual_message')
+         ON CONFLICT (conversation_id)
+         DO UPDATE SET
+           paused_by_user_id = $3,
+           paused_at = NOW(),
+           auto_resume_at = NOW() + INTERVAL '30 minutes',
+           pause_source = 'manual_message',
+           resumed_at = NULL`,
+        [conversation.id, companyId, req.user!.userId]
+      );
+    }
+
     const messageResult = await pool.query<Message>(
       `INSERT INTO messages (conversation_id, role, content)
        VALUES ($1, 'assistant', $2)
@@ -308,7 +355,7 @@ conversationsRouter.post('/:id/messages/manual', validateBody(manualMessageSchem
     );
     await pool.query(
       'UPDATE conversations SET last_message_at = NOW(), updated_at = NOW() WHERE id = $1 AND company_id = $2',
-      [conversation.id, getRequestCompanyId(req)]
+      [conversation.id, companyId]
     );
     res.status(201).json({ data: messageResult.rows[0] });
   } catch (err) {
