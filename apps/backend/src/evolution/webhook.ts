@@ -9,31 +9,13 @@ import { logger } from '../utils/logger';
 import { withTimeout } from '../utils/timeout';
 import { isResetCommand, resetConversationMemory } from '../conversations/reset';
 import { isConversationInactive } from '../conversations/archive';
+import { buildConversationLockKey, withConversationLock } from '../conversations/lock';
 import { clearExpiredAutoPause, isAutoPauseExpired } from '../conversations/pause';
 import type { ConversationPausePayload } from '../conversations/pause';
 import { transcribeAudio } from '../agent/transcribe';
 import type { WhatsAppInstance } from '@talora/shared';
 
 const evolution = new EvolutionClient();
-
-// Per-conversation lock to serialize entire webhook processing and prevent
-// race conditions when multiple messages arrive simultaneously (e.g. backend
-// was down and processes queued /reset + "hola" concurrently).
-const webhookLocks = new Map<string, Promise<void>>();
-
-function withConversationLock(lockKey: string, fn: () => Promise<void>): Promise<void> {
-  const prev = webhookLocks.get(lockKey) ?? Promise.resolve();
-  const current = prev
-    .then(fn)
-    .catch((err) => logger.error(`Error in webhook lock chain [${lockKey}]:`, err))
-    .finally(() => {
-      if (webhookLocks.get(lockKey) === current) {
-        webhookLocks.delete(lockKey);
-      }
-    });
-  webhookLocks.set(lockKey, current);
-  return current;
-}
 
 // Per-conversation message buffer to debounce agent invocations.
 // When multiple messages arrive within BUFFER_DELAY_MS, only one agent
@@ -397,7 +379,7 @@ export async function handleMessagesUpsert(body: EvolutionWebhookBody) {
 
   // Serialize all DB-touching work for the same conversation to prevent race
   // conditions (e.g. /reset + "hola" arriving simultaneously after downtime).
-  const lockKey = `${instanceName}:${phone}`;
+  const lockKey = buildConversationLockKey(instanceName, phone);
   await withConversationLock(lockKey, async () => {
     // Find the instance in DB
     const instanceResult = await pool.query<WhatsAppInstance>(

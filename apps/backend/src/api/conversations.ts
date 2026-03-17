@@ -6,6 +6,7 @@ import { authMiddleware, getRequestCompanyId, getRequestProfessionalId, requireC
 import { validateBody, manualMessageSchema, isValidUuid, parsePositiveInt } from './validation';
 import type { AgentMessageTrace, Conversation, Message } from '@talora/shared';
 import { archiveStaleConversations } from '../conversations/archive';
+import { buildConversationLockKey, withConversationLock } from '../conversations/lock';
 import { clearExpiredAutoPause, isAutoPauseExpired } from '../conversations/pause';
 
 export const conversationsRouter = Router();
@@ -274,14 +275,15 @@ conversationsRouter.post('/:id/messages/manual', validateBody(manualMessageSchem
 
   try {
     const professionalId = getScopedProfessionalId(req);
-    const result = await pool.query<Conversation & { evolution_instance_name: string; instance_status: string }>(
-      `SELECT c.*, wi.evolution_instance_name
+    const conversationQuery = `SELECT c.*, wi.evolution_instance_name
              , wi.status AS instance_status
        FROM conversations c
        JOIN whatsapp_instances wi ON wi.id = c.instance_id
        WHERE c.id = $1 AND c.company_id = $2
          AND ($3::uuid IS NULL OR c.professional_id = $3)
-       LIMIT 1`,
+       LIMIT 1`;
+    const result = await pool.query<Conversation & { evolution_instance_name: string; instance_status: string }>(
+      conversationQuery,
       [req.params.id, companyId, professionalId]
     );
     if (result.rows.length === 0) {
@@ -289,75 +291,95 @@ conversationsRouter.post('/:id/messages/manual', validateBody(manualMessageSchem
       return;
     }
 
-    let conversation = result.rows[0];
-    if (conversation.bot_paused && isAutoPauseExpired(conversation.auto_resume_at)) {
-      const resumedConversation = await clearExpiredAutoPause(conversation.id);
-      if (resumedConversation) {
-        conversation = {
-          ...conversation,
-          ...resumedConversation,
-        };
+    const lockKey = buildConversationLockKey(result.rows[0].evolution_instance_name, result.rows[0].phone_number);
+    let createdMessage: Message | null = null;
+
+    await withConversationLock(lockKey, async () => {
+      const refreshed = await pool.query<Conversation & { evolution_instance_name: string; instance_status: string }>(
+        conversationQuery,
+        [req.params.id, companyId, professionalId]
+      );
+      if (refreshed.rows.length === 0) {
+        res.status(404).json({ error: 'Conversation not found' });
+        return;
       }
-    }
-    if (conversation.archived_at) {
-      res.status(409).json({
-        error: 'Failed to send manual message',
-        message: 'La conversacion esta archivada. Espera un mensaje nuevo del cliente para reabrirla.',
-        code: 'CONVERSATION_ARCHIVED',
-      });
-      return;
-    }
 
-    if (conversation.instance_status !== 'connected') {
-      res.status(409).json({
-        error: 'Failed to send manual message',
-        message: 'La instancia de WhatsApp no está conectada. Pedí un QR nuevo o refrescá el estado antes de enviar mensajes manuales.',
-        code: 'INSTANCE_NOT_CONNECTED',
-      });
-      return;
-    }
+      let conversation = refreshed.rows[0];
+      if (conversation.bot_paused && isAutoPauseExpired(conversation.auto_resume_at)) {
+        const resumedConversation = await clearExpiredAutoPause(conversation.id);
+        if (resumedConversation) {
+          conversation = {
+            ...conversation,
+            ...resumedConversation,
+          };
+        }
+      }
+      if (conversation.archived_at) {
+        res.status(409).json({
+          error: 'Failed to send manual message',
+          message: 'La conversacion esta archivada. Espera un mensaje nuevo del cliente para reabrirla.',
+          code: 'CONVERSATION_ARCHIVED',
+        });
+        return;
+      }
 
-    await evolution.sendText(conversation.evolution_instance_name, conversation.phone_number, content);
+      if (conversation.instance_status !== 'connected') {
+        res.status(409).json({
+          error: 'Failed to send manual message',
+          message: 'La instancia de WhatsApp no está conectada. Pedí un QR nuevo o refrescá el estado antes de enviar mensajes manuales.',
+          code: 'INSTANCE_NOT_CONNECTED',
+        });
+        return;
+      }
 
-    const shouldRefreshAutoPause = !conversation.bot_paused || conversation.auto_resume_at !== null;
-    if (shouldRefreshAutoPause) {
-      await pool.query(
-        `UPDATE conversations
-         SET bot_paused = true,
+      await evolution.sendText(conversation.evolution_instance_name, conversation.phone_number, content);
+
+      const shouldRefreshAutoPause = !conversation.bot_paused || conversation.auto_resume_at !== null;
+      if (shouldRefreshAutoPause) {
+        await pool.query(
+          `UPDATE conversations
+           SET bot_paused = true,
+               paused_at = NOW(),
+               paused_by_user_id = $1,
+               auto_resume_at = NOW() + INTERVAL '30 minutes',
+               updated_at = NOW()
+           WHERE id = $2 AND company_id = $3`,
+          [req.user!.userId, conversation.id, companyId]
+        );
+        await pool.query(
+          `INSERT INTO conversation_pauses (
+             conversation_id, company_id, paused_by_user_id, paused_at, auto_resume_at, pause_source
+           )
+           VALUES ($1, $2, $3, NOW(), NOW() + INTERVAL '30 minutes', 'manual_message')
+           ON CONFLICT (conversation_id)
+           DO UPDATE SET
+             paused_by_user_id = $3,
              paused_at = NOW(),
-             paused_by_user_id = $1,
              auto_resume_at = NOW() + INTERVAL '30 minutes',
-             updated_at = NOW()
-         WHERE id = $2 AND company_id = $3`,
-        [req.user!.userId, conversation.id, companyId]
+             pause_source = 'manual_message',
+             resumed_at = NULL`,
+          [conversation.id, companyId, req.user!.userId]
+        );
+      }
+
+      const messageResult = await pool.query<Message>(
+        `INSERT INTO messages (conversation_id, role, content)
+         VALUES ($1, 'assistant', $2)
+         RETURNING *`,
+        [conversation.id, content]
       );
       await pool.query(
-        `INSERT INTO conversation_pauses (
-           conversation_id, company_id, paused_by_user_id, paused_at, auto_resume_at, pause_source
-         )
-         VALUES ($1, $2, $3, NOW(), NOW() + INTERVAL '30 minutes', 'manual_message')
-         ON CONFLICT (conversation_id)
-         DO UPDATE SET
-           paused_by_user_id = $3,
-           paused_at = NOW(),
-           auto_resume_at = NOW() + INTERVAL '30 minutes',
-           pause_source = 'manual_message',
-           resumed_at = NULL`,
-        [conversation.id, companyId, req.user!.userId]
+        'UPDATE conversations SET last_message_at = NOW(), updated_at = NOW() WHERE id = $1 AND company_id = $2',
+        [conversation.id, companyId]
       );
+      createdMessage = messageResult.rows[0];
+    });
+
+    if (res.headersSent) {
+      return;
     }
 
-    const messageResult = await pool.query<Message>(
-      `INSERT INTO messages (conversation_id, role, content)
-       VALUES ($1, 'assistant', $2)
-       RETURNING *`,
-      [conversation.id, content]
-    );
-    await pool.query(
-      'UPDATE conversations SET last_message_at = NOW(), updated_at = NOW() WHERE id = $1 AND company_id = $2',
-      [conversation.id, companyId]
-    );
-    res.status(201).json({ data: messageResult.rows[0] });
+    res.status(201).json({ data: createdMessage });
   } catch (err) {
     logger.error('Error sending manual message:', err);
     if (err instanceof EvolutionApiError) {
