@@ -44,7 +44,7 @@ mock.module('../../evolution/helpers', () => ({
 // Dynamic import AFTER mocks
 // ---------------------------------------------------------------------------
 
-const { generateReactivationMessage, sendReactivationMessage } = await import('../reactivation');
+const { generateReactivationMessage, sendOutboundMessage } = await import('../reactivation');
 
 // ---------------------------------------------------------------------------
 // Constants
@@ -131,10 +131,10 @@ describe('generateReactivationMessage', () => {
 });
 
 // ---------------------------------------------------------------------------
-// sendReactivationMessage
+// sendOutboundMessage
 // ---------------------------------------------------------------------------
 
-describe('sendReactivationMessage', () => {
+describe('sendOutboundMessage', () => {
   const client = makeClient({ phone_number: '5491155550000' });
   const company = { name: 'Barberia Roca' };
 
@@ -198,7 +198,7 @@ describe('sendReactivationMessage', () => {
       return Promise.resolve({ rows: [], rowCount: 0 });
     });
 
-    const result = await sendReactivationMessage(COMPANY_ID, CLIENT_ID);
+    const result = await sendOutboundMessage(COMPANY_ID, CLIENT_ID);
 
     expect(result.success).toBe(false);
     if (!result.success) {
@@ -228,7 +228,7 @@ describe('sendReactivationMessage', () => {
       return Promise.resolve({ rows: [], rowCount: 0 });
     });
 
-    const result = await sendReactivationMessage(COMPANY_ID, CLIENT_ID);
+    const result = await sendOutboundMessage(COMPANY_ID, CLIENT_ID);
 
     expect(result.success).toBe(false);
     if (!result.success) {
@@ -250,7 +250,7 @@ describe('sendReactivationMessage', () => {
       return Promise.resolve({ rows: [], rowCount: 0 });
     });
 
-    const result = await sendReactivationMessage(COMPANY_ID, CLIENT_ID);
+    const result = await sendOutboundMessage(COMPANY_ID, CLIENT_ID);
 
     expect(result.success).toBe(false);
     if (!result.success) {
@@ -262,7 +262,7 @@ describe('sendReactivationMessage', () => {
   it('should send successfully and create reactivation_messages record with status=sent', async () => {
     setupHappyPath();
 
-    const result = await sendReactivationMessage(COMPANY_ID, CLIENT_ID);
+    const result = await sendOutboundMessage(COMPANY_ID, CLIENT_ID);
 
     expect(result.success).toBe(true);
     if (result.success) {
@@ -303,7 +303,7 @@ describe('sendReactivationMessage', () => {
       return Promise.resolve({ rows: [], rowCount: 0 });
     });
 
-    const result = await sendReactivationMessage(COMPANY_ID, CLIENT_ID);
+    const result = await sendOutboundMessage(COMPANY_ID, CLIENT_ID);
 
     expect(result.success).toBe(false);
     if (!result.success) {
@@ -353,7 +353,7 @@ describe('sendReactivationMessage', () => {
       return Promise.resolve({ rows: [], rowCount: 0 });
     });
 
-    const result = await sendReactivationMessage(COMPANY_ID, CLIENT_ID);
+    const result = await sendOutboundMessage(COMPANY_ID, CLIENT_ID);
 
     expect(result.success).toBe(true);
     // Verify UPDATE was called instead of INSERT for conversation
@@ -365,7 +365,7 @@ describe('sendReactivationMessage', () => {
   it('should create new conversation if none exists', async () => {
     setupHappyPath();
 
-    const result = await sendReactivationMessage(COMPANY_ID, CLIENT_ID);
+    const result = await sendOutboundMessage(COMPANY_ID, CLIENT_ID);
 
     expect(result.success).toBe(true);
     const sqlCalls = mockQuery.mock.calls.map(c => String(c[0]));
@@ -410,7 +410,7 @@ describe('sendReactivationMessage', () => {
       return Promise.resolve({ rows: [], rowCount: 0 });
     });
 
-    const result = await sendReactivationMessage(COMPANY_ID, CLIENT_ID, customMessage);
+    const result = await sendOutboundMessage(COMPANY_ID, CLIENT_ID, customMessage);
 
     expect(result.success).toBe(true);
     // The sendText should receive the custom message
@@ -422,7 +422,7 @@ describe('sendReactivationMessage', () => {
   it('should broadcast conversation:updated and message:new after successful send', async () => {
     setupHappyPath();
 
-    await sendReactivationMessage(COMPANY_ID, CLIENT_ID);
+    await sendOutboundMessage(COMPANY_ID, CLIENT_ID);
 
     expect(mockBroadcast).toHaveBeenCalledTimes(2);
     const types = mockBroadcast.mock.calls.map(c => (c[0] as { type: string }).type);

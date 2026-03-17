@@ -25,7 +25,7 @@ export function generateReactivationMessage(params: {
     .replace(/\{\{last_service\}\}/g, params.lastService ?? '');
 }
 
-export async function sendReactivationMessage(
+export async function sendOutboundMessage(
   companyId: string,
   clientId: string,
   messageText?: string

@@ -3,7 +3,7 @@ import { pool } from '../db/pool';
 import { logger } from '../utils/logger';
 import { authMiddleware, getRequestCompanyId, requireCompanyScope } from './middleware';
 import { getAtRiskClients } from '../growth/analytics';
-import { sendReactivationMessage } from '../growth/reactivation';
+import { sendOutboundMessage } from '../growth/reactivation';
 import type { ClientAnalytics, ReactivationMessage, GrowthStats, ReactivationSettings, SlotFillSettings } from '@talora/shared';
 import { listPendingOpportunities, sendOpportunityCandidate, dismissOpportunity } from '../growth/slot-fill-actions';
 
@@ -87,7 +87,7 @@ growthRouter.post('/reactivation/send', async (req, res) => {
   }
 
   try {
-    const result = await sendReactivationMessage(companyId, clientId, messageText);
+    const result = await sendOutboundMessage(companyId, clientId, messageText);
 
     if (!result.success) {
       res.status(result.status).json({ error: result.error });
@@ -116,7 +116,7 @@ growthRouter.post('/reactivation/bulk', async (req, res) => {
 
   for (const clientId of clientIds) {
     try {
-      const result = await sendReactivationMessage(companyId, clientId, messageText);
+      const result = await sendOutboundMessage(companyId, clientId, messageText);
 
       if (!result.success) {
         // Stop immediately if rate limit hit

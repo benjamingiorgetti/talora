@@ -52,7 +52,7 @@ mock.module('../../evolution/helpers', () => ({
   getConnectedInstance: mockGetConnectedInstance,
 }));
 
-// Mock getAtRiskClients and sendReactivationMessage from growth modules
+// Mock getAtRiskClients and sendOutboundMessage from growth modules
 const mockGetAtRiskClients = mock(() =>
   Promise.resolve({ data: [], total: 0, page: 1, limit: 20 })
 );
@@ -64,7 +64,7 @@ const mockSendReactivationMessage = mock(() =>
   Promise.resolve({ success: true, reactivationId: 'react-id' })
 );
 mock.module('../../growth/reactivation', () => ({
-  sendReactivationMessage: mockSendReactivationMessage,
+  sendOutboundMessage: mockSendReactivationMessage,
   generateReactivationMessage: mock(() => 'generated message'),
 }));
 
@@ -302,7 +302,7 @@ describe('POST /growth/reactivation/send', () => {
     expect(body.error).toContain('clientId');
   });
 
-  it('should return error status from sendReactivationMessage on failure', async () => {
+  it('should return error status from sendOutboundMessage on failure', async () => {
     mockSendReactivationMessage.mockImplementation(() =>
       Promise.resolve({ success: false, error: 'Rate limit', status: 429 })
     );
@@ -318,7 +318,7 @@ describe('POST /growth/reactivation/send', () => {
     expect(body.error).toContain('Rate limit');
   });
 
-  it('should pass messageText to sendReactivationMessage', async () => {
+  it('should pass messageText to sendOutboundMessage', async () => {
     await fetch(`${baseUrl}/growth/reactivation/send`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
