@@ -242,6 +242,15 @@ export interface DashboardMetrics {
   confirmation_rate: number;
   estimated_time_saved_minutes: number;
   last_bot_activity_at: string | null;
+  relative_demand: {
+    today_count: number;
+    historical_avg_count: number;
+    ratio_pct: number;
+    delta_pct: number;
+    sample_size: number;
+    mode: 'same_weekday_until_now';
+    has_enough_data: boolean;
+  };
 }
 
 // --- Test Sessions ---
