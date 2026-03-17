@@ -460,11 +460,10 @@ describe('GET /growth/stats', () => {
   it('should return correct growth stats aggregations', async () => {
     const statsRow = {
       clients_at_risk: 15,
+      clients_contacted: 8,
       messages_sent: 10,
-      clients_reactivated: 3,
-      conversion_rate: '30.0',
-      revenue_attributed: '45000.00',
-      avg_days_to_convert: '2.5',
+      messages_failed: 2,
+      delivery_rate: '83.3',
     };
 
     mockQuery.mockImplementation((sql: string) => {
@@ -479,10 +478,10 @@ describe('GET /growth/stats', () => {
 
     expect(res.status).toBe(200);
     expect(body.data.clients_at_risk).toBe(15);
+    expect(body.data.clients_contacted).toBe(8);
     expect(body.data.messages_sent).toBe(10);
-    expect(body.data.clients_reactivated).toBe(3);
-    expect(body.data.conversion_rate).toBe(30.0);
-    expect(body.data.revenue_attributed).toBe(45000);
+    expect(body.data.messages_failed).toBe(2);
+    expect(body.data.delivery_rate).toBe(83.3);
   });
 
   it('should accept custom from/to query params', async () => {
@@ -493,8 +492,8 @@ describe('GET /growth/stats', () => {
         expect(params![2]).toBe('2026-02-01');
         return Promise.resolve({
           rows: [{
-            clients_at_risk: 0, messages_sent: 0, clients_reactivated: 0,
-            conversion_rate: '0', revenue_attributed: '0', avg_days_to_convert: '0',
+            clients_at_risk: 0, clients_contacted: 0, messages_sent: 0,
+            messages_failed: 0, delivery_rate: '0',
           }],
           rowCount: 1,
         });

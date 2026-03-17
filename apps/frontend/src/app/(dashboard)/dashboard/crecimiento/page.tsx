@@ -7,9 +7,7 @@ import type { GrowthStats, ReactivationMessage } from "@talora/shared";
 import {
   ArrowRight,
   CheckCircle2,
-  DollarSign,
   MessageCircle,
-  TrendingUp,
   Users,
   XCircle,
 } from "lucide-react";
@@ -41,14 +39,6 @@ function getDateRange(periodKey: PeriodKey): { from: string; to: string } {
   };
 }
 
-function formatCurrency(amount: number): string {
-  return new Intl.NumberFormat("es-AR", {
-    style: "currency",
-    currency: "ARS",
-    maximumFractionDigits: 0,
-  }).format(amount);
-}
-
 function formatRelativeDays(days: number): string {
   if (days === 0) return "hoy";
   if (days === 1) return "hace 1 dia";
@@ -58,7 +48,7 @@ function formatRelativeDays(days: number): string {
 function MessageStatusBadge({ status }: { status: ReactivationMessage["status"] }) {
   const map: Record<ReactivationMessage["status"], { label: string; className: string }> = {
     sent: { label: "Enviado", className: "bg-[hsl(var(--surface-sky))] text-[#305363]" },
-    converted: { label: "Convertido", className: "bg-[hsl(var(--surface-mint))] text-[#517261]" },
+    converted: { label: "Enviado", className: "bg-[hsl(var(--surface-sky))] text-[#305363]" },
     failed: { label: "Fallido", className: "bg-[hsl(var(--surface-rose))] text-[#7c5b66]" },
     pending: { label: "Pendiente", className: "border border-[#dde1ea] bg-white text-slate-500" },
   };
@@ -107,15 +97,6 @@ export default function CrecimientoPage() {
     );
   }
 
-  const chartData = [
-    { month: "Oct", sent: 3, converted: 1 },
-    { month: "Nov", sent: 8, converted: 3 },
-    { month: "Dic", sent: 12, converted: 5 },
-    { month: "Ene", sent: 15, converted: 7 },
-    { month: "Feb", sent: 22, converted: 10 },
-    { month: "Mar", sent: stats?.messages_sent ?? 0, converted: stats?.clients_reactivated ?? 0 },
-  ];
-
   const PERIODS: { key: PeriodKey; label: string }[] = [
     { key: "month", label: "Este mes" },
     { key: "30d", label: "30 dias" },
@@ -124,32 +105,47 @@ export default function CrecimientoPage() {
 
   const statCards = [
     {
-      label: "Clientes recuperados",
-      value: stats?.clients_reactivated ?? 0,
+      label: "Clientes contactados",
+      value: stats?.clients_contacted ?? 0,
       icon: Users,
       tone: "mint" as const,
-      caption: "Clientes que volvieron a sacar turno.",
-    },
-    {
-      label: "Revenue atribuido",
-      value: stats ? formatCurrency(stats.revenue_attributed) : "$0",
-      icon: DollarSign,
-      tone: "sky" as const,
-      caption: "Revenue generado por reactivaciones.",
-    },
-    {
-      label: "Tasa de conversion",
-      value: stats ? `${Math.round(stats.conversion_rate)}%` : "0%",
-      icon: TrendingUp,
-      tone: "lilac" as const,
-      caption: "Mensajes que generaron un turno.",
+      caption: "Clientes unicos alcanzados en el periodo.",
     },
     {
       label: "Mensajes enviados",
       value: stats?.messages_sent ?? 0,
       icon: MessageCircle,
       tone: "sand" as const,
-      caption: "Total de mensajes de reactivacion.",
+      caption: "Envios procesados sin error en el periodo.",
+    },
+    {
+      label: "Tasa de entrega",
+      value: stats ? `${Math.round(stats.delivery_rate)}%` : "0%",
+      icon: CheckCircle2,
+      tone: "sky" as const,
+      caption: "Mensajes procesados sin error sobre el total intentado.",
+    },
+    {
+      label: "Mensajes fallidos",
+      value: stats?.messages_failed ?? 0,
+      icon: XCircle,
+      tone: "rose" as const,
+      caption: "Intentos que no pudieron enviarse.",
+    },
+  ];
+
+  const upcomingMetrics = [
+    {
+      label: "Clientes recuperados",
+      caption: "Vuelve cuando la atribucion tenga una regla auditable y consistente.",
+    },
+    {
+      label: "Revenue atribuido",
+      caption: "Vuelve cuando podamos defender causalidad, no solo cercania temporal.",
+    },
+    {
+      label: "Tasa de conversion",
+      caption: "Vuelve cuando la definicion no dependa de una heuristica debil.",
     },
   ];
 
@@ -207,49 +203,25 @@ export default function CrecimientoPage() {
         ))}
       </AnimatedList>
 
-      {/* Activity chart */}
       <Card className="rounded-[28px] border-[#e6e7ec] bg-white shadow-none sm:rounded-[30px]">
         <CardContent className="p-5 sm:p-6 lg:p-7">
           <WorkspaceSectionHeader
-            eyebrow="Tendencia"
-            title="Actividad mensual"
-            description="Mensajes de reactivacion enviados y convertidos por mes."
+            eyebrow="Proximamente"
+            title="ROI y atribucion"
+            description="Ocultamos estas metricas hasta tener una base real de datos y una regla de atribucion defendible."
           />
 
-          <div className="mt-6">
-            <div className="flex items-end gap-4 h-[140px] px-2">
-              {chartData.map((d) => {
-                const maxVal = Math.max(...chartData.map((x) => x.sent), 1);
-                const sentHeight = (d.sent / maxVal) * 120;
-                const convertedHeight = (d.converted / maxVal) * 120;
-                return (
-                  <div key={d.month} className="flex-1 flex flex-col items-center gap-1">
-                    <div className="flex items-end gap-1 w-full justify-center" style={{ height: 120 }}>
-                      <div
-                        className="w-3 rounded-t-sm bg-slate-200"
-                        style={{ height: sentHeight }}
-                      />
-                      <div
-                        className="w-3 rounded-t-sm bg-slate-900"
-                        style={{ height: convertedHeight }}
-                      />
-                    </div>
-                    <span className="text-[10px] text-slate-400">{d.month}</span>
-                  </div>
-                );
-              })}
-            </div>
-
-            <div className="mt-4 flex items-center gap-4">
-              <div className="flex items-center gap-1.5">
-                <span className="h-2.5 w-2.5 rounded-full bg-slate-200 border border-slate-300" />
-                <span className="text-xs text-slate-500">Enviados</span>
+          <div className="mt-6 grid gap-3 md:grid-cols-3">
+            {upcomingMetrics.map((metric) => (
+              <div
+                key={metric.label}
+                className="rounded-[24px] border border-dashed border-[#d9dce6] bg-[linear-gradient(180deg,#fbfbfd_0%,#f5f6fa_100%)] p-5"
+              >
+                <p className="text-sm font-medium text-slate-600">{metric.label}</p>
+                <p className="mt-3 text-2xl font-semibold tracking-[-0.04em] text-slate-950">Proximamente</p>
+                <p className="mt-3 text-sm leading-6 text-slate-500">{metric.caption}</p>
               </div>
-              <div className="flex items-center gap-1.5">
-                <span className="h-2.5 w-2.5 rounded-full bg-slate-900" />
-                <span className="text-xs text-slate-500">Convertidos</span>
-              </div>
-            </div>
+            ))}
           </div>
         </CardContent>
       </Card>
@@ -258,9 +230,9 @@ export default function CrecimientoPage() {
       <Card className="rounded-[28px] border-[#e6e7ec] bg-white shadow-none sm:rounded-[30px]">
         <CardContent className="p-5 sm:p-6 lg:p-7">
           <WorkspaceSectionHeader
-            eyebrow="Historial"
+            eyebrow="Actividad"
             title="Mensajes recientes"
-            description="Ultimos mensajes de reactivacion y su resultado."
+            description="Ultimos mensajes de reactivacion y su estado operativo."
           />
 
           <div className="mt-6 space-y-3">
@@ -280,16 +252,12 @@ export default function CrecimientoPage() {
                     <div
                       className={cn(
                         "flex h-10 w-10 shrink-0 items-center justify-center rounded-[16px]",
-                        msg.status === "converted"
-                          ? "bg-[hsl(var(--surface-mint))] text-[#517261]"
-                          : msg.status === "failed"
+                        msg.status === "failed"
                             ? "bg-[hsl(var(--surface-rose))] text-[#7c5b66]"
                             : "bg-[hsl(var(--surface-sky))] text-[#305363]"
                       )}
                     >
-                      {msg.status === "converted" ? (
-                        <CheckCircle2 className="h-4.5 w-4.5" />
-                      ) : msg.status === "failed" ? (
+                      {msg.status === "failed" ? (
                         <XCircle className="h-4.5 w-4.5" />
                       ) : (
                         <MessageCircle className="h-4.5 w-4.5" />
