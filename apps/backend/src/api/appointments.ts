@@ -6,7 +6,13 @@ import { bookSlot, checkSlot, createEvent, deleteEvent, updateEvent } from '../c
 import { validateBody, createAppointmentSchema, reprogramAppointmentSchema } from './validation';
 import type { Appointment, AppointmentWsPayload, Client, Professional, Service, WsEvent } from '@talora/shared';
 import { broadcast } from '../ws/server';
-import { appEvents, type AppointmentCancelledEvent } from '../events';
+import {
+  appEvents,
+  type AppointmentCancelledEvent,
+  type AppointmentConfirmedEvent,
+  type AppointmentCreatedEvent,
+  type AppointmentRescheduledEvent,
+} from '../events';
 
 export const appointmentsRouter = Router();
 
@@ -273,6 +279,13 @@ async function reprogramAppointment(
       type: 'appointment:rescheduled',
       payload: buildAppointmentWsPayload(rescheduled, professional.name, service?.name),
     });
+    appEvents.emit('appointment:rescheduled', {
+      appointmentId: rescheduled.id,
+      clientId: rescheduled.client_id ?? null,
+      companyId: rescheduled.company_id,
+      serviceId: rescheduled.service_id ?? null,
+      professionalId: rescheduled.professional_id ?? null,
+    } satisfies AppointmentRescheduledEvent);
   }
 
   return { status: 200 as const, body: { data: rescheduled } };
@@ -496,7 +509,7 @@ appointmentsRouter.post('/', validateBody(createAppointmentSchema), async (req, 
         companyId: created.company_id,
         serviceId: created.service_id,
         professionalId: created.professional_id,
-      });
+      } satisfies AppointmentCreatedEvent);
     }
   } catch (err) {
     logger.error('Error creating appointment:', err);
@@ -580,6 +593,14 @@ appointmentsRouter.post('/:id/confirm', async (req, res) => {
       type: 'appointment:confirmed',
       payload: buildAppointmentWsPayload(confirmed, professional?.name, service?.name),
     });
+
+    appEvents.emit('appointment:confirmed', {
+      appointmentId: confirmed.id,
+      clientId: confirmed.client_id ?? null,
+      companyId: confirmed.company_id,
+      serviceId: confirmed.service_id ?? null,
+      professionalId: confirmed.professional_id ?? null,
+    } satisfies AppointmentConfirmedEvent);
 
     res.json({ data: confirmed });
   } catch (err) {

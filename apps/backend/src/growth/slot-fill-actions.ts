@@ -153,7 +153,9 @@ export async function sendOpportunityCandidate(
   }
 
   // Send via reactivation system (candidate already claimed — no duplicate risk)
-  const sendResult = await sendOutboundMessage(companyId, row.candidate_client_id, finalMessage);
+  const sendResult = await sendOutboundMessage(companyId, row.candidate_client_id, finalMessage, {
+    triggerType: 'slot_fill',
+  });
 
   if (!sendResult.success) {
     // Rollback candidate claim on send failure
@@ -168,12 +170,6 @@ export async function sendOpportunityCandidate(
   await pool.query(
     `UPDATE slot_fill_candidates SET reactivation_message_id = $1, updated_at = NOW() WHERE id = $2`,
     [sendResult.reactivationId, candidateId]
-  );
-
-  // Tag the reactivation_messages record as slot_fill
-  await pool.query(
-    `UPDATE reactivation_messages SET trigger_type = 'slot_fill' WHERE id = $1`,
-    [sendResult.reactivationId]
   );
 
   // Update opportunity status to reviewed

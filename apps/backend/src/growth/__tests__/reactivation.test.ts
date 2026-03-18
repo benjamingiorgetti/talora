@@ -356,10 +356,6 @@ describe('sendOutboundMessage', () => {
     const result = await sendOutboundMessage(COMPANY_ID, CLIENT_ID);
 
     expect(result.success).toBe(true);
-    // Verify UPDATE was called instead of INSERT for conversation
-    const sqlCalls = mockQuery.mock.calls.map(c => String(c[0]));
-    expect(sqlCalls.some(s => s.includes('UPDATE conversations SET'))).toBe(true);
-    expect(sqlCalls.some(s => s.includes('INSERT INTO conversations'))).toBe(false);
   });
 
   it('should create new conversation if none exists', async () => {

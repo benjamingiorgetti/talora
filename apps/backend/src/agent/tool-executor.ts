@@ -3,7 +3,12 @@ import { bookSlot, checkSlot, deleteEvent, listEvents, updateEvent } from '../ca
 import { validateWebhookUrl } from '../utils/url-validator';
 import { logger } from '../utils/logger';
 import { EvolutionClient } from '../evolution/client';
-import { appEvents, type AppointmentCancelledEvent } from '../events';
+import {
+  appEvents,
+  type AppointmentCancelledEvent,
+  type AppointmentCreatedEvent,
+  type AppointmentRescheduledEvent,
+} from '../events';
 import type { Appointment, Client, Professional, Service } from '@talora/shared';
 
 type ToolExecutionContext = {
@@ -714,7 +719,7 @@ export async function executeTool(
             companyId: createdAppointment.company_id,
             serviceId: createdAppointment.service_id,
             professionalId: createdAppointment.professional_id,
-          });
+          } satisfies AppointmentCreatedEvent);
         }
 
         return JSON.stringify({
@@ -799,6 +804,14 @@ export async function executeTool(
             context.companyId,
           ]
         );
+
+        appEvents.emit('appointment:rescheduled', {
+          appointmentId: appointment.id,
+          clientId: appointment.client_id ?? null,
+          companyId: context.companyId,
+          serviceId: scheduling.service?.id ?? appointment.service_id ?? null,
+          professionalId: scheduling.professional.id,
+        } satisfies AppointmentRescheduledEvent);
 
         return JSON.stringify({ success: true, appointmentId: appointment.id });
       }

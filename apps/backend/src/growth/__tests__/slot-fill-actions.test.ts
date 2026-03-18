@@ -180,12 +180,6 @@ describe('sendOpportunityCandidate', () => {
     );
     expect(candidateUpdate).toBeDefined();
 
-    // Should have tagged trigger_type
-    const triggerUpdate = mockQuery.mock.calls.find(c =>
-      String(c[0]).includes('trigger_type')
-    );
-    expect(triggerUpdate).toBeDefined();
-
     // Should have updated opportunity status
     const oppUpdate = mockQuery.mock.calls.find(c =>
       String(c[0]).includes('UPDATE slot_fill_opportunities')
