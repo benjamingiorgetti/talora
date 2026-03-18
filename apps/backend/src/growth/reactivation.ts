@@ -1,9 +1,6 @@
 import { pool } from '../db/pool';
 import { logger } from '../utils/logger';
-import { broadcast } from '../ws/server';
-import { EvolutionClient } from '../evolution/client';
-import { getConnectedInstance } from '../evolution/helpers';
-import type { Conversation, Message } from '@talora/shared';
+import { sendWhatsAppMessage } from '../outbound/service';
 
 const DEFAULT_TEMPLATE =
   'Hola {{client_name}}! Hace {{days}} dias que no te vemos por {{company_name}}. Queres agendar tu proximo turno?';
@@ -28,8 +25,11 @@ export function generateReactivationMessage(params: {
 export async function sendOutboundMessage(
   companyId: string,
   clientId: string,
-  messageText?: string
+  messageText?: string,
+  options: { triggerType?: 'reactivation' | 'slot_fill' } = {}
 ): Promise<{ success: true; reactivationId: string } | { success: false; error: string; status: number }> {
+  const triggerType = options.triggerType ?? 'reactivation';
+
   // 1. Rate limit check: max 20 messages per day
   const rateLimitResult = await pool.query<{ count: number }>(
     `SELECT COUNT(*)::int AS count
@@ -40,9 +40,9 @@ export async function sendOutboundMessage(
     [companyId]
   );
 
-  if ((rateLimitResult.rows[0]?.count ?? 0) >= 20) {
-    return { success: false, error: 'Daily reactivation message limit reached (20 per day)', status: 429 };
-  }
+    if ((rateLimitResult.rows[0]?.count ?? 0) >= 20) {
+      return { success: false, error: 'Daily reactivation message limit reached (20 per day)', status: 429 };
+    }
 
   // 2. Load client
   const clientResult = await pool.query<{ id: string; name: string; phone_number: string }>(
@@ -66,20 +66,7 @@ export async function sendOutboundMessage(
     return { success: false, error: 'Company not found', status: 404 };
   }
 
-  // 4. Get connected WhatsApp instance
-  const instance = await getConnectedInstance(companyId);
-  if (!instance) {
-    const insertResult = await pool.query<{ id: string }>(
-      `INSERT INTO reactivation_messages (company_id, client_id, message_text, status, created_at)
-       VALUES ($1, $2, $3, 'failed', NOW())
-       RETURNING id`,
-      [companyId, clientId, messageText ?? '']
-    );
-    logger.error(`[reactivation] No connected WhatsApp instance for company ${companyId}`);
-    return { success: false, error: 'No connected WhatsApp instance', status: 503 };
-  }
-
-  // 5. Generate message if not provided
+  // 4. Generate message if not provided
   let analyticsResult;
   if (!messageText) {
     analyticsResult = await pool.query<{
@@ -109,108 +96,42 @@ export async function sendOutboundMessage(
       customTemplate,
     });
 
-  // 6. Send via Evolution API
-  try {
-    const evolution = new EvolutionClient();
-    await evolution.sendText(instance.evolution_instance_name, client.phone_number, finalMessage);
-  } catch (err) {
-    logger.error(`[reactivation] Failed to send WhatsApp message to client ${clientId}:`, err);
+  const outboundResult = await sendWhatsAppMessage({
+    companyId,
+    clientId,
+    messageText: finalMessage,
+    purpose: triggerType === 'slot_fill' ? 'slot_fill' : 'reactivation',
+    sourceType: triggerType,
+    sourceId: clientId,
+  });
 
-    const insertResult = await pool.query<{ id: string }>(
-      `INSERT INTO reactivation_messages (company_id, client_id, message_text, status, created_at)
-       VALUES ($1, $2, $3, 'failed', NOW())
-       RETURNING id`,
-      [companyId, clientId, finalMessage]
+  if (!outboundResult.success) {
+    await pool.query(
+      `INSERT INTO reactivation_messages (
+        company_id, client_id, message_text, status, trigger_type, created_at
+      )
+       VALUES ($1, $2, $3, 'failed', $4, NOW())`,
+      [companyId, clientId, finalMessage, triggerType]
     );
 
     return {
       success: false,
-      error: err instanceof Error ? err.message : 'Failed to send WhatsApp message',
-      status: 502,
+      error: outboundResult.error,
+      status: outboundResult.status,
     };
   }
 
-  // 7. Find or create conversation
-  let conversation: Conversation | null = null;
-
-  // Look for any conversation (active or archived) — unarchive if needed
-  const existingConv = await pool.query<Conversation>(
-    `SELECT * FROM conversations WHERE company_id = $1 AND phone_number = $2 ORDER BY archived_at IS NULL DESC, last_message_at DESC LIMIT 1`,
-    [companyId, client.phone_number]
-  );
-
-  if (existingConv.rows[0]) {
-    conversation = existingConv.rows[0];
-    await pool.query(
-      `UPDATE conversations SET last_message_at = NOW(), updated_at = NOW(), archived_at = NULL, archive_reason = NULL WHERE id = $1`,
-      [conversation.id]
-    );
-    conversation = { ...conversation, last_message_at: new Date().toISOString(), archived_at: null };
-  } else {
-    // Need instance_id from whatsapp_instances
-    const instanceIdResult = await pool.query<{ id: string }>(
-      `SELECT id FROM whatsapp_instances WHERE company_id = $1 AND evolution_instance_name = $2 LIMIT 1`,
-      [companyId, instance.evolution_instance_name]
-    );
-
-    const instanceId = instanceIdResult.rows[0]?.id;
-    if (!instanceId) {
-      logger.warn(`[reactivation] Could not find instance row for ${instance.evolution_instance_name}`);
-    }
-
-    const newConv = await pool.query<Conversation>(
-      `INSERT INTO conversations (company_id, instance_id, phone_number, contact_name, last_message_at)
-       VALUES ($1, $2, $3, $4, NOW())
-       RETURNING *`,
-      [companyId, instanceId ?? null, client.phone_number, client.name]
-    );
-    conversation = newConv.rows[0] ?? null;
-  }
-
-  // 8. Insert message into conversation
-  let newMessage: Message | null = null;
-  if (conversation) {
-    const msgResult = await pool.query<Message>(
-      `INSERT INTO messages (conversation_id, role, content) VALUES ($1, 'assistant', $2) RETURNING *`,
-      [conversation.id, finalMessage]
-    );
-    newMessage = msgResult.rows[0] ?? null;
-  }
-
-  // 9. Insert reactivation_messages record
+  // 5. Insert reactivation_messages record
   const reactivationResult = await pool.query<{ id: string }>(
-    `INSERT INTO reactivation_messages (company_id, client_id, message_text, status, sent_at, created_at)
-     VALUES ($1, $2, $3, 'sent', NOW(), NOW())
+    `INSERT INTO reactivation_messages (
+      company_id, client_id, message_text, status, trigger_type, outbound_message_id, sent_at, created_at
+    )
+     VALUES ($1, $2, $3, 'sent', $4, $5, NOW(), NOW())
      RETURNING id`,
-    [companyId, clientId, finalMessage]
+    [companyId, clientId, finalMessage, triggerType, outboundResult.outboundMessageId]
   );
 
   const reactivationId = reactivationResult.rows[0]?.id;
-
-  // 10. Broadcast WebSocket events
-  if (conversation) {
-    broadcast({
-      type: 'conversation:updated',
-      payload: {
-        id: conversation.id,
-        company_id: conversation.company_id,
-        instance_id: conversation.instance_id,
-        professional_id: conversation.professional_id ?? null,
-        last_message_at: conversation.last_message_at,
-        bot_paused: conversation.bot_paused,
-        auto_resume_at: conversation.auto_resume_at ?? null,
-        archived_at: conversation.archived_at,
-        archive_reason: conversation.archive_reason,
-      },
-    });
-
-    if (newMessage) {
-      broadcast({
-        type: 'message:new',
-        payload: { ...newMessage, company_id: companyId },
-      });
-    }
-  }
 
   return { success: true, reactivationId: reactivationId! };
 }

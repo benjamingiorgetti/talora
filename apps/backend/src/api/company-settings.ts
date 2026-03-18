@@ -3,6 +3,7 @@ import { pool } from '../db/pool';
 import { logger } from '../utils/logger';
 import { authMiddleware, getRequestCompanyId, requireCompanyScope, requireSuperadmin } from './middleware';
 import type { CompanySettings } from '@talora/shared';
+import { appEvents, type CompanySettingsUpdatedEvent } from '../events';
 
 export const companySettingsRouter = Router();
 
@@ -54,6 +55,11 @@ companySettingsRouter.put('/', async (req, res) => {
       opening_hour, closing_hour, working_days, show_prices, timezone,
       reminder_enabled, reminder_hours_before, reminder_message_template,
     } = req.body;
+    const reminderSettingsChanged =
+      reminder_enabled !== undefined
+      || reminder_hours_before !== undefined
+      || reminder_message_template !== undefined
+      || timezone !== undefined;
 
     // Validate reminder_hours_before if provided
     if (reminder_hours_before !== undefined) {
@@ -93,6 +99,10 @@ companySettingsRouter.put('/', async (req, res) => {
         reminder_message_template ?? DEFAULTS.reminder_message_template,
       ]
     );
+    appEvents.emit('company:settings_updated', {
+      companyId,
+      reminderSettingsChanged,
+    } satisfies CompanySettingsUpdatedEvent);
     res.json({ data: result.rows[0] });
   } catch (err) {
     logger.error('Error saving company settings:', err);

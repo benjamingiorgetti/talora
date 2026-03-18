@@ -879,6 +879,53 @@ END $$;
 CREATE INDEX IF NOT EXISTS idx_reactivation_client_trigger_sent
   ON reactivation_messages(client_id, trigger_type, sent_at DESC);
 
+-- Outbound Messages: generic delivery ledger
+CREATE TABLE IF NOT EXISTS outbound_messages (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  company_id UUID NOT NULL REFERENCES companies(id) ON DELETE CASCADE,
+  client_id UUID NOT NULL REFERENCES clients(id) ON DELETE CASCADE,
+  conversation_id UUID REFERENCES conversations(id) ON DELETE SET NULL,
+  channel VARCHAR(20) NOT NULL DEFAULT 'whatsapp',
+  purpose VARCHAR(20) NOT NULL,
+  source_type VARCHAR(50) NOT NULL,
+  source_id UUID,
+  message_text TEXT NOT NULL,
+  status VARCHAR(20) NOT NULL,
+  provider_message_id TEXT,
+  error TEXT,
+  sent_at TIMESTAMPTZ,
+  failed_at TIMESTAMPTZ,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+DO $$ BEGIN
+  ALTER TABLE outbound_messages ADD CONSTRAINT chk_outbound_channel
+    CHECK (channel IN ('whatsapp'));
+EXCEPTION WHEN duplicate_object THEN NULL;
+END $$;
+
+DO $$ BEGIN
+  ALTER TABLE outbound_messages ADD CONSTRAINT chk_outbound_purpose
+    CHECK (purpose IN ('reactivation', 'slot_fill', 'reminder', 'manual', 'agent'));
+EXCEPTION WHEN duplicate_object THEN NULL;
+END $$;
+
+DO $$ BEGIN
+  ALTER TABLE outbound_messages ADD CONSTRAINT chk_outbound_status
+    CHECK (status IN ('sent', 'failed'));
+EXCEPTION WHEN duplicate_object THEN NULL;
+END $$;
+
+CREATE INDEX IF NOT EXISTS idx_outbound_company_purpose_sent
+  ON outbound_messages(company_id, purpose, sent_at DESC);
+
+CREATE INDEX IF NOT EXISTS idx_outbound_source_lookup
+  ON outbound_messages(source_type, source_id);
+
+ALTER TABLE reactivation_messages
+  ADD COLUMN IF NOT EXISTS outbound_message_id UUID REFERENCES outbound_messages(id) ON DELETE SET NULL;
+
 -- Slot Fill v1: Opportunities table
 CREATE TABLE IF NOT EXISTS slot_fill_opportunities (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -943,7 +990,66 @@ ALTER TABLE company_settings
   ADD COLUMN IF NOT EXISTS reminder_hours_before INT NOT NULL DEFAULT 3,
   ADD COLUMN IF NOT EXISTS reminder_message_template TEXT;
 
--- Reminders: tracking on appointments
+-- Reminders: durable reminder jobs
+CREATE TABLE IF NOT EXISTS appointment_reminders (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  appointment_id UUID NOT NULL REFERENCES appointments(id) ON DELETE CASCADE,
+  company_id UUID NOT NULL REFERENCES companies(id) ON DELETE CASCADE,
+  client_id UUID REFERENCES clients(id) ON DELETE CASCADE,
+  due_at TIMESTAMPTZ,
+  status VARCHAR(20) NOT NULL DEFAULT 'pending',
+  status_reason TEXT,
+  claimed_at TIMESTAMPTZ,
+  sent_at TIMESTAMPTZ,
+  last_error TEXT,
+  outbound_message_id UUID REFERENCES outbound_messages(id) ON DELETE SET NULL,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  UNIQUE(appointment_id)
+);
+
+DO $$ BEGIN
+  ALTER TABLE appointment_reminders ADD CONSTRAINT chk_appointment_reminder_status
+    CHECK (status IN ('pending', 'processing', 'sent', 'failed', 'cancelled', 'skipped'));
+EXCEPTION WHEN duplicate_object THEN NULL;
+END $$;
+
+CREATE INDEX IF NOT EXISTS idx_appointment_reminders_due
+  ON appointment_reminders(status, due_at);
+
+CREATE INDEX IF NOT EXISTS idx_appointment_reminders_company_status
+  ON appointment_reminders(company_id, status, due_at);
+
+INSERT INTO appointment_reminders (
+  appointment_id, company_id, client_id, due_at, status, status_reason, created_at, updated_at
+)
+SELECT
+  a.id,
+  a.company_id,
+  a.client_id,
+  a.starts_at - (COALESCE(cs.reminder_hours_before, 3) * INTERVAL '1 hour') AS due_at,
+  CASE
+    WHEN a.client_id IS NULL THEN 'skipped'
+    WHEN a.starts_at <= NOW() THEN 'skipped'
+    WHEN a.starts_at - (COALESCE(cs.reminder_hours_before, 3) * INTERVAL '1 hour') <= NOW() THEN 'skipped'
+    ELSE 'pending'
+  END AS status,
+  CASE
+    WHEN a.client_id IS NULL THEN 'missing_client'
+    WHEN a.starts_at <= NOW() THEN 'past_start'
+    WHEN a.starts_at - (COALESCE(cs.reminder_hours_before, 3) * INTERVAL '1 hour') <= NOW() THEN 'past_due_at'
+    ELSE NULL
+  END AS status_reason,
+  NOW(),
+  NOW()
+FROM appointments a
+JOIN company_settings cs ON cs.company_id = a.company_id
+WHERE a.status = 'confirmed'
+  AND cs.reminder_enabled = true
+  AND a.starts_at > NOW()
+ON CONFLICT (appointment_id) DO NOTHING;
+
+-- Reminders: compatibility tracking on appointments
 ALTER TABLE appointments
   ADD COLUMN IF NOT EXISTS reminder_sent_at TIMESTAMPTZ;
 

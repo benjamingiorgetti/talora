@@ -1,8 +1,8 @@
-import { pool } from '../db/pool';
 import { logger } from '../utils/logger';
-import { sendOutboundMessage } from '../growth/reactivation';
+import { sendWhatsAppMessage } from '../outbound/service';
+import { claimDueReminders, initReminderSyncListener, markReminderFailed, markReminderSent } from './service';
 
-const POLL_INTERVAL_MS = 5 * 60 * 1000; // 5 minutes
+const POLL_INTERVAL_MS = 60 * 1000; // 1 minute
 const BATCH_LIMIT = 100;
 const DEFAULT_FALLBACK_TZ = 'America/Argentina/Buenos_Aires';
 
@@ -11,23 +11,6 @@ export const DEFAULT_REMINDER_TEMPLATE =
 
 let intervalId: ReturnType<typeof setInterval> | null = null;
 
-interface PendingReminder {
-  appointment_id: string;
-  company_id: string;
-  client_id: string;
-  client_name: string;
-  starts_at: string;
-  service_name: string | null;
-  company_name: string;
-  professional_name: string | null;
-  reminder_message_template: string | null;
-  timezone: string;
-}
-
-/**
- * Formats a date into localized parts for a given timezone.
- * Falls back to DEFAULT_FALLBACK_TZ if the timezone is invalid.
- */
 function formatDateParts(
   startsAt: string,
   timezone: string,
@@ -35,7 +18,6 @@ function formatDateParts(
 ): { date: string; time: string; timeDescription: string } {
   let tz = timezone;
   try {
-    // Validate timezone by attempting to use it
     new Intl.DateTimeFormat('es-AR', { timeZone: tz }).format();
   } catch {
     tz = DEFAULT_FALLBACK_TZ;
@@ -58,7 +40,6 @@ function formatDateParts(
   const date = dateFormatter.format(apptDate);
   const time = timeFormatter.format(apptDate);
 
-  // Compare calendar days in the company timezone
   const dayFormatter = new Intl.DateTimeFormat('en-US', {
     timeZone: tz,
     year: 'numeric',
@@ -109,45 +90,12 @@ export function generateReminderMessage(params: {
 
 export async function processReminders(): Promise<void> {
   try {
-    const result = await pool.query<PendingReminder>(
-      `SELECT
-        a.id AS appointment_id,
-        a.company_id,
-        a.client_id,
-        a.client_name,
-        a.starts_at,
-        s.name AS service_name,
-        co.name AS company_name,
-        p.name AS professional_name,
-        cs.reminder_message_template,
-        COALESCE(cs.timezone, 'America/Argentina/Buenos_Aires') AS timezone
-      FROM appointments a
-      JOIN company_settings cs ON cs.company_id = a.company_id
-      JOIN companies co ON co.id = a.company_id
-      LEFT JOIN services s ON s.id = a.service_id
-      LEFT JOIN professionals p ON p.id = a.professional_id
-      WHERE cs.reminder_enabled = true
-        AND a.status = 'confirmed'
-        AND a.reminder_sent_at IS NULL
-        AND a.client_id IS NOT NULL
-        AND a.starts_at > NOW()
-        AND a.starts_at <= NOW() + (cs.reminder_hours_before * INTERVAL '1 hour')
-      ORDER BY a.starts_at ASC
-      LIMIT $1`,
-      [BATCH_LIMIT]
-    );
+    const dueReminders = await claimDueReminders(BATCH_LIMIT);
+    if (dueReminders.length === 0) return;
 
-    const pending = result.rows;
-    if (pending.length === 0) return;
+    logger.info(`[reminders] Processing cycle: found ${dueReminders.length} due reminders`);
 
-    logger.info(`[reminders] Processing cycle: found ${pending.length} pending reminders`);
-
-    const sentIds: string[] = [];
-    let stopped = false;
-
-    for (const row of pending) {
-      if (stopped) break;
-
+    for (const row of dueReminders) {
       const message = generateReminderMessage({
         clientName: row.client_name,
         serviceName: row.service_name ?? 'tu turno',
@@ -158,35 +106,34 @@ export async function processReminders(): Promise<void> {
         customTemplate: row.reminder_message_template,
       });
 
-      const sendResult = await sendOutboundMessage(row.company_id, row.client_id, message);
+      const sendResult = await sendWhatsAppMessage({
+        companyId: row.company_id,
+        clientId: row.client_id,
+        messageText: message,
+        purpose: 'reminder',
+        sourceType: 'appointment_reminder',
+        sourceId: row.reminder_id,
+      });
 
       if (sendResult.success) {
-        sentIds.push(row.appointment_id);
+        await markReminderSent(row.reminder_id, sendResult.outboundMessageId);
         logger.info(`[reminders] Sent reminder for appointment ${row.appointment_id}`);
-      } else if (sendResult.status === 429) {
-        logger.info(`[reminders] Rate limit hit, stopping cycle. Sent ${sentIds.length}/${pending.length}`);
-        stopped = true;
-      } else {
-        logger.warn(`[reminders] Failed to send reminder for appointment ${row.appointment_id}: ${sendResult.error}`);
+        continue;
       }
+
+      await markReminderFailed(row.reminder_id, sendResult.error);
+      logger.warn(`[reminders] Failed to send reminder for appointment ${row.appointment_id}: ${sendResult.error}`);
     }
 
-    // Batch update all successfully sent reminders
-    if (sentIds.length > 0) {
-      await pool.query(
-        `UPDATE appointments SET reminder_sent_at = NOW() WHERE id = ANY($1)`,
-        [sentIds]
-      );
-    }
-
-    logger.info(`[reminders] Cycle complete: ${sentIds.length}/${pending.length} sent`);
+    logger.info(`[reminders] Cycle complete: ${dueReminders.length}/${dueReminders.length} processed`);
   } catch (err) {
     logger.error('[reminders] Error in processing cycle:', err);
   }
 }
 
 export function initReminderScheduler(): void {
-  // Run once immediately (non-blocking)
+  initReminderSyncListener();
+
   processReminders().catch((err) => {
     logger.error('[reminders] Error in initial run:', err);
   });
@@ -197,7 +144,7 @@ export function initReminderScheduler(): void {
     });
   }, POLL_INTERVAL_MS);
 
-  logger.info('[reminders] Scheduler initialized, polling every 5 minutes');
+  logger.info('[reminders] Scheduler initialized, polling every 1 minute');
 }
 
 export function stopReminderScheduler(): void {
