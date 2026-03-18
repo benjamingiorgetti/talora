@@ -48,7 +48,7 @@ function formatRelativeDays(days: number): string {
 function MessageStatusBadge({ status }: { status: ReactivationMessage["status"] }) {
   const map: Record<ReactivationMessage["status"], { label: string; className: string }> = {
     sent: { label: "Enviado", className: "bg-[hsl(var(--surface-sky))] text-[#305363]" },
-    converted: { label: "Enviado", className: "bg-[hsl(var(--surface-sky))] text-[#305363]" },
+    converted: { label: "Convertido", className: "bg-emerald-50 text-emerald-700" },
     failed: { label: "Fallido", className: "bg-[hsl(var(--surface-rose))] text-[#7c5b66]" },
     pending: { label: "Pendiente", className: "border border-[#dde1ea] bg-white text-slate-500" },
   };
