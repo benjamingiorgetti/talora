@@ -51,19 +51,14 @@ export function QueCambia() {
               <div className={`inline-flex h-11 w-11 items-center justify-center rounded-full ${colors.bg} ring-4 ${colors.ring}`}>
                 <Icon className="h-5 w-5 text-ink" strokeWidth={1.5} />
               </div>
-              <h3 className="mt-4 font-display text-lg font-bold text-ink">
+              <span className={`mt-4 text-xs font-semibold uppercase tracking-wider text-gray-medium`}>
+                {item.eyebrow}
+              </span>
+              <h3 className="mt-1.5 font-display text-lg font-bold text-ink">
                 {item.title}
               </h3>
-              {item.metric && (
-                <span className={`mt-3 inline-block rounded-full px-2.5 py-0.5 text-xs font-semibold text-ink ${colors.bg}`}>
-                  {item.metric}
-                </span>
-              )}
               <p className="mt-2 flex-1 text-sm leading-relaxed text-gray-600">
                 {item.description}
-              </p>
-              <p className="mt-3 text-sm font-semibold text-ink">
-                {item.benefit}
               </p>
             </motion.div>
           );

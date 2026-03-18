@@ -12,20 +12,20 @@ export const nav = {
 export const hero = {
   badge: "Para peluquerias y salones de belleza",
   headline: {
-    before: "Converti WhatsApp en el canal que ",
-    highlight: "llena tu agenda",
-    after: ".",
+    before: "Tu WhatsApp puede ",
+    highlight: "llenar tu agenda",
+    after: " aunque nadie lo atienda.",
   },
   subheadline:
-    "Talora ayuda a peluquerias y salones de belleza a agendar turnos, reactivar clientas y vender mas sin sumar trabajo manual.",
+    "Talora agenda turnos, reactiva clientas y vende mas por WhatsApp sin sumar trabajo manual.",
   ctaPrimary: "Agendar demo",
   ctaPrimaryHref: "https://calendly.com/giorgettibenjamin/30min",
-  ctaSecondary: "Ver como funciona",
+  ctaSecondary: "Ver una demo real",
   ctaSecondaryHref: "#como-funciona",
   microcopy: [
     "Funciona con varios profesionales",
     "Se adapta a tus servicios y horarios",
-    "Atiende por WhatsApp 24/7",
+    "Usa WhatsApp como ya trabaja tu negocio",
   ],
   paraQuien: "Ideal para negocios de belleza con 2 a 10 profesionales que hoy ya manejan su agenda por WhatsApp.",
 };
@@ -37,17 +37,17 @@ export const problem = {
   painPoints: [
     {
       title: "Clientas que preguntan y no reservan",
-      description: "Muchas conversaciones quedan sin cierre.",
+      description: "Las conversaciones quedan abiertas y el turno no se cierra.",
       color: "lilac" as const,
     },
     {
       title: "Clientas que deberian volver y nadie contacta",
-      description: "Pero nadie las reactiva a tiempo.",
+      description: "Se enfria la relacion y la agenda pierde recurrencia.",
       color: "sand" as const,
     },
     {
       title: "Tiempo perdido respondiendo lo mismo una y otra vez",
-      description: "Tu equipo repite las mismas respuestas todos los dias.",
+      description: "Tu equipo dedica horas a tareas repetitivas que no suman valor.",
       color: "sky" as const,
     },
   ],
@@ -59,28 +59,25 @@ export const queCambia = {
   title: "Tres formas en que Talora hace crecer tu agenda",
   items: [
     {
-      title: "Agenda automatica",
-      description: "Responde consultas, muestra horarios y reserva turnos sin depender del equipo.",
-      benefit: "Mas turnos confirmados, menos tiempo coordinando mensajes.",
+      eyebrow: "Agenda automatica",
+      title: "Mas turnos confirmados, menos tiempo coordinando",
+      description: "Responde consultas, muestra horarios y reserva turnos por WhatsApp sin depender del equipo.",
       icon: "CalendarCheck" as const,
       color: "mint" as const,
-      metric: "24/7",
     },
     {
-      title: "Reactivacion",
-      description: "Detecta clientas que hace semanas no vuelven y les escribe por WhatsApp.",
-      benefit: "Clientas recuperadas sin seguimiento manual.",
+      eyebrow: "Reactivacion",
+      title: "Recuperas clientas sin seguimiento manual",
+      description: "Detecta clientas inactivas y las vuelve a contactar por WhatsApp en el momento correcto.",
       icon: "UserPlus" as const,
       color: "lilac" as const,
-      metric: "+30%",
     },
     {
-      title: "Upsell inteligente",
-      description: "Sugiere tratamientos, brushing, color o servicios complementarios en el momento justo.",
-      benefit: "Mas ticket promedio por visita.",
+      eyebrow: "Upsell inteligente",
+      title: "Mas ticket promedio por visita",
+      description: "Sugiere servicios complementarios cuando la clienta ya esta por cerrar su turno.",
       icon: "Sparkles" as const,
       color: "sand" as const,
-      metric: "+23%",
     },
   ],
 };
@@ -95,19 +92,19 @@ export const howItWorks = {
       number: "1",
       title: "Conectas tu WhatsApp",
       description:
-        "Talora se adapta a tu numero, tu negocio y tu forma de trabajar.",
+        "Usas tu numero y tu forma de trabajar.",
     },
     {
       number: "2",
-      title: "Configuras servicios, horarios y profesionales",
+      title: "Definis tu agenda",
       description:
-        "Definis que ofrece cada persona y cuando tiene disponibilidad.",
+        "Configuras servicios, horarios, profesionales y disponibilidad.",
     },
     {
       number: "3",
-      title: "Talora empieza a responder, agendar y seguir clientas",
+      title: "Talora empieza a responder",
       description:
-        "Automatiza reservas, recordatorios y reactivacion desde el mismo chat.",
+        "Agenda turnos, reactiva clientas y manda recordatorios desde el mismo chat.",
     },
   ],
 };
@@ -118,41 +115,54 @@ export const faq = {
     {
       question: "Talora sirve si tengo varios profesionales?",
       answer:
-        "Si. Podes configurar profesionales, servicios y agendas por separado. Cada una tiene su propio calendario y horarios.",
+        "Si. Podes definir agendas, servicios y disponibilidad por cada profesional.",
     },
     {
       question: "Puedo definir que hace cada profesional?",
       answer:
-        "Si. Cada profesional puede tener sus propios horarios y servicios: corte, color, brushing, tratamiento, lo que necesites.",
+        "Si. Talora muestra solo los servicios y horarios que correspondan a cada persona.",
     },
     {
       question: "Que pasa si una clienta pide algo fuera de lo normal?",
       answer:
-        "Talora puede derivar la conversacion a un humano cuando detecta que no puede resolver el pedido. Nunca deja colgada a la clienta.",
+        "Talora resuelve lo repetitivo y te deja intervenir cuando hace falta revision humana.",
     },
     {
       question: "Sigue funcionando si ya uso WhatsApp todos los dias?",
       answer:
-        "Si. Justamente esta pensado para negocios que ya venden y agendan por WhatsApp, pero hoy lo hacen de forma manual.",
+        "Si. La idea es que no cambies tu forma de trabajar, sino que dejes de responder manualmente lo que se repite.",
     },
   ],
 };
 
 export const finalCta = {
   headline:
-    "Si hoy respondes todo a mano, estas perdiendo turnos.",
+    "Si hoy tus turnos dependen de responder mensajes, estas perdiendo agenda.",
   subheadline:
-    "Talora agenda, reactiva y responde por WhatsApp sin sumar trabajo manual.",
+    "Talora responde, agenda y reactiva por WhatsApp sin sumar trabajo manual ni cambiar tu forma de trabajar.",
   cta: "Agendar demo",
   ctaHref: "https://calendly.com/giorgettibenjamin/30min",
   trust: [
     "Te mostramos como se adaptaria a tu negocio",
-    "Soporte incluido",
     "Funciona con tu WhatsApp actual",
   ],
 };
 
+export const idealPara = {
+  badge: "Para quien es Talora",
+  badgeColor: "text-sky-600" as const,
+  title: "Ideal para negocios como el tuyo",
+  items: [
+    "Peluquerias con varios profesionales",
+    "Centros de estetica",
+    "Salones que ya viven en WhatsApp",
+    "Negocios que hoy coordinan turnos a mano",
+  ],
+};
+
 export const footer = {
+  tagline: "Automatiza turnos por WhatsApp con inteligencia artificial.",
+  microcopy: "Hecho con amor en Buenos Aires.",
   columns: [
     {
       title: "Producto",

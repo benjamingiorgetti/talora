@@ -8,12 +8,7 @@ import { finalCta } from "@/lib/content";
 
 export function FinalCTA() {
   return (
-    <SectionWrapper className="relative bg-gradient-to-b from-ink to-[#111318] overflow-hidden">
-      {/* Dot grid background */}
-      <div className="absolute inset-0 dot-grid-light" />
-      {/* Subtle mesh gradient overlay */}
-      <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_top_left,_rgba(239,233,255,0.06)_0%,_transparent_50%)]" />
-      <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_bottom_right,_rgba(232,246,235,0.05)_0%,_transparent_50%)]" />
+    <SectionWrapper className="relative bg-ink overflow-hidden py-10 sm:py-14 md:py-20">
 
       <FadeIn>
         <div className="relative mx-auto max-w-2xl text-center">
