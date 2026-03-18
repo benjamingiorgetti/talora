@@ -57,11 +57,11 @@ export async function computeClientAnalytics(companyId: string): Promise<void> {
       CASE WHEN days_since_last IS NOT NULL THEN ROUND(days_since_last)::int ELSE NULL END AS days_since_last,
       CASE WHEN avg_frequency_days IS NOT NULL
         THEN GREATEST(ROUND(days_since_last - avg_frequency_days), 0)::int
-        ELSE 0
+        ELSE GREATEST(ROUND(days_since_last - 30), 0)::int
       END AS days_overdue,
       CASE WHEN avg_frequency_days IS NOT NULL AND avg_frequency_days > 0
         THEN LEAST(GREATEST(ROUND((days_since_last - avg_frequency_days) / avg_frequency_days * 100), 0), 100)::int
-        ELSE 0
+        ELSE LEAST(GREATEST(ROUND((days_since_last - 30) / 30.0 * 100), 0), 100)::int
       END AS risk_score
     FROM per_client
   `;

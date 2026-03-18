@@ -904,7 +904,8 @@ END $$;
 CREATE INDEX IF NOT EXISTS idx_slot_fill_opportunities_company_status
   ON slot_fill_opportunities(company_id, status, created_at DESC);
 
-CREATE INDEX IF NOT EXISTS idx_slot_fill_opportunities_appointment
+DROP INDEX IF EXISTS idx_slot_fill_opportunities_appointment;
+CREATE UNIQUE INDEX IF NOT EXISTS idx_slot_fill_opportunities_appointment
   ON slot_fill_opportunities(appointment_id);
 
 -- Slot Fill v1: Candidates table

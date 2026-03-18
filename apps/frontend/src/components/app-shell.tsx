@@ -331,6 +331,14 @@ export function AppShell({ children }: AppShellProps) {
         return keyStr.includes("/conversations");
       });
     }
+
+    if (lastEvent.type === "slot_fill:new_opportunity") {
+      void globalMutate((key) => {
+        if (!key) return false;
+        const keyStr = Array.isArray(key) ? key[0] : String(key);
+        return keyStr.includes("/growth/slot-fill/opportunities");
+      });
+    }
   }, [lastEvent, globalMutate]);
 
   useEffect(() => {

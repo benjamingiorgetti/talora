@@ -68,6 +68,7 @@ export function initSlotFillListener(): void {
         `INSERT INTO slot_fill_opportunities
           (company_id, appointment_id, service_id, professional_id, slot_starts_at, slot_ends_at, service_name, professional_name)
          VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+         ON CONFLICT (appointment_id) DO NOTHING
          RETURNING id`,
         [
           event.companyId, event.appointmentId, event.serviceId, event.professionalId,
@@ -75,6 +76,10 @@ export function initSlotFillListener(): void {
           ctx.service_name, ctx.professional_name,
         ]
       );
+      if (oppResult.rows.length === 0) {
+        // Duplicate event — opportunity already exists for this appointment
+        return;
+      }
       const opportunityId = oppResult.rows[0].id;
 
       // Insert candidates one by one (max 3, no perf concern)

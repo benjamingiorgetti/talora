@@ -76,7 +76,7 @@ function buildColumns(clients: ClientAnalytics[]): KanbanColumn[] {
   return [
     { id: "activos", title: "Activos", dotColor: "#22c55e", clients: activos },
     { id: "leve", title: "5–11 dias de atraso", dotColor: "#eab308", clients: leve },
-    { id: "moderado", title: "15–30 dias de atraso", dotColor: "#f97316", clients: moderado },
+    { id: "moderado", title: "12–30 dias de atraso", dotColor: "#f97316", clients: moderado },
     { id: "critico", title: "30–60 dias de atraso", dotColor: "#ef4444", clients: critico },
   ];
 }
