@@ -1,4 +1,5 @@
-import { footer } from "@/lib/content";
+import { footer, nav } from "@/lib/content";
+import { Button } from "@/components/ui/button";
 
 export function Footer() {
   return (
@@ -14,7 +15,10 @@ export function Footer() {
               className="h-14 w-auto"
             />
             <p className="mt-4 text-sm text-gray-medium leading-relaxed">
-              Automatiza turnos con WhatsApp e inteligencia artificial.
+              {footer.tagline}
+            </p>
+            <p className="mt-2 text-xs text-gray-soft">
+              {footer.microcopy}
             </p>
           </div>
 
@@ -38,6 +42,15 @@ export function Footer() {
               </ul>
             </div>
           ))}
+
+          {/* CTA */}
+          <div className="flex flex-col justify-start">
+            <Button size="default" asChild>
+              <a href={nav.ctaHref} target="_blank" rel="noopener noreferrer">
+                {nav.cta}
+              </a>
+            </Button>
+          </div>
         </div>
 
         {/* Bottom */}

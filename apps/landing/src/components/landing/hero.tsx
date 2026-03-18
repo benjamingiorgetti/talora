@@ -477,7 +477,7 @@ export function Hero() {
             {/* Dot grid background */}
             <div className="absolute inset-0 sm:-m-4 md:-m-8 dot-grid opacity-40 rounded-3xl" />
 
-            <div className="relative flex flex-col md:flex-row items-center justify-center gap-4 sm:gap-6 md:gap-4">
+            <div className="relative flex flex-col md:flex-row items-center justify-center gap-4 sm:gap-6 md:gap-6">
               <WhatsAppMockup />
 
               <motion.div
@@ -485,7 +485,7 @@ export function Hero() {
                 initial="hidden"
                 whileInView="visible"
                 viewport={{ once: true, margin: "-64px" }}
-                className="block md:-ml-8"
+                className="block"
               >
                 <ResultsPanelMockup />
               </motion.div>
