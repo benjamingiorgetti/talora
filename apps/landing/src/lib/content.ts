@@ -1,174 +1,149 @@
 export const nav = {
   links: [
-    { label: "Que hace", href: "#que-cambia" },
-    { label: "Como funciona", href: "#como-funciona" },
+    { label: "Qué hace", href: "#que-cambia" },
+    { label: "Cómo funciona", href: "#como-funciona" },
     { label: "FAQ", href: "#faq" },
   ],
   cta: "Agendar demo",
   ctaHref: "https://calendly.com/giorgettibenjamin/30min",
-  descriptor: "Para peluquerias y salones de belleza",
+  descriptor: "Para peluquerías, salones y centros de estética",
 };
 
 export const hero = {
-  badge: "Para peluquerias y salones de belleza",
+  badge: "Para peluquerías, salones y centros de estética",
   headline: {
     before: "Tu WhatsApp puede ",
     highlight: "llenar tu agenda",
     after: " aunque nadie lo atienda.",
   },
   subheadline:
-    "Talora agenda turnos, reactiva clientas y vende mas por WhatsApp sin sumar trabajo manual.",
+    "Talora agenda turnos, reactiva clientas y vende más por WhatsApp sin sumar trabajo manual.",
   ctaPrimary: "Agendar demo",
   ctaPrimaryHref: "https://calendly.com/giorgettibenjamin/30min",
-  ctaSecondary: "Ver una demo real",
+  ctaSecondary: "Ver cómo funciona",
   ctaSecondaryHref: "#como-funciona",
-  microcopy: [
-    "Funciona con varios profesionales",
-    "Se adapta a tus servicios y horarios",
-    "Usa WhatsApp como ya trabaja tu negocio",
-  ],
-  paraQuien: "Ideal para negocios de belleza con 2 a 10 profesionales que hoy ya manejan su agenda por WhatsApp.",
-};
-
-export const problem = {
-  badge: "El problema",
-  badgeColor: "text-rose-600" as const,
-  title: "Tu agenda no se vacia solo por falta de demanda.",
-  painPoints: [
-    {
-      title: "Clientas que preguntan y no reservan",
-      description: "Las conversaciones quedan abiertas y el turno no se cierra.",
-      color: "lilac" as const,
-    },
-    {
-      title: "Clientas que deberian volver y nadie contacta",
-      description: "Se enfria la relacion y la agenda pierde recurrencia.",
-      color: "sand" as const,
-    },
-    {
-      title: "Tiempo perdido respondiendo lo mismo una y otra vez",
-      description: "Tu equipo dedica horas a tareas repetitivas que no suman valor.",
-      color: "sky" as const,
-    },
-  ],
+  supportLine:
+    "Usa tu WhatsApp actual. Se adapta a cómo ya vende y agenda tu negocio.",
 };
 
 export const queCambia = {
-  badge: "Que hace Talora",
+  badge: "Qué hace Talora",
   badgeColor: "text-sky-600" as const,
-  title: "Tres formas en que Talora hace crecer tu agenda",
+  title: "Lo que cambia cuando WhatsApp deja de ser un cuello de botella",
+  subtitle: "Menos coordinación manual. Más turnos cerrados. Más clientas que vuelven.",
   items: [
     {
-      eyebrow: "Agenda automatica",
-      title: "Mas turnos confirmados, menos tiempo coordinando",
-      description: "Responde consultas, muestra horarios y reserva turnos por WhatsApp sin depender del equipo.",
-      icon: "CalendarCheck" as const,
+      eyebrow: "Agenda automática",
+      title: "Responde consultas, ofrece horarios y confirma turnos sin depender del equipo.",
+      previewTitle: "Color con Ana",
+      previewMeta: "Jueves 15:00",
+      previewStatus: "Confirmado",
       color: "mint" as const,
     },
     {
-      eyebrow: "Reactivacion",
-      title: "Recuperas clientas sin seguimiento manual",
-      description: "Detecta clientas inactivas y las vuelve a contactar por WhatsApp en el momento correcto.",
-      icon: "UserPlus" as const,
+      eyebrow: "Reactivación",
+      title: "Vuelve a abrir conversaciones con clientas que ya deberían regresar.",
+      previewTitle: "Hace 6 semanas que no venís.",
+      previewMeta: "¿Querés que te muestre horarios?",
+      previewStatus: "Reactivación lista",
       color: "lilac" as const,
     },
     {
       eyebrow: "Upsell inteligente",
-      title: "Mas ticket promedio por visita",
-      description: "Sugiere servicios complementarios cuando la clienta ya esta por cerrar su turno.",
-      icon: "Sparkles" as const,
+      title: "Sugiere servicios complementarios cuando la clienta ya está por cerrar.",
+      previewTitle: "Ya que venís por brushing,",
+      previewMeta: "¿querés sumar cejas?",
+      previewStatus: "Sugerencia enviada",
       color: "sand" as const,
     },
   ],
 };
 
 export const howItWorks = {
-  badge: "Como funciona",
+  badge: "Cómo funciona",
   badgeColor: "text-violet-600" as const,
   title: "Empezar es simple",
-  subtitle: "Tres pasos para llenar tu agenda por WhatsApp.",
+  subtitle: "Tres pasos para ordenar tu agenda desde WhatsApp.",
   steps: [
     {
       number: "1",
-      title: "Conectas tu WhatsApp",
+      title: "Conectás tu WhatsApp",
       description:
-        "Usas tu numero y tu forma de trabajar.",
+        "Usás tu número y tu forma de trabajar.",
     },
     {
       number: "2",
-      title: "Definis tu agenda",
+      title: "Definís tu agenda",
       description:
-        "Configuras servicios, horarios, profesionales y disponibilidad.",
+        "Configurás servicios, horarios y profesionales.",
     },
     {
       number: "3",
       title: "Talora empieza a responder",
       description:
-        "Agenda turnos, reactiva clientas y manda recordatorios desde el mismo chat.",
+        "Agenda, reactiva y sigue clientas desde el mismo chat.",
     },
   ],
 };
 
 export const faq = {
-  title: "Preguntas que seguro te estas haciendo",
+  eyebrow: "FAQ",
+  title: "Lo que conviene saber antes de agendar",
   items: [
     {
-      question: "Talora sirve si tengo varios profesionales?",
+      question: "¿Sirve si tengo varios profesionales?",
       answer:
-        "Si. Podes definir agendas, servicios y disponibilidad por cada profesional.",
+        "Sí. Podés definir agendas, servicios y disponibilidad por cada profesional.",
     },
     {
-      question: "Puedo definir que hace cada profesional?",
+      question: "¿Tengo que cambiar de número o de forma de trabajar?",
       answer:
-        "Si. Talora muestra solo los servicios y horarios que correspondan a cada persona.",
+        "No. La idea es que Talora se adapte a cómo ya vende y agenda tu negocio.",
     },
     {
-      question: "Que pasa si una clienta pide algo fuera de lo normal?",
+      question: "¿Qué pasa cuando hace falta intervención humana?",
       answer:
-        "Talora resuelve lo repetitivo y te deja intervenir cuando hace falta revision humana.",
+        "Talora resuelve lo repetitivo y te deja entrar cuando la conversación lo necesita.",
     },
     {
-      question: "Sigue funcionando si ya uso WhatsApp todos los dias?",
+      question: "¿También ayuda a que vuelvan clientas que se perdieron?",
       answer:
-        "Si. La idea es que no cambies tu forma de trabajar, sino que dejes de responder manualmente lo que se repite.",
+        "Sí. Puede reactivar clientas inactivas y volver a abrir la conversación.",
     },
   ],
 };
 
 export const finalCta = {
-  headline:
-    "Si hoy tus turnos dependen de responder mensajes, estas perdiendo agenda.",
+  headline: "Te mostramos cómo se vería Talora en tu negocio.",
   subheadline:
-    "Talora responde, agenda y reactiva por WhatsApp sin sumar trabajo manual ni cambiar tu forma de trabajar.",
+    "En una demo corta te mostramos cómo responder, agendar y reactivar desde tu WhatsApp actual.",
   cta: "Agendar demo",
   ctaHref: "https://calendly.com/giorgettibenjamin/30min",
-  trust: [
-    "Te mostramos como se adaptaria a tu negocio",
-    "Funciona con tu WhatsApp actual",
-  ],
+  supportLine: "Sin cambiar de número. Sin cambiar tu forma de trabajar.",
 };
 
 export const idealPara = {
-  badge: "Para quien es Talora",
+  badge: "Para quién es Talora",
   badgeColor: "text-sky-600" as const,
-  title: "Ideal para negocios como el tuyo",
+  title: "Talora encaja mejor en negocios donde WhatsApp ya mueve la agenda",
   items: [
-    "Peluquerias con varios profesionales",
-    "Centros de estetica",
-    "Salones que ya viven en WhatsApp",
-    "Negocios que hoy coordinan turnos a mano",
+    "Entran consultas y reservas por chat todos los días.",
+    "Hay varios profesionales con horarios y servicios distintos.",
+    "El equipo pierde tiempo respondiendo y coordinando manualmente.",
+    "Quieren vender más sin sumar trabajo operativo.",
   ],
+  closing: "Especialmente útil para peluquerías, salones, cejas, uñas y estética.",
 };
 
 export const footer = {
-  tagline: "Automatiza turnos por WhatsApp con inteligencia artificial.",
-  microcopy: "Hecho con amor en Buenos Aires.",
+  tagline: "Turnos por WhatsApp con criterio de negocio.",
+  microcopy: "Hecho en Buenos Aires.",
   columns: [
     {
       title: "Producto",
       links: [
-        { label: "Que hace", href: "#que-cambia" },
-        { label: "Como funciona", href: "#como-funciona" },
+        { label: "Qué hace", href: "#que-cambia" },
+        { label: "Cómo funciona", href: "#como-funciona" },
         { label: "FAQ", href: "#faq" },
       ],
     },
