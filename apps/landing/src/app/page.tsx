@@ -1,6 +1,5 @@
 import { Navbar } from "@/components/landing/navbar";
 import { Hero } from "@/components/landing/hero";
-import { Problem } from "@/components/landing/problem";
 import { QueCambia } from "@/components/landing/que-cambia";
 import { SocialProof } from "@/components/landing/social-proof";
 import { HowItWorks } from "@/components/landing/how-it-works";
@@ -13,7 +12,6 @@ export default function LandingPage() {
     <main>
       <Navbar />
       <Hero />
-      <Problem />
       <QueCambia />
       <SocialProof />
       <HowItWorks />
