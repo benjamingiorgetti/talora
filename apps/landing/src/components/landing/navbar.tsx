@@ -4,6 +4,7 @@ import Image from "next/image";
 import { useEffect, useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { Menu, X } from "lucide-react";
+import brandLogo from "../../../../../img/logo.png";
 import { Button } from "@/components/ui/button";
 import { nav } from "@/lib/content";
 import { cn } from "@/lib/utils";
@@ -63,7 +64,7 @@ export function Navbar() {
           >
             <a href="/" className="flex items-center">
               <Image
-                src="/images/logo-talora.png"
+                src={brandLogo}
                 alt="Talora"
                 width={150}
                 height={44}

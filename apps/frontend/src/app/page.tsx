@@ -1,6 +1,7 @@
 import Image from "next/image";
 import Link from "next/link";
 import { Calendar, MessageCircle, Building2, ArrowRight, CheckCircle2 } from "lucide-react";
+import brandLogo from "../../../../img/logo.png";
 import { AuthRedirect } from "./auth-redirect";
 
 const features = [
@@ -46,13 +47,12 @@ export default function LandingPage() {
       <nav className="mx-auto flex max-w-[1200px] items-center justify-between px-4 sm:px-6 py-5">
         <a href="/" className="flex items-center gap-2.5">
           <Image
-            src="/icono-negro.png"
+            src={brandLogo}
             alt="Talora"
-            width={28}
-            height={28}
-            className="h-7 w-7 object-contain"
+            width={112}
+            height={34}
+            className="h-auto w-[102px] object-contain"
           />
-          <span className="text-lg font-semibold text-text-strong">Talora</span>
         </a>
         <Link
           href="/login"
@@ -131,15 +131,14 @@ export default function LandingPage() {
       {/* Footer */}
       <footer className="border-t border-[#E2E4EC] bg-white">
         <div className="mx-auto flex max-w-[1200px] items-center justify-between px-4 sm:px-6 py-8">
-          <div className="flex items-center gap-2">
+          <div className="flex items-center">
             <Image
-              src="/icono-negro.png"
+              src={brandLogo}
               alt="Talora"
-              width={20}
-              height={20}
-              className="h-5 w-5 object-contain"
+              width={90}
+              height={28}
+              className="h-auto w-[86px] object-contain"
             />
-            <span className="text-sm font-semibold text-text-strong">Talora</span>
           </div>
           <p className="text-sm text-gray-soft">Hecho en Argentina</p>
         </div>

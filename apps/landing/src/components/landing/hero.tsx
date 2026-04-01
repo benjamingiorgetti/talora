@@ -1,5 +1,7 @@
 "use client";
 
+import Image from "next/image";
+import brandWhite from "../../../../../img/blanco.png";
 import { motion } from "framer-motion";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -64,7 +66,15 @@ function ProductScene() {
           <div className="rounded-[30px] bg-[#2A2D37] p-3 shadow-[0_18px_40px_rgba(17,19,24,0.18)]">
             <div className="overflow-hidden rounded-[24px] border border-black/5 bg-[#EDE3D7]">
               <div className="flex items-center gap-3 border-b border-black/5 bg-[#0D6B5C] px-4 py-3.5">
-                <div className="h-9 w-9 rounded-full bg-white/15" />
+                <div className="flex h-9 w-9 items-center justify-center rounded-full bg-white/15">
+                  <Image
+                    src={brandWhite}
+                    alt="Talora"
+                    width={18}
+                    height={18}
+                    className="h-[18px] w-[18px] object-contain"
+                  />
+                </div>
                 <div className="min-w-0">
                   <p className="text-sm font-semibold text-white">Talora</p>
                   <p className="text-[11px] text-white/70">en línea</p>

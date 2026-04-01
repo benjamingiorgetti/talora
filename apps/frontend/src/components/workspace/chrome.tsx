@@ -67,7 +67,7 @@ export function WorkspaceMetricCard({
         <div className="flex items-start justify-between gap-3">
           <div>
             <p className="text-sm font-medium text-slate-600">{label}</p>
-            <p className="mt-3 text-[2rem] font-semibold leading-none tracking-[-0.05em] text-slate-950 sm:text-[2.3rem]">
+            <p className="mt-3 tabular-nums text-[2rem] font-semibold leading-none tracking-[-0.05em] text-slate-950 sm:text-[2.3rem]">
               {value}
             </p>
           </div>
