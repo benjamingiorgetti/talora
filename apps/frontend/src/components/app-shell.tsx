@@ -10,7 +10,6 @@ import type { Company, WsEvent } from "@talora/shared";
 import { fadeIn, slideInLeft } from "@/lib/motion";
 import {
   ArrowLeftRight,
-  BookOpenText,
   BriefcaseBusiness,
   Building2,
   CalendarDays,
@@ -26,7 +25,6 @@ import {
   Sparkles,
   TrendingUp,
   UsersRound,
-  Wrench,
   BellRing,
   X,
 } from "lucide-react";
@@ -40,6 +38,10 @@ import { cn } from "@/lib/utils";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { useWebSocket } from "@/hooks/useWebSocket";
 
+/* ------------------------------------------------------------------ */
+/*  Types                                                              */
+/* ------------------------------------------------------------------ */
+
 interface AppShellProps {
   children: React.ReactNode;
 }
@@ -47,15 +49,12 @@ interface AppShellProps {
 type NavItem = {
   href: string;
   label: string;
-  icon: React.ComponentType<{ className?: string }>;
+  icon: React.ComponentType<{ className?: string; strokeWidth?: string | number }>;
 };
 
-type SidebarIdentityProps = {
-  session: NonNullable<ReturnType<typeof useAuth>["session"]>;
-  companyLabel: string;
-  shellLabel: string;
-  onExitImpersonation: () => void;
-};
+/* ------------------------------------------------------------------ */
+/*  Nav arrays                                                         */
+/* ------------------------------------------------------------------ */
 
 const sharedNav: NavItem[] = [
   { href: "/dashboard", label: "Dashboard", icon: LayoutDashboard },
@@ -66,14 +65,14 @@ const sharedNav: NavItem[] = [
   { href: "/workspace/growth", label: "CRM", icon: TrendingUp },
 ];
 
-const configNav: NavItem[] = [
-  { href: "/settings/general", label: "General", icon: Settings2 },
-  { href: "/settings/services", label: "Servicios", icon: BookOpenText },
-  { href: "/settings/professionals", label: "Profesionales", icon: Sparkles },
-];
+const settingsItem: NavItem = {
+  href: "/settings/general",
+  label: "Configuracion",
+  icon: Settings2,
+};
 
 const adminNav: NavItem[] = [
-  { href: "/admin/companies", label: "Compañías", icon: Building2 },
+  { href: "/admin/companies", label: "Companias", icon: Building2 },
   { href: "/admin/ai", label: "IA", icon: Sparkles },
   { href: "/admin/messages", label: "Mensajes", icon: BellRing },
   { href: "/admin/settings", label: "Ajustes", icon: Settings2 },
@@ -86,9 +85,43 @@ const professionalNav: NavItem[] = [
   { href: "/settings/professionals", label: "Mi Google", icon: Sparkles },
 ];
 
+/* ------------------------------------------------------------------ */
+/*  Shared styles                                                      */
+/* ------------------------------------------------------------------ */
+
+const ICON_SIZE = "h-[18px] w-[18px]";
+const ICON_STROKE = 1.75;
+
+const navItemBase =
+  "group flex items-center gap-3 rounded-[14px] px-3.5 py-2.5 text-[15px] font-medium transition-colors duration-150";
+const navItemActive =
+  "bg-white text-[#111111] shadow-[0_2px_8px_rgba(0,0,0,0.06)]";
+const navItemInactive =
+  "text-[#2B2B2B] hover:bg-[#EDEDF0]";
+
+const collapsedItemBase =
+  "flex items-center justify-center rounded-[14px] p-2.5 transition-colors duration-150";
+const collapsedItemActive =
+  "bg-white text-[#111111] shadow-[0_2px_8px_rgba(0,0,0,0.06)]";
+const collapsedItemInactive =
+  "text-[#2B2B2B] hover:bg-[#EDEDF0]";
+
+/* ------------------------------------------------------------------ */
+/*  Helpers                                                            */
+/* ------------------------------------------------------------------ */
+
 function navItemIsActive(pathname: string, href: string) {
   return pathname === href || pathname.startsWith(`${href}/`);
 }
+
+function getInitial(name: string | null): string | null {
+  if (!name) return null;
+  return name.charAt(0).toUpperCase();
+}
+
+/* ------------------------------------------------------------------ */
+/*  NavLink — renders a <Link> for navigation items                    */
+/* ------------------------------------------------------------------ */
 
 function NavLink({
   item,
@@ -102,32 +135,19 @@ function NavLink({
   const Icon = item.icon;
   const isActive = navItemIsActive(pathname, item.href);
 
-  const link = (
-    <Link
-      href={item.href}
-      className={cn(
-        "interactive-soft group flex items-center gap-3 rounded-[20px] border px-3 py-2.5 text-sm font-medium",
-        isActive
-          ? "border-[#dfe1e9] bg-[linear-gradient(180deg,#ffffff_0%,#f4f5fa_100%)] text-slate-950 shadow-[0_12px_26px_rgba(15,23,42,0.05)]"
-          : "border-transparent text-slate-500 hover:border-[#e5e7ef] hover:bg-white hover:text-slate-950",
-        collapsed && "justify-center px-2"
-      )}
-    >
-      <div
+  if (collapsed) {
+    const link = (
+      <Link
+        href={item.href}
         className={cn(
-          "flex h-9 w-9 items-center justify-center rounded-[15px] border transition-all duration-200",
-          isActive
-            ? "border-[#d7dae4] bg-white text-slate-950 shadow-sm"
-            : "border-[#e5e7ef] bg-[#f6f7fb] text-slate-500 group-hover:border-[#daddE8] group-hover:bg-white group-hover:text-slate-800"
+          collapsedItemBase,
+          isActive ? collapsedItemActive : collapsedItemInactive,
         )}
       >
-        <Icon className="h-4.5 w-4.5" />
-      </div>
-      {!collapsed && <span>{item.label}</span>}
-    </Link>
-  );
+        <Icon className={cn(ICON_SIZE, "shrink-0")} strokeWidth={ICON_STROKE} />
+      </Link>
+    );
 
-  if (collapsed) {
     return (
       <Tooltip delayDuration={0}>
         <TooltipTrigger asChild>{link}</TooltipTrigger>
@@ -136,145 +156,190 @@ function NavLink({
     );
   }
 
-  return link;
-}
-
-function DropdownMenu({
-  title,
-  items,
-  pathname,
-  onNavigate,
-}: {
-  title: string;
-  items: NavItem[];
-  pathname: string;
-  onNavigate: () => void;
-}) {
   return (
-    <div className="absolute right-0 top-[calc(100%+12px)] z-40 w-[320px] rounded-[28px] border border-[#dde1ea] bg-white p-3 shadow-[0_24px_60px_rgba(15,23,42,0.12)]">
-      <p className="px-3 pb-2 pt-1 text-xs font-medium uppercase tracking-[0.16em] text-slate-400">{title}</p>
-      <div className="space-y-1">
-        {items.map((item) => {
-          const Icon = item.icon;
-          const isActive = navItemIsActive(pathname, item.href);
-
-          return (
-            <Link
-              key={item.href}
-              href={item.href}
-              onClick={onNavigate}
-              className={cn(
-                "flex items-center gap-3 rounded-[22px] border px-3 py-3 text-sm transition-all duration-200",
-                isActive
-                  ? "border-[#dfe1e9] bg-[linear-gradient(180deg,#ffffff_0%,#f4f5fa_100%)] text-slate-950"
-                  : "border-transparent text-slate-600 hover:border-[#e5e7ef] hover:bg-[#f7f8fc] hover:text-slate-950"
-              )}
-            >
-              <div className="flex h-10 w-10 items-center justify-center rounded-[16px] border border-[#dfe3eb] bg-[#f6f7fb]">
-                <Icon className="h-4.5 w-4.5" />
-              </div>
-              <span className="font-medium">{item.label}</span>
-            </Link>
-          );
-        })}
-      </div>
-    </div>
+    <Link
+      href={item.href}
+      className={cn(navItemBase, isActive ? navItemActive : navItemInactive)}
+    >
+      <Icon className={cn(ICON_SIZE, "shrink-0")} strokeWidth={ICON_STROKE} />
+      <span>{item.label}</span>
+    </Link>
   );
 }
 
-function BrandLockup({
+/* ------------------------------------------------------------------ */
+/*  NavAction — renders a <button> for actions (logout, etc.)          */
+/*  Same visual system as NavLink but semantically correct.            */
+/* ------------------------------------------------------------------ */
+
+function NavAction({
+  label,
+  icon: Icon,
+  onClick,
   collapsed,
 }: {
+  label: string;
+  icon: React.ComponentType<{ className?: string; strokeWidth?: string | number }>;
+  onClick: () => void;
   collapsed: boolean;
 }) {
+  if (collapsed) {
+    const btn = (
+      <button
+        onClick={onClick}
+        className={cn(collapsedItemBase, "text-[#9A9AA0] hover:bg-[#EDEDF0] hover:text-[#2B2B2B]")}
+        aria-label={label}
+      >
+        <Icon className={cn(ICON_SIZE, "shrink-0")} strokeWidth={ICON_STROKE} />
+      </button>
+    );
+
+    return (
+      <Tooltip delayDuration={0}>
+        <TooltipTrigger asChild>{btn}</TooltipTrigger>
+        <TooltipContent side="right" sideOffset={8}>{label}</TooltipContent>
+      </Tooltip>
+    );
+  }
+
   return (
-    <>
-      {collapsed ? (
-        <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-[14px] border border-[#dfe2ea] bg-white shadow-[0_8px_20px_rgba(15,23,42,0.05)]">
-          <Image
-            src="/talora-icon.png"
-            alt="Talora"
-            width={22}
-            height={22}
-            className="h-5 w-5 object-contain"
-          />
-        </div>
-      ) : (
-        <div className="flex min-h-14 items-center">
-          <Image
-            src="/talora-wordmark.png"
-            alt="Talora"
-            width={148}
-            height={54}
-            className="h-auto w-[136px] object-contain"
-          />
-        </div>
-      )}
-    </>
+    <button
+      onClick={onClick}
+      className={cn(navItemBase, "w-full text-[#9A9AA0] hover:bg-[#EDEDF0] hover:text-[#2B2B2B]")}
+      aria-label={label}
+    >
+      <Icon className={cn(ICON_SIZE, "shrink-0")} strokeWidth={ICON_STROKE} />
+      <span>{label}</span>
+    </button>
   );
 }
 
-function SidebarIdentityCard({
-  session,
-  companyLabel,
-  shellLabel,
+/* ------------------------------------------------------------------ */
+/*  SidebarDivider                                                     */
+/* ------------------------------------------------------------------ */
+
+function SidebarDivider({ collapsed }: { collapsed: boolean }) {
+  return (
+    <div
+      className={cn(
+        "border-t border-[#E5E5EA]/60",
+        collapsed ? "mx-2 my-2" : "mx-3 my-3",
+      )}
+    />
+  );
+}
+
+/* ------------------------------------------------------------------ */
+/*  SidebarFooter — identity at the very bottom                        */
+/* ------------------------------------------------------------------ */
+
+function SidebarFooter({
+  collapsed,
+  displayName,
+  roleLabel,
+  roleIcon: RoleIcon,
+  isImpersonating,
   onExitImpersonation,
-}: SidebarIdentityProps) {
-  const isClientWorkspace = session.role === "admin_empresa";
+}: {
+  collapsed: boolean;
+  displayName: string;
+  roleLabel: string;
+  roleIcon: React.ComponentType<{ className?: string; strokeWidth?: string | number }>;
+  isImpersonating: boolean;
+  onExitImpersonation: () => void;
+}) {
+  const initial = getInitial(displayName);
+
+  const avatar = (
+    <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-[#E5E5EA] text-[13px] font-medium text-[#2B2B2B]">
+      {initial ?? <RoleIcon className="h-4 w-4" strokeWidth={ICON_STROKE} />}
+    </div>
+  );
+
+  if (collapsed) {
+    return (
+      <div className="flex flex-col items-center">
+        <Tooltip delayDuration={0}>
+          <TooltipTrigger asChild>{avatar}</TooltipTrigger>
+          <TooltipContent side="right" sideOffset={8}>
+            <p className="font-medium">{displayName}</p>
+            <p className="text-xs text-[#9A9AA0]">{roleLabel}</p>
+          </TooltipContent>
+        </Tooltip>
+      </div>
+    );
+  }
 
   return (
-    <div className="mt-6 rounded-[24px] border border-[#e3e5ec] bg-[linear-gradient(180deg,#fcfcfe_0%,#f5f6fa_100%)] p-4">
-      <div className="flex items-center gap-3">
-        <div className="relative flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl border border-[#d8dce6] bg-white text-slate-900">
-          {session.role === "superadmin" ? (
-            <Shield className="h-5 w-5" />
-          ) : session.role === "professional" ? (
-            <UsersRound className="h-5 w-5" />
-          ) : (
-            <Building2 className="h-5 w-5" />
-          )}
-          <div className="absolute -bottom-1 -right-1 flex h-4.5 w-4.5 items-center justify-center rounded-full border border-[#dfe2ea] bg-white shadow-sm">
-            <Image
-              src="/talora-icon.png"
-              alt=""
-              width={10}
-              height={10}
-              className="h-2.5 w-2.5 object-contain"
-              aria-hidden="true"
-            />
-          </div>
-        </div>
-        <div className="min-w-0">
-          {isClientWorkspace ? (
-            <p className="truncate text-base font-semibold text-slate-950">{companyLabel}</p>
-          ) : (
-            <>
-              <p className="truncate text-sm font-semibold text-slate-950">{shellLabel}</p>
-              <p className="truncate text-sm text-slate-500">{companyLabel}</p>
-            </>
-          )}
-        </div>
+    <div className="flex items-center gap-2.5 px-1">
+      {avatar}
+      <div className="min-w-0 flex-1">
+        <p className="truncate text-[13px] font-medium text-[#2B2B2B]">{displayName}</p>
+        <p className="truncate text-[12px] text-[#9A9AA0]">{roleLabel}</p>
       </div>
-
-      {session.isImpersonating && (
-        <Button
-          variant="outline"
-          onClick={() => {
-            onExitImpersonation();
-          }}
-          className="mt-4 h-10 w-full justify-start rounded-2xl border-[#dde1ea] bg-white px-3 text-sm hover:bg-[#f6f7fb]"
-        >
-          <ArrowLeftRight className="mr-2 h-4 w-4" />
-          Volver a Talora
-        </Button>
+      {isImpersonating && (
+        <Tooltip delayDuration={0}>
+          <TooltipTrigger asChild>
+            <button
+              onClick={onExitImpersonation}
+              className="shrink-0 rounded-lg p-1.5 text-[#9A9AA0] transition-colors hover:bg-[#EDEDF0] hover:text-[#2B2B2B]"
+              aria-label="Volver a Talora"
+            >
+              <ArrowLeftRight className="h-3.5 w-3.5" />
+            </button>
+          </TooltipTrigger>
+          <TooltipContent side="right" sideOffset={8}>Volver a Talora</TooltipContent>
+        </Tooltip>
       )}
     </div>
   );
 }
+
+/* ------------------------------------------------------------------ */
+/*  BrandLockup                                                        */
+/* ------------------------------------------------------------------ */
+
+function BrandLockup({ collapsed }: { collapsed: boolean }) {
+  if (collapsed) {
+    return (
+      <div className="flex h-9 w-9 shrink-0 items-center justify-center">
+        <Image
+          src="/talora-brand.png"
+          alt="Talora"
+          width={32}
+          height={32}
+          className="h-7 w-7 rounded-lg object-contain"
+        />
+      </div>
+    );
+  }
+
+  return (
+    <div className="flex min-h-12 items-center gap-2.5">
+      <Image
+        src="/talora-brand.png"
+        alt=""
+        width={32}
+        height={32}
+        className="h-7 w-7 rounded-lg object-contain"
+        aria-hidden="true"
+      />
+      <span className="text-[17px] font-semibold text-[#111111] tracking-[-0.01em]">Talora</span>
+    </div>
+  );
+}
+
+/* ------------------------------------------------------------------ */
+/*  Utility                                                            */
+/* ------------------------------------------------------------------ */
 
 function formatAppointmentTime(startsAt: string) {
   return new Date(startsAt).toLocaleTimeString("es-AR", { hour: "2-digit", minute: "2-digit" });
 }
+
+/* ------------------------------------------------------------------ */
+/*  AppShell                                                           */
+/* ------------------------------------------------------------------ */
 
 export function AppShell({ children }: AppShellProps) {
   const pathname = usePathname();
@@ -285,15 +350,14 @@ export function AppShell({ children }: AppShellProps) {
   const lastEventRef = useRef<WsEvent | null>(null);
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const [mobileNavOpen, setMobileNavOpen] = useState(false);
-  const [configOpen, setConfigOpen] = useState(false);
-  const [adminOpen, setAdminOpen] = useState(false);
   const [switcherOpen, setSwitcherOpen] = useState(false);
   const { data: companies } = useSWR<Company[]>(
     session?.role === "superadmin" ? "/companies" : null,
-    fetcher
+    fetcher,
   );
 
-  // Global WebSocket listener: show toasts for appointment events and revalidate SWR caches
+  /* ---- WebSocket listener ---- */
+
   useEffect(() => {
     if (!lastEvent || lastEvent === lastEventRef.current) return;
     lastEventRef.current = lastEvent;
@@ -316,7 +380,6 @@ export function AppShell({ children }: AppShellProps) {
         toast.info(`Turno cancelado: ${payload.client_name} con ${professional}`);
       }
 
-      // Revalidate appointment-related caches across all pages
       void globalMutate((key) => {
         if (!key) return false;
         const keyStr = Array.isArray(key) ? key[0] : String(key);
@@ -342,8 +405,6 @@ export function AppShell({ children }: AppShellProps) {
   }, [lastEvent, globalMutate]);
 
   useEffect(() => {
-    setConfigOpen(false);
-    setAdminOpen(false);
     setMobileNavOpen(false);
   }, [pathname]);
 
@@ -382,9 +443,13 @@ export function AppShell({ children }: AppShellProps) {
 
   if (!session) return null;
 
+  /* ---- Derived values ---- */
+
+  const workspaceNav = session.role === "professional" ? professionalNav : sharedNav;
+
   const activeSharedItem =
-    (session.role === "professional" ? professionalNav : sharedNav).find((item) => navItemIsActive(pathname, item.href)) ??
-    configNav.find((item) => navItemIsActive(pathname, item.href)) ??
+    workspaceNav.find((item) => navItemIsActive(pathname, item.href)) ??
+    (navItemIsActive(pathname, settingsItem.href) ? settingsItem : undefined) ??
     adminNav.find((item) => navItemIsActive(pathname, item.href));
 
   const activeCompany =
@@ -394,8 +459,8 @@ export function AppShell({ children }: AppShellProps) {
 
   const hasCompanies = (companies?.length ?? 0) > 0;
   const companiesLoaded = session.role !== "superadmin" || companies !== undefined;
-  const workspaceNav = session.role === "professional" ? professionalNav : sharedNav;
   const topbarTitle = activeSharedItem?.label ?? "Talora";
+
   const shellLabel = session.isImpersonating
     ? "Vista cliente"
     : session.role === "superadmin"
@@ -406,10 +471,11 @@ export function AppShell({ children }: AppShellProps) {
 
   const companyLabel =
     session.role === "superadmin"
-      ? activeCompany?.name ?? (companiesLoaded ? (hasCompanies ? "Seleccioná una empresa" : "Crea tu primera empresa") : "Cargando empresas")
+      ? activeCompany?.name ?? (companiesLoaded ? (hasCompanies ? "Selecciona una empresa" : "Crea tu primera empresa") : "Cargando empresas")
       : session.role === "professional"
         ? session.fullName ?? session.companyName ?? "Profesional"
         : session.companyName ?? "Workspace";
+
   const topbarEyebrow =
     session.role === "superadmin"
       ? shellLabel
@@ -417,15 +483,39 @@ export function AppShell({ children }: AppShellProps) {
         ? session.fullName ?? shellLabel
         : companyLabel;
 
+  const identityName =
+    session.fullName ?? session.email ?? shellLabel;
+
+  const roleIcon =
+    session.role === "superadmin"
+      ? Shield
+      : session.role === "professional"
+        ? UsersRound
+        : Building2;
+
   const handleSelectCompany = (companyId: string) => {
     setSwitcherOpen(false);
-    setConfigOpen(false);
-    setAdminOpen(false);
     setActiveCompanyId(companyId);
   };
 
+  const exitImpersonationHandler = () => {
+    void exitImpersonation().catch((error) => {
+      toast.error(error instanceof Error ? error.message : "No se pudo restaurar la sesion.");
+    });
+  };
+
+  const showSettings = session.role !== "professional";
+  const showAdmin = session.role === "superadmin";
+
+  /* ---- Render ---- */
+
   return (
     <div className="min-h-dvh bg-[linear-gradient(180deg,#f8f9fc_0%,#f1f3f8_100%)] text-foreground">
+
+      {/* ============================================================ */}
+      {/*  Mobile nav drawer                                           */}
+      {/* ============================================================ */}
+
       <AnimatePresence>
         {mobileNavOpen && (
           <motion.div
@@ -442,171 +532,157 @@ export function AppShell({ children }: AppShellProps) {
               initial="hidden"
               animate="visible"
               exit="exit"
-              className="flex h-full w-[min(88vw,340px)] flex-col border-r border-[#e2e4ec] bg-[linear-gradient(180deg,#ffffff_0%,#f7f8fb_100%)] px-4 py-4 shadow-[0_24px_80px_rgba(15,23,42,0.14)]"
+              className="flex h-full w-[min(88vw,340px)] flex-col bg-[#F5F5F7] px-5 py-5 shadow-[0_24px_80px_rgba(15,23,42,0.14)]"
               onClick={(event) => event.stopPropagation()}
             >
-            <div className="flex items-center justify-between gap-3">
-              <Link href={resolveDefaultRoute(session, activeCompanyId)} className="flex min-w-0 items-center gap-3">
-                <BrandLockup collapsed={false} />
-              </Link>
-              <Button
-                variant="ghost"
-                size="icon"
-                aria-label="Cerrar navegación"
-                onClick={() => setMobileNavOpen(false)}
-                className="h-10 w-10 rounded-2xl border border-[#e3e6ee] bg-white text-slate-500 hover:bg-[#f6f7fb] hover:text-slate-900"
-              >
-                <X className="h-4 w-4" />
-              </Button>
-            </div>
+              {/* Header */}
+              <div className="flex items-center justify-between">
+                <Link href={resolveDefaultRoute(session, activeCompanyId)}>
+                  <BrandLockup collapsed={false} />
+                </Link>
+                <button
+                  aria-label="Cerrar navegacion"
+                  onClick={() => setMobileNavOpen(false)}
+                  className="flex h-8 w-8 items-center justify-center rounded-xl text-[#9A9AA0] transition-colors hover:bg-[#EDEDF0] hover:text-[#2B2B2B]"
+                >
+                  <X className="h-4 w-4" strokeWidth={ICON_STROKE} />
+                </button>
+              </div>
 
-            <SidebarIdentityCard
-              session={session}
-              companyLabel={companyLabel}
-              shellLabel={shellLabel}
-              onExitImpersonation={() => {
-                void exitImpersonation().catch((error) => {
-                  toast.error(error instanceof Error ? error.message : "No se pudo restaurar la sesión.");
-                });
-              }}
-            />
+              {/* Main nav */}
+              <nav className="mt-6 flex-1 space-y-0.5 overflow-y-auto" aria-label="Navegacion">
+                {workspaceNav.map((item) => (
+                  <NavLink key={item.href} item={item} pathname={pathname} collapsed={false} />
+                ))}
 
-            <nav className="mt-6 space-y-1.5" aria-label="Navegación móvil">
-              {workspaceNav.map((item) => (
-                <NavLink key={item.href} item={item} pathname={pathname} collapsed={false} />
-              ))}
-            </nav>
+                <SidebarDivider collapsed={false} />
 
-            <div className="mt-6 space-y-4 overflow-y-auto pr-1">
-              {session.role !== "professional" && (
-                <div className="space-y-1.5">
-                  <p className="px-1 text-[11px] font-medium uppercase tracking-[0.16em] text-slate-400">Configurar</p>
-                  {configNav.map((item) => (
-                    <NavLink key={item.href} item={item} pathname={pathname} collapsed={false} />
-                  ))}
-                </div>
-              )}
-              {session.role === "superadmin" && (
-                <div className="space-y-1.5">
-                  <p className="px-1 text-[11px] font-medium uppercase tracking-[0.16em] text-slate-400">Admin</p>
-                  {adminNav.map((item) => (
-                    <NavLink key={item.href} item={item} pathname={pathname} collapsed={false} />
-                  ))}
-                </div>
-              )}
-            </div>
+                {showSettings && (
+                  <NavLink item={settingsItem} pathname={pathname} collapsed={false} />
+                )}
 
-            <div className="mt-auto pt-6">
-              <Button
-                variant="outline"
-                onClick={logout}
-                className="h-11 w-full justify-start rounded-2xl border-[#dde1ea] bg-white px-4 text-slate-700 hover:bg-[#f6f7fb]"
-              >
-                <LogOut className="mr-2 h-4 w-4" />
-                Salir
-              </Button>
-            </div>
+                {showAdmin && (
+                  <>
+                    <p className="px-3.5 pb-0.5 pt-3 text-[12px] font-medium text-[#9A9AA0]">Admin</p>
+                    {adminNav.map((item) => (
+                      <NavLink key={item.href} item={item} pathname={pathname} collapsed={false} />
+                    ))}
+                  </>
+                )}
+              </nav>
+
+              {/* Bottom */}
+              <SidebarDivider collapsed={false} />
+              <NavAction label="Salir" icon={LogOut} onClick={logout} collapsed={false} />
+
+              <div className="mt-3">
+                <SidebarFooter
+                  collapsed={false}
+                  displayName={identityName}
+                  roleLabel={shellLabel}
+                  roleIcon={roleIcon}
+                  isImpersonating={!!session.isImpersonating}
+                  onExitImpersonation={exitImpersonationHandler}
+                />
+              </div>
             </motion.aside>
           </motion.div>
         )}
       </AnimatePresence>
 
+      {/* ============================================================ */}
+      {/*  Main layout                                                 */}
+      {/* ============================================================ */}
+
       <div className="mx-auto flex h-dvh w-full max-w-[1680px] overflow-hidden gap-4 px-3 py-3 lg:px-6 lg:py-4">
+
+        {/* ========================================================== */}
+        {/*  Desktop sidebar                                           */}
+        {/* ========================================================== */}
+
         <aside
           className={cn(
-            "sticky top-4 hidden h-[calc(100dvh-2rem)] shrink-0 flex-col overflow-hidden rounded-[30px] border border-[#e2e4ec] bg-[linear-gradient(180deg,#ffffff_0%,#f7f8fb_100%)] p-4 shadow-[0_24px_64px_rgba(15,23,42,0.06)] transition-[width] duration-200 ease-in-out lg:flex",
-            sidebarCollapsed ? "w-[68px]" : "w-[260px]"
+            "group/sidebar relative sticky top-4 hidden h-[calc(100dvh-2rem)] shrink-0 flex-col rounded-[32px] bg-[#F5F5F7] transition-[width,padding] duration-200 ease-in-out lg:flex",
+            sidebarCollapsed ? "w-[76px] px-3 py-5" : "w-[260px] px-5 py-5",
           )}
         >
+          {/* ---- Edge toggle: sits on the right border of the sidebar ---- */}
+          <button
+            aria-label={sidebarCollapsed ? "Expandir sidebar" : "Colapsar sidebar"}
+            onClick={() => setSidebarCollapsed((prev) => !prev)}
+            className="absolute -right-3 top-1/2 z-10 flex h-6 w-6 -translate-y-1/2 items-center justify-center rounded-full border border-[#E5E5EA] bg-white text-[#9A9AA0] shadow-sm opacity-0 transition-opacity duration-150 hover:text-[#2B2B2B] group-hover/sidebar:opacity-100"
+          >
+            <ChevronLeft className={cn("h-3 w-3", sidebarCollapsed && "rotate-180")} strokeWidth={2} />
+          </button>
+
           <TooltipProvider delayDuration={0}>
-          <div className={cn("flex items-center", sidebarCollapsed ? "flex-col gap-2" : "justify-between gap-3")}>
-            <Link
-              href={resolveDefaultRoute(session, activeCompanyId)}
-              className={cn("flex items-center", sidebarCollapsed ? "justify-center" : "gap-3")}
-            >
-              <BrandLockup collapsed={sidebarCollapsed} />
-            </Link>
 
-            <Button
-              variant="ghost"
-              size="icon"
-              aria-label={sidebarCollapsed ? "Expandir sidebar" : "Colapsar sidebar"}
-              onClick={() => setSidebarCollapsed((prev) => !prev)}
+            {/* ---- Header: brand only ---- */}
+            {sidebarCollapsed ? (
+              <div className="flex justify-center">
+                <Link href={resolveDefaultRoute(session, activeCompanyId)}>
+                  <BrandLockup collapsed />
+                </Link>
+              </div>
+            ) : (
+              <div className="px-1">
+                <Link href={resolveDefaultRoute(session, activeCompanyId)}>
+                  <BrandLockup collapsed={false} />
+                </Link>
+              </div>
+            )}
+
+            {/* ---- Main nav ---- */}
+            <nav
               className={cn(
-                "h-8 w-8 shrink-0 rounded-xl border text-slate-400 transition-colors hover:text-slate-900",
-                sidebarCollapsed
-                  ? "border-[#e3e6ee] bg-white shadow-sm hover:bg-[#f6f7fb]"
-                  : "border-transparent hover:border-[#e3e6ee] hover:bg-white"
+                "mt-5 flex-1 overflow-y-auto",
+                sidebarCollapsed ? "space-y-1" : "space-y-0.5",
               )}
+              aria-label="Navegacion principal"
             >
-              <ChevronLeft className={cn("h-3.5 w-3.5 transition-transform duration-200", sidebarCollapsed && "rotate-180")} />
-            </Button>
-          </div>
-
-          {sidebarCollapsed ? (
-            <Tooltip>
-              <TooltipTrigger asChild>
-                <div className="mt-4 flex h-9 w-9 items-center justify-center self-center rounded-2xl border border-[#d8dce6] bg-white text-slate-700">
-                  {session.role === "superadmin" ? <Shield className="h-4 w-4" />
-                   : session.role === "professional" ? <UsersRound className="h-4 w-4" />
-                   : <Building2 className="h-4 w-4" />}
-                </div>
-              </TooltipTrigger>
-              <TooltipContent side="right" sideOffset={8}>
-                <p className="font-medium">{shellLabel}</p>
-                <p className="text-xs text-slate-500">{companyLabel}</p>
-              </TooltipContent>
-            </Tooltip>
-          ) : (
-            <SidebarIdentityCard
-              session={session}
-              companyLabel={companyLabel}
-              shellLabel={shellLabel}
-              onExitImpersonation={() => {
-                void exitImpersonation().catch((error) => {
-                  toast.error(error instanceof Error ? error.message : "No se pudo restaurar la sesión.");
-                });
-              }}
-            />
-          )}
-
-          <div className={cn("mt-6 flex-1 overflow-y-auto", sidebarCollapsed ? "pr-0" : "pr-1")}>
-            <nav className="space-y-1.5" aria-label="Navegación principal">
               {workspaceNav.map((item) => (
                 <NavLink key={item.href} item={item} pathname={pathname} collapsed={sidebarCollapsed} />
               ))}
-            </nav>
-          </div>
 
-          <div className={cn("border-t border-[#e4e7ef] pt-4", sidebarCollapsed && "flex flex-col items-center")}>
-            {sidebarCollapsed ? (
-              <Tooltip>
-                <TooltipTrigger asChild>
-                  <Button
-                    variant="outline"
-                    onClick={logout}
-                    className="h-9 w-9 rounded-xl border-[#dde1ea] bg-white px-0 text-slate-700 hover:bg-[#f6f7fb]"
-                    aria-label="Cerrar sesión"
-                  >
-                    <LogOut className="h-4 w-4" />
-                  </Button>
-                </TooltipTrigger>
-                <TooltipContent side="right" sideOffset={8}>Salir</TooltipContent>
-              </Tooltip>
-            ) : (
-              <Button
-                variant="outline"
-                onClick={logout}
-                className="h-11 w-full justify-start rounded-2xl border-[#dde1ea] bg-white px-4 text-slate-700 hover:bg-[#f6f7fb]"
-                aria-label="Cerrar sesión"
-              >
-                <LogOut className="mr-2 h-4 w-4" />
-                Salir
-              </Button>
-            )}
-          </div>
+              <SidebarDivider collapsed={sidebarCollapsed} />
+
+              {showSettings && (
+                <NavLink item={settingsItem} pathname={pathname} collapsed={sidebarCollapsed} />
+              )}
+
+              {showAdmin && (
+                <>
+                  {!sidebarCollapsed && (
+                    <p className="px-3.5 pb-0.5 pt-3 text-[12px] font-medium text-[#9A9AA0]">Admin</p>
+                  )}
+                  {adminNav.map((item) => (
+                    <NavLink key={item.href} item={item} pathname={pathname} collapsed={sidebarCollapsed} />
+                  ))}
+                </>
+              )}
+            </nav>
+
+            {/* ---- Bottom: salir + identity ---- */}
+            <SidebarDivider collapsed={sidebarCollapsed} />
+            <NavAction label="Salir" icon={LogOut} onClick={logout} collapsed={sidebarCollapsed} />
+
+            <div className={cn("mt-3", sidebarCollapsed && "flex justify-center")}>
+              <SidebarFooter
+                collapsed={sidebarCollapsed}
+                displayName={identityName}
+                roleLabel={shellLabel}
+                roleIcon={roleIcon}
+                isImpersonating={!!session.isImpersonating}
+                onExitImpersonation={exitImpersonationHandler}
+              />
+            </div>
+
           </TooltipProvider>
         </aside>
+
+        {/* ========================================================== */}
+        {/*  Main content                                              */}
+        {/* ========================================================== */}
 
         <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden rounded-[28px] border border-[#e2e4ec] bg-[linear-gradient(180deg,#ffffff_0%,#fafbfe_100%)] shadow-[0_24px_80px_rgba(15,23,42,0.07)] sm:rounded-[32px]">
           <header className="sticky top-0 z-20 rounded-t-[28px] border-b border-[#e6e7ee] bg-white/92 px-4 py-3.5 backdrop-blur sm:rounded-t-[32px] md:px-5 lg:px-8">
@@ -615,7 +691,7 @@ export function AppShell({ children }: AppShellProps) {
                 <Button
                   variant="ghost"
                   size="icon"
-                  aria-label="Abrir navegación"
+                  aria-label="Abrir navegacion"
                   onClick={() => setMobileNavOpen(true)}
                   className="h-10 w-10 rounded-2xl border border-[#dde1ea] bg-[#f5f6fa] text-slate-600 hover:bg-white hover:text-slate-950 lg:hidden"
                 >
@@ -638,7 +714,7 @@ export function AppShell({ children }: AppShellProps) {
                       <span className="flex min-w-0 items-center gap-3">
                         <Building2 className="h-4 w-4 text-slate-500" />
                         <span className="truncate text-sm font-medium text-slate-900 sm:text-base">
-                          {activeCompany?.name ?? (companiesLoaded ? "Seleccioná una empresa" : "Cargando empresas")}
+                          {activeCompany?.name ?? (companiesLoaded ? "Selecciona una empresa" : "Cargando empresas")}
                         </span>
                       </span>
                       <span className="flex items-center gap-2 text-sm text-slate-400">
@@ -654,56 +730,6 @@ export function AppShell({ children }: AppShellProps) {
                       onSelect={handleSelectCompany}
                     />
                   </>
-                )}
-
-                {session.role !== "professional" && (
-                  <div className="relative">
-                    <Button
-                      variant="outline"
-                      onClick={() => {
-                        setConfigOpen((current) => !current);
-                        setAdminOpen(false);
-                      }}
-                      className="h-11 rounded-2xl border-[#dde1ea] bg-white px-4 shadow-none hover:bg-[#f6f7fb]"
-                    >
-                      <Wrench className="mr-2 h-4 w-4" />
-                      Configurar
-                      <ChevronDown className="ml-2 h-4 w-4" />
-                    </Button>
-                    {configOpen && (
-                      <DropdownMenu
-                        title="Configuración"
-                        items={configNav}
-                        pathname={pathname}
-                        onNavigate={() => setConfigOpen(false)}
-                      />
-                    )}
-                  </div>
-                )}
-
-                {session.role === "superadmin" && (
-                  <div className="relative">
-                    <Button
-                      variant="outline"
-                      onClick={() => {
-                        setAdminOpen((current) => !current);
-                        setConfigOpen(false);
-                      }}
-                      className="h-11 rounded-2xl border-[#dde1ea] bg-white px-4 shadow-none hover:bg-[#f6f7fb]"
-                    >
-                      <Shield className="mr-2 h-4 w-4" />
-                      Admin
-                      <ChevronDown className="ml-2 h-4 w-4" />
-                    </Button>
-                    {adminOpen && (
-                      <DropdownMenu
-                        title="Administración"
-                        items={adminNav}
-                        pathname={pathname}
-                        onNavigate={() => setAdminOpen(false)}
-                      />
-                    )}
-                  </div>
                 )}
 
                 <div className="hidden h-11 items-center gap-3 rounded-full border border-[#dde1ea] bg-white px-4 text-sm text-slate-600 sm:flex">
