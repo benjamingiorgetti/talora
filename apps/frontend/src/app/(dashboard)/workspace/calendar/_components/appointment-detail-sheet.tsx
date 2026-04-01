@@ -1,190 +1,181 @@
 "use client";
 
+import type { Appointment } from "@talora/shared";
 import {
   Sheet,
   SheetContent,
   SheetHeader,
   SheetTitle,
-  SheetDescription,
 } from "@/components/ui/sheet";
 import {
   formatTimeRange,
   getDurationLabel,
-  getAppointmentTimeState,
-  getAccentColor,
+  hexToRgba,
 } from "./utils";
 import {
-  statusLabel,
-  statusTone,
-  type AppointmentItem,
-  type BoardProfessional,
-} from "./calendar-shared-types";
-import { Calendar, Clock, User, Phone, FileText, Briefcase } from "lucide-react";
+  Clock,
+  User,
+  Phone,
+  Tag,
+  FileText,
+  MessageSquare,
+} from "lucide-react";
+
+type AppointmentItem = Appointment & {
+  professional_name?: string | null;
+  service_name?: string | null;
+};
+
+const statusLabel: Record<string, string> = {
+  confirmed: "Confirmado",
+  cancelled: "Cancelado",
+  rescheduled: "Reprogramado",
+  draft: "Borrador",
+};
+
+const statusTone: Record<string, string> = {
+  confirmed: "bg-[#dbf0dd] text-[#2d5e3a]",
+  cancelled: "bg-[#f5dbe4] text-[#714a58]",
+  rescheduled: "bg-[#f3dfc1] text-[#6c5338]",
+  draft: "bg-[#e6e7ec] text-slate-600",
+};
+
+const sourceLabel: Record<string, string> = {
+  bot: "WhatsApp Bot",
+  manual: "Manual",
+  google_calendar: "Google Calendar",
+};
 
 export function AppointmentDetailSheet({
   appointment,
-  professionals,
-  professionalMap,
-  open,
-  onOpenChange,
+  professionalColor,
+  onClose,
 }: {
   appointment: AppointmentItem | null;
-  professionals: BoardProfessional[];
-  professionalMap: Map<string, { id: string; color_hex: string | null; name: string; specialty?: string | null }>;
-  open: boolean;
-  onOpenChange: (open: boolean) => void;
+  professionalColor?: string;
+  onClose: () => void;
 }) {
-  if (!appointment) {
-    return (
-      <Sheet open={false} onOpenChange={onOpenChange}>
-        <SheetContent>
-          <SheetHeader>
-            <SheetTitle />
-            <SheetDescription />
-          </SheetHeader>
-        </SheetContent>
-      </Sheet>
-    );
-  }
+  if (!appointment) return null;
 
-  const professional = appointment.professional_id
-    ? professionalMap.get(appointment.professional_id)
-    : null;
-  const profIndex = professional
-    ? professionals.findIndex((p) => p.id === professional.id)
-    : 0;
-  const accent = professional
-    ? getAccentColor(professional, Math.max(0, profIndex))
-    : "#667085";
   const status = appointment.status ?? "confirmed";
-  const timeState = getAppointmentTimeState(
-    appointment.starts_at,
-    appointment.ends_at
-  );
-  const timeRange = formatTimeRange(
-    appointment.starts_at,
-    appointment.ends_at
-  );
-  const duration = getDurationLabel(
-    appointment.starts_at,
-    appointment.ends_at
-  );
-  const dateDisplay = new Date(appointment.starts_at).toLocaleDateString(
-    "es-AR",
-    { weekday: "long", day: "numeric", month: "long" }
-  );
-  const sourceLabel =
-    appointment.source === "bot"
-      ? "WhatsApp Bot"
-      : appointment.source === "manual"
-        ? "Manual"
-        : appointment.source === "google_calendar"
-          ? "Google Calendar"
-          : null;
+  const timeRange = formatTimeRange(appointment.starts_at, appointment.ends_at);
+  const duration = getDurationLabel(appointment.starts_at, appointment.ends_at);
+  const color = professionalColor ?? "#667085";
+
+  const dateLabel = new Date(appointment.starts_at).toLocaleDateString("es-AR", {
+    weekday: "long",
+    day: "numeric",
+    month: "long",
+  });
 
   return (
-    <Sheet open={open} onOpenChange={onOpenChange}>
-      <SheetContent>
-        {/* Accent bar */}
-        <div
-          className="h-1.5 w-full shrink-0"
-          style={{ backgroundColor: accent }}
-        />
-
-        <SheetHeader className="p-6 pb-4">
-          <SheetTitle className="font-display text-xl font-semibold text-slate-950">
+    <Sheet open onOpenChange={(open) => !open && onClose()}>
+      <SheetContent className="w-[380px] sm:w-[420px]">
+        <SheetHeader>
+          <SheetTitle className="text-left text-lg font-semibold text-slate-900">
             {appointment.client_name}
           </SheetTitle>
-          <SheetDescription className="text-sm text-slate-500">
-            {appointment.service_name ?? appointment.title ?? "Turno"}
-          </SheetDescription>
         </SheetHeader>
 
-        <div className="flex-1 space-y-5 overflow-y-auto px-6 pb-6">
-          {/* Time */}
-          <div className="flex items-center gap-3">
-            <Clock className="h-4 w-4 shrink-0 text-slate-400" />
-            <div>
-              <p className="text-sm font-medium text-slate-800">{timeRange}</p>
-              <p className="text-xs text-slate-500">{duration}</p>
-            </div>
+        <div className="mt-6 space-y-5">
+          {/* Status + Source */}
+          <div className="flex items-center gap-2">
+            <span
+              className={`rounded-full px-3 py-1 text-xs font-medium ${statusTone[status] ?? statusTone.draft}`}
+            >
+              {statusLabel[status] ?? status}
+            </span>
+            <span className="rounded-full bg-[#f7f8fc] px-3 py-1 text-xs font-medium text-slate-500">
+              {sourceLabel[appointment.source] ?? appointment.source}
+            </span>
           </div>
 
-          {/* Date */}
-          <div className="flex items-center gap-3">
-            <Calendar className="h-4 w-4 shrink-0 text-slate-400" />
-            <p className="text-sm text-slate-800">
-              {dateDisplay.charAt(0).toUpperCase() + dateDisplay.slice(1)}
-            </p>
-          </div>
-
-          {/* Professional */}
-          {professional && (
-            <div className="flex items-center gap-3">
-              <User className="h-4 w-4 shrink-0 text-slate-400" />
-              <div className="flex items-center gap-2">
-                <span
-                  className="h-2.5 w-2.5 shrink-0 rounded-full"
-                  style={{ backgroundColor: accent }}
-                />
-                <p className="text-sm text-slate-800">{professional.name}</p>
-                {professional.specialty && (
-                  <span className="text-xs text-slate-400">
-                    {professional.specialty}
-                  </span>
-                )}
+          {/* Date & Time */}
+          <div className="space-y-3">
+            <div className="flex items-start gap-3">
+              <Clock className="mt-0.5 h-4 w-4 shrink-0 text-slate-400" />
+              <div>
+                <p className="text-sm font-medium text-slate-900 capitalize">
+                  {dateLabel}
+                </p>
+                <p className="mt-0.5 text-sm text-slate-500">
+                  {timeRange} · {duration}
+                </p>
               </div>
             </div>
-          )}
 
-          {/* Phone */}
-          {appointment.phone_number && (
-            <div className="flex items-center gap-3">
-              <Phone className="h-4 w-4 shrink-0 text-slate-400" />
-              <a
-                href={`tel:${appointment.phone_number}`}
-                className="text-sm text-slate-800 hover:underline"
-              >
-                {appointment.phone_number}
-              </a>
-            </div>
-          )}
+            {/* Professional */}
+            {appointment.professional_name && (
+              <div className="flex items-center gap-3">
+                <User className="h-4 w-4 shrink-0 text-slate-400" />
+                <div className="flex items-center gap-2">
+                  <span
+                    className="h-2.5 w-2.5 rounded-full"
+                    style={{ backgroundColor: color }}
+                  />
+                  <span className="text-sm text-slate-700">
+                    {appointment.professional_name}
+                  </span>
+                </div>
+              </div>
+            )}
 
-          {/* Status + source */}
-          <div className="flex items-center gap-3">
-            <Briefcase className="h-4 w-4 shrink-0 text-slate-400" />
-            <div className="flex flex-wrap items-center gap-2">
-              <span
-                className={`inline-flex items-center rounded-full px-2.5 py-1 text-xs font-medium ${
-                  statusTone[status] ?? statusTone.draft
-                }`}
-              >
-                {statusLabel[status] ?? status}
-              </span>
-              {sourceLabel && (
-                <span className="inline-flex items-center rounded-full border border-[#e6e7ec] bg-[#f7f8fc] px-2.5 py-1 text-xs font-medium text-slate-600">
-                  {sourceLabel}
+            {/* Service */}
+            {(appointment.service_name ?? appointment.title) && (
+              <div className="flex items-center gap-3">
+                <Tag className="h-4 w-4 shrink-0 text-slate-400" />
+                <span className="text-sm text-slate-700">
+                  {appointment.service_name ?? appointment.title}
                 </span>
-              )}
-            </div>
+              </div>
+            )}
+
+            {/* Phone */}
+            {appointment.phone_number && (
+              <div className="flex items-center gap-3">
+                <Phone className="h-4 w-4 shrink-0 text-slate-400" />
+                <span className="text-sm text-slate-700 tabular-nums">
+                  {appointment.phone_number}
+                </span>
+              </div>
+            )}
+
+            {/* Notes */}
+            {appointment.notes && (
+              <div className="flex items-start gap-3">
+                <FileText className="mt-0.5 h-4 w-4 shrink-0 text-slate-400" />
+                <p className="text-sm text-slate-600 whitespace-pre-wrap">
+                  {appointment.notes}
+                </p>
+              </div>
+            )}
+
+            {/* Conversation link */}
+            {appointment.conversation_id && (
+              <div className="flex items-center gap-3">
+                <MessageSquare className="h-4 w-4 shrink-0 text-slate-400" />
+                <span className="text-sm text-slate-500">
+                  Tiene conversacion asociada
+                </span>
+              </div>
+            )}
           </div>
 
-          {/* Notes */}
-          {appointment.notes && (
-            <div className="flex items-start gap-3">
-              <FileText className="mt-0.5 h-4 w-4 shrink-0 text-slate-400" />
-              <p className="whitespace-pre-wrap text-sm text-slate-600">
-                {appointment.notes}
-              </p>
-            </div>
-          )}
-
-          {/* Active indicator */}
-          {timeState === "now" && (
-            <div className="animate-status-pulse rounded-xl bg-slate-950 px-4 py-2.5 text-center text-sm font-medium text-white">
-              En curso ahora
-            </div>
-          )}
+          {/* Action buttons (placeholder) */}
+          <div className="flex gap-2 border-t border-[#e6e7ec] pt-5">
+            <button
+              type="button"
+              className="flex-1 rounded-full border border-[#e6e7ec] px-4 py-2 text-sm font-medium text-slate-700 transition-colors hover:bg-[#f7f8fc]"
+            >
+              Reprogramar
+            </button>
+            <button
+              type="button"
+              className="flex-1 rounded-full border border-[#f5dbe4] px-4 py-2 text-sm font-medium text-[#714a58] transition-colors hover:bg-[#fdf2f6]"
+            >
+              Cancelar
+            </button>
+          </div>
         </div>
       </SheetContent>
     </Sheet>

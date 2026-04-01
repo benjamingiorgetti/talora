@@ -1,40 +1,23 @@
 "use client";
 
-import { ChevronLeft, ChevronRight } from "lucide-react";
-import { Button } from "@/components/ui/button";
-import { formatWeekRange, sameDay, startOfWeek, getAccentColor, hexToRgba } from "./utils";
-import type { BoardProfessional, CalendarViewMode } from "./calendar-shared-types";
+import { ChevronLeft, ChevronRight, Plus } from "lucide-react";
+import { hexToRgba, getAccentColor } from "./utils";
 
-const viewLabels: { value: CalendarViewMode; label: string }[] = [
-  { value: "day", label: "Dia" },
-  { value: "week", label: "Semana" },
-  { value: "team", label: "Equipo" },
-];
+export type ViewMode = "dia" | "semana" | "equipo";
 
-function formatDayDisplay(date: Date): string {
-  return date.toLocaleDateString("es-AR", {
-    weekday: "long",
-    day: "numeric",
-    month: "long",
-  });
-}
-
-function capitalize(s: string): string {
-  return s.charAt(0).toUpperCase() + s.slice(1);
-}
-
-function isCurrentWeek(date: Date): boolean {
-  const today = new Date();
-  const weekStart = startOfWeek(date);
-  const todayWeekStart = startOfWeek(today);
-  return weekStart.getTime() === todayWeekStart.getTime();
-}
+type Professional = {
+  id: string;
+  name: string;
+  color_hex: string | null;
+};
 
 export function CalendarHeader({
-  view,
-  onViewChange,
-  currentDate,
-  onDateChange,
+  viewMode,
+  onViewModeChange,
+  dateLabel,
+  isToday,
+  onPrev,
+  onNext,
   onToday,
   professionals,
   selectedProfessionalId,
@@ -42,163 +25,129 @@ export function CalendarHeader({
   isProfessionalSession,
   weekTotal,
 }: {
-  view: CalendarViewMode;
-  onViewChange: (view: CalendarViewMode) => void;
-  currentDate: Date;
-  onDateChange: (date: Date) => void;
+  viewMode: ViewMode;
+  onViewModeChange: (mode: ViewMode) => void;
+  dateLabel: string;
+  isToday: boolean;
+  onPrev: () => void;
+  onNext: () => void;
   onToday: () => void;
-  professionals: BoardProfessional[];
+  professionals: Professional[];
   selectedProfessionalId: string;
   onProfessionalChange: (id: string) => void;
   isProfessionalSession: boolean;
   weekTotal: number;
 }) {
-  const isToday = sameDay(currentDate, new Date());
-  const showTodayButton =
-    view === "week" ? !isCurrentWeek(currentDate) : !isToday;
-
-  function handlePrev() {
-    const next = new Date(currentDate);
-    if (view === "week") {
-      next.setDate(next.getDate() - 7);
-    } else {
-      next.setDate(next.getDate() - 1);
-    }
-    onDateChange(next);
-  }
-
-  function handleNext() {
-    const next = new Date(currentDate);
-    if (view === "week") {
-      next.setDate(next.getDate() + 7);
-    } else {
-      next.setDate(next.getDate() + 1);
-    }
-    onDateChange(next);
-  }
-
-  const dateDisplay =
-    view === "week"
-      ? (() => {
-          const ws = startOfWeek(currentDate);
-          const we = new Date(ws);
-          we.setDate(we.getDate() + 6);
-          return formatWeekRange(ws, we);
-        })()
-      : capitalize(formatDayDisplay(currentDate));
+  const views: { id: ViewMode; label: string }[] = [
+    { id: "dia", label: "Dia" },
+    { id: "semana", label: "Semana" },
+    { id: "equipo", label: "Equipo" },
+  ];
 
   return (
-    <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-      {/* Left: view switcher + date nav */}
-      <div className="flex flex-wrap items-center gap-2">
-        {/* View switcher */}
-        <div className="flex rounded-2xl border border-[#e6e7ec] bg-[#f7f8fc] p-1">
-          {viewLabels.map(({ value, label }) => (
+    <div className="flex flex-wrap items-center justify-between gap-3">
+      {/* Left: View toggles */}
+      <div className="flex items-center gap-3">
+        <div className="inline-flex rounded-full border border-[#e6e7ec] bg-white p-1">
+          {views.map((v) => (
             <button
-              key={value}
+              key={v.id}
               type="button"
-              onClick={() => onViewChange(value)}
-              className={`rounded-xl px-3 py-1.5 text-sm font-medium transition-colors ${
-                view === value
+              onClick={() => onViewModeChange(v.id)}
+              className={`rounded-full px-3.5 py-1.5 text-sm font-medium transition-colors ${
+                viewMode === v.id
                   ? "bg-[#1c1d22] text-white shadow-sm"
-                  : "text-slate-600 hover:text-slate-900"
+                  : "text-slate-600 hover:bg-[#f7f8fc]"
               }`}
             >
-              {label}
+              {v.label}
             </button>
           ))}
         </div>
+      </div>
 
-        {/* Date navigation */}
-        <div className="flex items-center gap-1.5">
-          <Button
-            variant="outline"
-            size="icon"
-            onClick={handlePrev}
-            className="h-9 w-9 rounded-2xl border-muted bg-white hover:bg-[#f6f7fb]"
-          >
-            <ChevronLeft className="h-4 w-4" />
-          </Button>
-          <Button
-            variant="outline"
-            size="icon"
-            onClick={handleNext}
-            className="h-9 w-9 rounded-2xl border-muted bg-white hover:bg-[#f6f7fb]"
-          >
-            <ChevronRight className="h-4 w-4" />
-          </Button>
-        </div>
-
-        {showTodayButton && (
+      {/* Center: Date navigation */}
+      <div className="flex items-center gap-2">
+        <button
+          type="button"
+          onClick={onPrev}
+          className="flex h-8 w-8 items-center justify-center rounded-full border border-[#e6e7ec] bg-white text-slate-600 transition-colors hover:bg-[#f6f7fb]"
+        >
+          <ChevronLeft className="h-4 w-4" />
+        </button>
+        <span className="min-w-[140px] text-center text-sm font-medium text-slate-900">
+          {dateLabel}
+        </span>
+        <button
+          type="button"
+          onClick={onNext}
+          className="flex h-8 w-8 items-center justify-center rounded-full border border-[#e6e7ec] bg-white text-slate-600 transition-colors hover:bg-[#f6f7fb]"
+        >
+          <ChevronRight className="h-4 w-4" />
+        </button>
+        {!isToday && (
           <button
             type="button"
             onClick={onToday}
-            className="rounded-2xl border border-muted bg-white px-3.5 py-1.5 text-sm font-medium text-slate-700 transition-colors hover:bg-[#f6f7fb]"
+            className="rounded-full border border-[#e6e7ec] bg-white px-3 py-1.5 text-xs font-medium text-slate-600 transition-colors hover:bg-[#f6f7fb]"
           >
             Hoy
           </button>
         )}
-
-        {/* Date display */}
-        <span className="text-sm font-medium text-slate-800">
-          {dateDisplay}
-        </span>
-
         {weekTotal > 0 && (
-          <span className="hidden text-sm text-slate-500 sm:inline-flex">
-            · {weekTotal === 1 ? "1 turno" : `${weekTotal} turnos`}
+          <span className="hidden text-sm text-slate-500 lg:inline-flex">
+            {weekTotal === 1 ? "1 turno" : `${weekTotal} turnos`}
           </span>
         )}
       </div>
 
-      {/* Right: professional filter pills */}
-      {view !== "team" && (
-        <div className="flex flex-wrap items-center gap-2">
-          {!isProfessionalSession && (
+      {/* Right: Professional filters + CTA */}
+      <div className="flex flex-wrap items-center gap-2">
+        {!isProfessionalSession && (
+          <button
+            type="button"
+            onClick={() => onProfessionalChange("all")}
+            className={`rounded-full border px-3.5 py-1.5 text-sm font-medium transition-colors ${
+              selectedProfessionalId === "all"
+                ? "border-[#1c1d22] bg-[#1c1d22] text-white"
+                : "border-[#dde1ea] bg-[#f7f8fc] text-slate-700 hover:border-[#cfd5e0] hover:bg-white"
+            }`}
+          >
+            Todos
+          </button>
+        )}
+        {professionals.map((professional, index) => {
+          const accent = getAccentColor(professional, index);
+          const isSelected = professional.id === selectedProfessionalId;
+          return (
             <button
+              key={professional.id}
               type="button"
-              onClick={() => onProfessionalChange("all")}
-              className={`rounded-full border px-3.5 py-1.5 text-sm font-medium transition-colors ${
-                selectedProfessionalId === "all"
-                  ? "border-[#1c1d22] bg-[#1c1d22] text-white"
-                  : "border-[#dde1ea] bg-[#f7f8fc] text-slate-700 hover:border-[#cfd5e0] hover:bg-white"
-              }`}
+              onClick={() => {
+                if (!isProfessionalSession) {
+                  onProfessionalChange(professional.id);
+                }
+              }}
+              disabled={isProfessionalSession}
+              className="rounded-full border px-3.5 py-1.5 text-sm font-medium transition-colors disabled:pointer-events-none disabled:opacity-50"
+              style={{
+                borderColor: isSelected ? accent : hexToRgba(accent, 0.16),
+                background: isSelected ? accent : hexToRgba(accent, 0.09),
+                color: isSelected ? "#ffffff" : "#24323f",
+              }}
             >
-              Todos
+              {professional.name}
             </button>
-          )}
-          {professionals
-            .filter((p) => p.id !== "__unassigned__")
-            .map((professional, index) => {
-              const accent = getAccentColor(professional, index);
-              const isSelected = professional.id === selectedProfessionalId;
-              return (
-                <button
-                  key={professional.id}
-                  type="button"
-                  onClick={() => {
-                    if (!isProfessionalSession) {
-                      onProfessionalChange(professional.id);
-                    }
-                  }}
-                  disabled={isProfessionalSession}
-                  className="rounded-full border px-3.5 py-1.5 text-sm font-medium transition-colors disabled:pointer-events-none disabled:opacity-50"
-                  style={{
-                    borderColor: isSelected
-                      ? accent
-                      : hexToRgba(accent, 0.16),
-                    background: isSelected
-                      ? accent
-                      : hexToRgba(accent, 0.09),
-                    color: isSelected ? "#ffffff" : "#24323f",
-                  }}
-                >
-                  {professional.name}
-                </button>
-              );
-            })}
-        </div>
-      )}
+          );
+        })}
+        <button
+          type="button"
+          className="inline-flex items-center gap-1.5 rounded-full bg-[#1c1d22] px-4 py-1.5 text-sm font-medium text-white transition-colors hover:bg-[#2a2b33]"
+        >
+          <Plus className="h-4 w-4" />
+          Nuevo turno
+        </button>
+      </div>
     </div>
   );
 }

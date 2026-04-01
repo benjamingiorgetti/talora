@@ -1,14 +1,24 @@
 "use client";
 
+import type { Appointment } from "@talora/shared";
 import {
+  MIN_BLOCK_HEIGHT,
   formatTimeRange,
   getAppointmentTimeState,
   hexToRgba,
 } from "./utils";
-import {
-  statusLabel,
-  type AppointmentItem,
-} from "./calendar-shared-types";
+
+type AppointmentItem = Appointment & {
+  professional_name?: string | null;
+  service_name?: string | null;
+};
+
+const statusLabel: Record<string, string> = {
+  confirmed: "Confirmado",
+  cancelled: "Cancelado",
+  rescheduled: "Reprogramado",
+  draft: "Borrador",
+};
 
 export function AppointmentBlock({
   appointment,
@@ -16,7 +26,7 @@ export function AppointmentBlock({
   height,
   column,
   totalColumns,
-  accent,
+  color,
   onClick,
 }: {
   appointment: AppointmentItem;
@@ -24,57 +34,124 @@ export function AppointmentBlock({
   height: number;
   column: number;
   totalColumns: number;
-  accent: string;
-  onClick: (appointment: AppointmentItem) => void;
+  color: string;
+  onClick: () => void;
 }) {
+  const status = appointment.status ?? "confirmed";
   const timeState = getAppointmentTimeState(
     appointment.starts_at,
-    appointment.ends_at
+    appointment.ends_at,
   );
   const isPast = timeState === "past";
   const isNow = timeState === "now";
-  const isCancelled = appointment.status === "cancelled";
+  const isCancelled = status === "cancelled";
+  const isDraft = status === "draft";
+  const isRescheduled = status === "rescheduled";
+
+  const blockHeight = Math.max(height, MIN_BLOCK_HEIGHT);
+  const isTall = blockHeight >= 48;
+
+  const leftPercent = (column / totalColumns) * 100;
+  const widthPercent = (1 / totalColumns) * 100;
+
+  const getBlockStyle = (): React.CSSProperties => {
+    const base: React.CSSProperties = {
+      position: "absolute",
+      top,
+      height: blockHeight,
+      left: `calc(${leftPercent}% + 2px)`,
+      width: `calc(${widthPercent}% - 4px)`,
+      borderRadius: 6,
+      borderLeft: "3px solid",
+      cursor: "pointer",
+      overflow: "hidden",
+      transition: "box-shadow 0.15s ease, opacity 0.15s ease",
+    };
+
+    if (isCancelled) {
+      return {
+        ...base,
+        background: "#f8f9fb",
+        borderLeftColor: "#cbd5e1",
+        borderLeftStyle: "dashed",
+        opacity: isPast ? 0.35 : 0.5,
+      };
+    }
+
+    if (isDraft) {
+      return {
+        ...base,
+        background: hexToRgba(color, 0.06),
+        borderLeftColor: color,
+        borderLeftStyle: "dashed",
+        opacity: isPast ? 0.4 : 1,
+      };
+    }
+
+    if (isRescheduled) {
+      return {
+        ...base,
+        background: hexToRgba("#9A6D38", 0.08),
+        borderLeftColor: "#9A6D38",
+        opacity: isPast ? 0.4 : 1,
+      };
+    }
+
+    return {
+      ...base,
+      background: hexToRgba(color, isNow ? 0.18 : 0.12),
+      borderLeftColor: color,
+      opacity: isPast ? 0.4 : 1,
+    };
+  };
+
   const timeRange = formatTimeRange(appointment.starts_at, appointment.ends_at);
-  const serviceName =
-    appointment.service_name ?? appointment.title ?? "Turno";
-  const isCompact = height < 32;
-  const isMedium = height >= 32 && height < 52;
+  const service = appointment.service_name ?? appointment.title ?? "Turno";
+  const client = appointment.client_name;
 
   return (
-    <button
-      type="button"
-      onClick={() => onClick(appointment)}
-      className={`absolute overflow-hidden rounded-xl text-left transition-shadow hover:shadow-md focus:outline-none focus:ring-2 focus:ring-slate-300 ${
-        isPast ? "opacity-50" : ""
-      }`}
-      style={{
-        top: `${top}px`,
-        height: `${Math.max(height, 20)}px`,
-        left: `calc(${(column / totalColumns) * 100}% + 2px)`,
-        width: `calc(${(1 / totalColumns) * 100}% - 4px)`,
-        borderLeft: `3px ${isCancelled ? "dashed" : "solid"} ${isPast ? "#cbd5e1" : accent}`,
-        backgroundColor: isCancelled
-          ? "#f8f9fb"
-          : isNow
-            ? hexToRgba(accent, 0.12)
-            : isPast
-              ? hexToRgba(accent, 0.04)
-              : hexToRgba(accent, 0.08),
-        borderTop: `1px solid ${hexToRgba(accent, isCancelled ? 0.08 : 0.15)}`,
-        borderRight: `1px solid ${hexToRgba(accent, isCancelled ? 0.08 : 0.15)}`,
-        borderBottom: `1px solid ${hexToRgba(accent, isCancelled ? 0.08 : 0.15)}`,
+    <div
+      role="button"
+      tabIndex={0}
+      onClick={onClick}
+      onKeyDown={(e) => {
+        if (e.key === "Enter" || e.key === " ") onClick();
       }}
+      style={getBlockStyle()}
+      className="group hover:shadow-md hover:z-10"
     >
-      {isNow && (
-        <div
-          className="pointer-events-none absolute inset-y-0 left-0 w-[3px] animate-status-pulse"
-          style={{ backgroundColor: accent }}
-        />
-      )}
-
-      <div className="px-2 py-1">
-        {isCompact ? (
-          /* Single line for short blocks */
+      <div className="flex h-full flex-col justify-center px-2 py-1">
+        {isTall ? (
+          <>
+            <p
+              className={`truncate text-xs font-semibold leading-tight ${
+                isCancelled
+                  ? "text-slate-400 line-through"
+                  : isPast
+                    ? "text-slate-500"
+                    : "text-slate-900"
+              }`}
+            >
+              {client}
+            </p>
+            <p
+              className={`mt-0.5 truncate text-[11px] leading-tight ${
+                isCancelled || isPast ? "text-slate-400" : "text-slate-600"
+              }`}
+            >
+              {service}
+            </p>
+            {blockHeight >= 64 && (
+              <p
+                className={`mt-0.5 truncate text-[10px] tabular-nums leading-tight ${
+                  isCancelled || isPast ? "text-slate-400" : "text-slate-500"
+                }`}
+              >
+                {timeRange}
+              </p>
+            )}
+          </>
+        ) : (
           <p
             className={`truncate text-[11px] font-medium leading-tight ${
               isCancelled
@@ -84,68 +161,17 @@ export function AppointmentBlock({
                   : "text-slate-800"
             }`}
           >
-            <span className="tabular-nums text-slate-500">{timeRange}</span>
-            <span className="mx-1 text-slate-300">·</span>
-            {appointment.client_name}
+            {client} · {timeRange.split(" – ")[0]}
           </p>
-        ) : isMedium ? (
-          /* Two lines for medium blocks */
-          <>
-            <p
-              className={`truncate text-[11px] leading-tight ${
-                isPast ? "text-slate-400" : "text-slate-500"
-              }`}
-            >
-              <span className="tabular-nums">{timeRange}</span>
-              <span className="mx-1">·</span>
-              <span
-                className={`font-medium ${
-                  isCancelled
-                    ? "text-slate-400 line-through"
-                    : isPast
-                      ? "text-slate-500"
-                      : "text-slate-800"
-                }`}
-              >
-                {appointment.client_name}
-              </span>
-            </p>
-            <p className="mt-0.5 truncate text-[11px] text-slate-400">
-              {serviceName}
-            </p>
-          </>
-        ) : (
-          /* Full layout for tall blocks */
-          <>
-            <p
-              className={`text-[11px] tabular-nums leading-tight ${
-                isPast ? "text-slate-400" : "text-slate-500"
-              }`}
-            >
-              {timeRange}
-            </p>
-            <p
-              className={`mt-0.5 truncate text-[13px] font-semibold leading-tight ${
-                isCancelled
-                  ? "text-slate-400 line-through"
-                  : isPast
-                    ? "text-slate-500"
-                    : "text-slate-900"
-              }`}
-            >
-              {appointment.client_name}
-            </p>
-            <p className="mt-0.5 truncate text-[12px] text-slate-500">
-              {serviceName}
-            </p>
-            {isCancelled && (
-              <p className="mt-1 text-[10px] font-medium text-[#714a58]">
-                {statusLabel.cancelled}
-              </p>
-            )}
-          </>
         )}
       </div>
-    </button>
+
+      {isNow && (
+        <div
+          className="absolute inset-x-0 bottom-0 h-[2px]"
+          style={{ backgroundColor: color }}
+        />
+      )}
+    </div>
   );
 }

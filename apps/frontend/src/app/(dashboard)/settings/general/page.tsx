@@ -7,7 +7,6 @@ import { Bell, Clock, ToggleLeft, ToggleRight } from "lucide-react";
 import { toast } from "sonner";
 import { api, companyScopedFetcher, companyScopedKey } from "@/lib/api";
 import { useAuth } from "@/lib/auth";
-import { RequireAdminAccess } from "@/components/role-guards";
 import { RequireActiveCompany } from "@/components/role-guards";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
@@ -106,9 +105,8 @@ export default function GeneralSettingsPage() {
   };
 
   return (
-    <RequireAdminAccess description="La configuracion general de empresa queda reservada para Talora.">
-      <RequireActiveCompany title="Selecciona una empresa" description="Selecciona una empresa para ver su configuracion.">
-        <div className="space-y-6">
+    <RequireActiveCompany title="Selecciona una empresa" description="Selecciona una empresa para ver su configuracion.">
+      <div className="space-y-6">
           {/* Horarios */}
           <Card className="rounded-[28px] border-[#e6e7ec] bg-white shadow-none">
             <CardContent className="p-6">
@@ -286,7 +284,6 @@ export default function GeneralSettingsPage() {
             </div>
           )}
         </div>
-      </RequireActiveCompany>
-    </RequireAdminAccess>
+    </RequireActiveCompany>
   );
 }

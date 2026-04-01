@@ -1,13 +1,13 @@
 import { Router } from 'express';
 import { pool } from '../db/pool';
 import { logger } from '../utils/logger';
-import { authMiddleware, getRequestCompanyId, requireCompanyScope, requireSuperadmin } from './middleware';
+import { authMiddleware, getRequestCompanyId, requireCompanyScope } from './middleware';
 import type { CompanySettings } from '@talora/shared';
 import { appEvents, type CompanySettingsUpdatedEvent } from '../events';
 
 export const companySettingsRouter = Router();
 
-companySettingsRouter.use(authMiddleware, requireSuperadmin, requireCompanyScope);
+companySettingsRouter.use(authMiddleware, requireCompanyScope);
 
 const DEFAULTS: Omit<CompanySettings, 'id' | 'company_id' | 'created_at' | 'updated_at'> = {
   opening_hour: '09:00',
