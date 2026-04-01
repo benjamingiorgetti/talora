@@ -102,6 +102,28 @@ Auth: JWT with roles `superadmin | admin_empresa | professional`. Multi-tenant b
 - Helpers: `apps/backend/src/__test-utils__/`
 - CI: `.github/workflows/test.yml` (tests) + `ci.yml` (typecheck + lint + build) on push/PR
 
+## Branding
+
+See `branding.md` for full spec. Key rules:
+
+- **Direction**: operational premium — black, white, gray. Color only where it aids readability.
+- **Brand assets**: `img/negro.png` (dark icon), `img/blanco.png` (light icon), `img/logo.png` (full lockup). In frontend use `/talora-brand.png` (copy of negro.png in public/).
+- **Never use** `talora-logo-transparent.png` (old colorful violet/turquoise — deprecated) or `talora-wordmark.png` (has white background baked in).
+- **Sidebar**: uses `/talora-brand.png` icon + "Talora" text in CSS. No PNG wordmarks.
+- **Colors**: 80-90% neutros. Pastels (lilac, sky, sand, mint, rose) only for KPI cards, badges, context panels.
+- **Typography**: IBM Plex Sans (body), Fraunces (display/titles).
+
+## Sidebar Architecture
+
+The sidebar lives in `apps/frontend/src/components/app-shell.tsx`. Design principles:
+
+- **Navigation first**. No cards, no heavy containers, no identity cards at the top.
+- **Expanded (260px)**: brand lockup → main nav (flat list) → divider → Configuracion → Admin (superadmin) → divider → Salir → identity footer (discreet).
+- **Collapsed (76px)**: intentional icon rail, not compressed expanded state. Icons centered, tooltips on hover.
+- **Edge toggle**: Linear/Notion pattern — circular button on sidebar right edge, visible on hover (`group-hover/sidebar`).
+- **Active state**: white pill with subtle shadow. No gradients, no borders, no glow.
+- **Icons**: bare Lucide icons, `h-[18px] w-[18px] strokeWidth={1.75}`. No icon boxes or containers.
+
 ## Code Style
 
 - In React components, declare all functions BEFORE any `useEffect` that references them and BEFORE any early return. Prevents Temporal Dead Zone crashes.
