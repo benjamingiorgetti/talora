@@ -685,7 +685,7 @@ export function AppShell({ children }: AppShellProps) {
         {/* ========================================================== */}
 
         <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden rounded-[28px] border border-[#e2e4ec] bg-[linear-gradient(180deg,#ffffff_0%,#fafbfe_100%)] shadow-[0_24px_80px_rgba(15,23,42,0.07)] sm:rounded-[32px]">
-          <header className="sticky top-0 z-20 rounded-t-[28px] border-b border-[#e6e7ee] bg-white/92 px-4 py-3.5 backdrop-blur sm:rounded-t-[32px] md:px-5 lg:px-8">
+          <header className="sticky top-0 z-20 rounded-t-[28px] border-b border-[#e6e7ee] bg-white/92 px-4 py-2.5 backdrop-blur sm:rounded-t-[32px] md:px-5 lg:px-8">
             <div className="flex flex-wrap items-center justify-between gap-4">
               <div className="flex min-w-0 items-center gap-3">
                 <Button
@@ -699,7 +699,7 @@ export function AppShell({ children }: AppShellProps) {
                 </Button>
                 <div className="min-w-0">
                   <p className="text-xs font-medium uppercase tracking-[0.18em] text-slate-400">{topbarEyebrow}</p>
-                  <h1 className="font-display truncate text-[1.8rem] leading-none text-slate-950 sm:text-[2rem] lg:text-[2.15rem]">{topbarTitle}</h1>
+                  <h1 className="truncate text-[1.3rem] font-semibold leading-none text-slate-950 sm:text-[1.45rem] lg:text-[1.55rem]">{topbarTitle}</h1>
                 </div>
               </div>
 

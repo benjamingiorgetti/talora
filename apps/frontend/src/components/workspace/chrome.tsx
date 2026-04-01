@@ -5,9 +5,27 @@ import type { ReactNode } from "react";
 import { Card, CardContent } from "@/components/ui/card";
 import { cn } from "@/lib/utils";
 
-type Tone = "neutral" | "lilac" | "sky" | "sand" | "mint" | "rose";
+export type Tone = "neutral" | "lilac" | "sky" | "sand" | "mint" | "rose";
 
-const toneStyles: Record<
+export const toneAccentColor: Record<Tone, string> = {
+  neutral: "#8b919e",
+  lilac: "#7c5cbf",
+  sky: "#4a8fad",
+  sand: "#b08a4c",
+  mint: "#4a8f5a",
+  rose: "#b05a70",
+};
+
+export const toneEmphasisBg: Record<Tone, string> = {
+  neutral: "#f5f6f8",
+  lilac: "#f5f0ff",
+  sky: "#edf7fc",
+  sand: "#faf5ec",
+  mint: "#eef8f0",
+  rose: "#fdf2f5",
+};
+
+export const toneStyles: Record<
   Tone,
   {
     metric: string;

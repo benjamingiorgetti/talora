@@ -3,57 +3,50 @@
 import { useEffect, useMemo, useState } from "react";
 import { usePathname, useRouter } from "next/navigation";
 import useSWR from "swr";
-import type { Appointment, Professional } from "@talora/shared";
-import { ChevronLeft, ChevronRight } from "lucide-react";
-import { Button } from "@/components/ui/button";
-import { LoadingSpinner } from "@/components/ui/loading-spinner";
+import type { Professional } from "@talora/shared";
+import { AnimatePresence, motion } from "framer-motion";
 import { companyScopedFetcher, companyScopedKey } from "@/lib/api";
 import { useAuth } from "@/lib/auth";
+import { LoadingSpinner } from "@/components/ui/loading-spinner";
 import { WorkspaceErrorState } from "@/components/workspace/error-state";
-import { WeekStrip, WeekStripMobile } from "./_components/week-strip";
-import { DayDetail } from "./_components/day-detail";
+import { fadeIn } from "@/lib/motion";
+import { CalendarHeader } from "./_components/calendar-header";
+import { CalendarDayView } from "./_components/calendar-day-view";
+import { CalendarWeekView } from "./_components/calendar-week-view";
+import { CalendarTeamView } from "./_components/calendar-team-view";
+import { AppointmentDetailSheet } from "./_components/appointment-detail-sheet";
+import {
+  DEFAULT_BUSINESS_START,
+  DEFAULT_BUSINESS_END,
+} from "./_components/time-grid-constants";
+import type {
+  AppointmentItem,
+  BoardProfessional,
+  CalendarViewMode,
+} from "./_components/calendar-shared-types";
 import {
   UNASSIGNED_PROFESSIONAL_ID,
   buildCalendarDays,
-  formatWeekRange,
-  getAccentColor,
-  getDateKey,
-  getTodayIndex,
-  hexToRgba,
-  sameDay,
   startOfWeek,
 } from "./_components/utils";
-
-type AppointmentItem = Appointment & {
-  professional_name?: string | null;
-  service_name?: string | null;
-};
-
-type BoardProfessional = {
-  id: string;
-  name: string;
-  specialty?: string | null;
-  color_hex: string | null;
-  calendar_id?: string;
-  is_active: boolean;
-};
 
 export default function WorkspaceCalendarPage() {
   const pathname = usePathname();
   const router = useRouter();
   const { activeCompanyId, session } = useAuth();
-  const [offsetWeeks, setOffsetWeeks] = useState(0);
+
+  // ── Core state ──
+  const [view, setView] = useState<CalendarViewMode>("day");
+  const [currentDate, setCurrentDate] = useState(() => new Date());
   const [selectedProfessionalId, setSelectedProfessionalId] = useState("all");
-  const [selectedDayIndex, setSelectedDayIndex] = useState(0);
+  const [detailAppointment, setDetailAppointment] =
+    useState<AppointmentItem | null>(null);
+
   const isProfessionalSession = session?.role === "professional";
   const sessionProfessionalId = session?.professionalId ?? null;
 
-  // ── Week boundaries ──
-  const weekStart = useMemo(() => {
-    const current = startOfWeek(new Date());
-    current.setDate(current.getDate() + offsetWeeks * 7);
-    return current;
-  }, [offsetWeeks]);
+  // ── Week boundaries (always fetch full week for smooth view switching) ──
+  const weekStart = useMemo(() => startOfWeek(currentDate), [currentDate]);
 
   const weekEnd = useMemo(() => {
     const end = new Date(weekStart);
@@ -62,7 +55,10 @@ export default function WorkspaceCalendarPage() {
     return end;
   }, [weekStart]);
 
-  const calendarDays = useMemo(() => buildCalendarDays(weekStart), [weekStart]);
+  const calendarDays = useMemo(
+    () => buildCalendarDays(weekStart),
+    [weekStart]
+  );
 
   // ── Data fetching ──
   const { data: professionals, error: professionalsError } = useSWR(
@@ -116,7 +112,10 @@ export default function WorkspaceCalendarPage() {
       (a) => !a.professional_id || !professionalMap.has(a.professional_id)
     );
 
-    if (hasUnassigned && selectedProfessionalId === "all") {
+    if (
+      hasUnassigned &&
+      (selectedProfessionalId === "all" || view === "team")
+    ) {
       baseRows.push({
         id: UNASSIGNED_PROFESSIONAL_ID,
         name: "Sin asignar",
@@ -126,40 +125,27 @@ export default function WorkspaceCalendarPage() {
       });
     }
 
-    if (selectedProfessionalId === "all") return baseRows;
-    return baseRows.filter((p) => p.id === selectedProfessionalId);
+    return baseRows;
   }, [
     activeProfessionals,
     professionalMap,
     selectedProfessionalId,
     sortedAppointments,
+    view,
   ]);
 
   const visibleAppointments = useMemo(() => {
-    if (selectedProfessionalId === "all") return sortedAppointments;
+    if (selectedProfessionalId === "all" || view === "team")
+      return sortedAppointments;
     return sortedAppointments.filter(
       (a) => a.professional_id === selectedProfessionalId
     );
-  }, [selectedProfessionalId, sortedAppointments]);
-
-  const appointmentCountByDay = useMemo(() => {
-    const counts = new Map<string, number>();
-    for (const a of visibleAppointments) {
-      const key = getDateKey(new Date(a.starts_at));
-      counts.set(key, (counts.get(key) ?? 0) + 1);
-    }
-    return counts;
-  }, [visibleAppointments]);
-
-  const maxDayCount = useMemo(() => {
-    let max = 0;
-    for (const count of appointmentCountByDay.values()) {
-      if (count > max) max = count;
-    }
-    return max;
-  }, [appointmentCountByDay]);
+  }, [selectedProfessionalId, sortedAppointments, view]);
 
   const weekTotal = visibleAppointments.length;
+
+  const businessStart = DEFAULT_BUSINESS_START;
+  const businessEnd = DEFAULT_BUSINESS_END;
 
   // ── Side effects ──
   useEffect(() => {
@@ -169,7 +155,7 @@ export default function WorkspaceCalendarPage() {
   }, [pathname, router]);
 
   useEffect(() => {
-    setOffsetWeeks(0);
+    setCurrentDate(new Date());
     setSelectedProfessionalId(sessionProfessionalId ?? "all");
   }, [activeCompanyId, sessionProfessionalId]);
 
@@ -185,11 +171,6 @@ export default function WorkspaceCalendarPage() {
       setSelectedProfessionalId("all");
     }
   }, [activeProfessionals, selectedProfessionalId, sessionProfessionalId]);
-
-  // Reset selected day when week changes
-  useEffect(() => {
-    setSelectedDayIndex(getTodayIndex(calendarDays));
-  }, [calendarDays]);
 
   // ── Loading / error ──
   if (professionalsError || appointmentsError) {
@@ -207,109 +188,88 @@ export default function WorkspaceCalendarPage() {
     return <LoadingSpinner className="min-h-[70vh]" />;
   }
 
-  const selectedDay = calendarDays[selectedDayIndex] ?? calendarDays[0];
+  // ── Handlers ──
+  function handleDateChange(date: Date) {
+    setCurrentDate(date);
+  }
+
+  function handleToday() {
+    setCurrentDate(new Date());
+  }
+
+  function handleAppointmentClick(appointment: AppointmentItem) {
+    setDetailAppointment(appointment);
+  }
 
   return (
-    <div className="min-h-0 flex-1 overflow-y-auto space-y-5 lg:space-y-6">
-      {/* ── Controls row ── */}
-      <div className="flex flex-wrap items-center justify-between gap-3">
-        <div className="flex items-center gap-2">
-          <Button
-            variant="outline"
-            size="icon"
-            onClick={() => setOffsetWeeks((c) => c - 1)}
-            className="h-10 w-10 rounded-2xl border-muted bg-white hover:bg-[#f6f7fb]"
+    <div className="flex min-h-0 flex-1 flex-col gap-4 overflow-hidden">
+      <CalendarHeader
+        view={view}
+        onViewChange={setView}
+        currentDate={currentDate}
+        onDateChange={handleDateChange}
+        onToday={handleToday}
+        professionals={boardProfessionals}
+        selectedProfessionalId={selectedProfessionalId}
+        onProfessionalChange={setSelectedProfessionalId}
+        isProfessionalSession={isProfessionalSession}
+        weekTotal={weekTotal}
+      />
+
+      <div className="min-h-0 flex-1">
+        <AnimatePresence mode="wait">
+          <motion.div
+            key={view}
+            variants={fadeIn}
+            initial="hidden"
+            animate="visible"
+            exit="exit"
+            className="h-full"
           >
-            <ChevronLeft className="h-4 w-4" />
-          </Button>
-          <span className="inline-flex h-10 items-center rounded-2xl border border-muted bg-white px-4 text-sm text-foreground">
-            {formatWeekRange(weekStart, weekEnd)}
-          </span>
-          <Button
-            variant="outline"
-            size="icon"
-            onClick={() => setOffsetWeeks((c) => c + 1)}
-            className="h-10 w-10 rounded-2xl border-muted bg-white hover:bg-[#f6f7fb]"
-          >
-            <ChevronRight className="h-4 w-4" />
-          </Button>
-
-          {weekTotal > 0 && (
-            <span className="hidden text-sm text-slate-500 sm:inline-flex">
-              {weekTotal === 1 ? "1 turno" : `${weekTotal} turnos`} esta semana
-            </span>
-          )}
-        </div>
-
-        <div className="flex flex-wrap items-center gap-2">
-          {!isProfessionalSession && (
-            <button
-              type="button"
-              onClick={() => setSelectedProfessionalId("all")}
-              className={`rounded-full border px-4 py-2 text-sm font-medium transition-colors ${
-                selectedProfessionalId === "all"
-                  ? "border-[#1c1d22] bg-[#1c1d22] text-white"
-                  : "border-[#dde1ea] bg-[#f7f8fc] text-slate-700 hover:border-[#cfd5e0] hover:bg-white"
-              }`}
-            >
-              Todos
-            </button>
-          )}
-          {activeProfessionals.map((professional, index) => {
-            const accent = getAccentColor(professional, index);
-            const isSelected = professional.id === selectedProfessionalId;
-            return (
-              <button
-                key={professional.id}
-                type="button"
-                onClick={() => {
-                  if (!isProfessionalSession) {
-                    setSelectedProfessionalId(professional.id);
-                  }
-                }}
-                disabled={isProfessionalSession}
-                className="rounded-full border px-4 py-2 text-sm font-medium transition-colors disabled:pointer-events-none disabled:opacity-50"
-                style={{
-                  borderColor: isSelected ? accent : hexToRgba(accent, 0.16),
-                  background: isSelected ? accent : hexToRgba(accent, 0.09),
-                  color: isSelected ? "#ffffff" : "#24323f",
-                }}
-              >
-                {professional.name}
-              </button>
-            );
-          })}
-        </div>
+            {view === "day" && (
+              <CalendarDayView
+                date={currentDate}
+                appointments={visibleAppointments}
+                professionals={boardProfessionals}
+                selectedProfessionalId={selectedProfessionalId}
+                businessStart={businessStart}
+                businessEnd={businessEnd}
+                onAppointmentClick={handleAppointmentClick}
+              />
+            )}
+            {view === "week" && (
+              <CalendarWeekView
+                calendarDays={calendarDays}
+                appointments={visibleAppointments}
+                professionals={boardProfessionals}
+                professionalMap={professionalMap}
+                businessStart={businessStart}
+                businessEnd={businessEnd}
+                onAppointmentClick={handleAppointmentClick}
+              />
+            )}
+            {view === "team" && (
+              <CalendarTeamView
+                date={currentDate}
+                appointments={sortedAppointments}
+                professionals={boardProfessionals}
+                businessStart={businessStart}
+                businessEnd={businessEnd}
+                onAppointmentClick={handleAppointmentClick}
+              />
+            )}
+          </motion.div>
+        </AnimatePresence>
       </div>
 
-      {/* ── Week strip (desktop) ── */}
-      <div className="hidden sm:block">
-        <WeekStrip
-          days={calendarDays}
-          selectedIndex={selectedDayIndex}
-          onSelect={setSelectedDayIndex}
-          appointmentCountByDay={appointmentCountByDay}
-          maxCount={maxDayCount}
-        />
-      </div>
-
-      {/* ── Week strip (mobile) ── */}
-      <div className="sm:hidden">
-        <WeekStripMobile
-          days={calendarDays}
-          selectedIndex={selectedDayIndex}
-          onSelect={setSelectedDayIndex}
-          appointmentCountByDay={appointmentCountByDay}
-        />
-      </div>
-
-      {/* ── Day detail ── */}
-      <DayDetail
-        day={selectedDay}
-        appointments={visibleAppointments}
+      <AppointmentDetailSheet
+        appointment={detailAppointment}
         professionals={boardProfessionals}
         professionalMap={professionalMap}
-        showAllProfessionals={selectedProfessionalId === "all"}
+        open={!!detailAppointment}
+        onOpenChange={(open) => {
+          if (!open) setDetailAppointment(null);
+        }}
       />
     </div>
   );
