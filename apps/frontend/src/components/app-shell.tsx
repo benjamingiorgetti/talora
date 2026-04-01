@@ -555,15 +555,10 @@ export function AppShell({ children }: AppShellProps) {
                   <NavLink key={item.href} item={item} pathname={pathname} collapsed={false} />
                 ))}
 
-                <SidebarDivider collapsed={false} />
-
-                {showSettings && (
-                  <NavLink item={settingsItem} pathname={pathname} collapsed={false} />
-                )}
-
                 {showAdmin && (
                   <>
-                    <p className="px-3.5 pb-0.5 pt-3 text-[12px] font-medium text-[#9A9AA0]">Admin</p>
+                    <SidebarDivider collapsed={false} />
+                    <p className="px-3.5 pb-0.5 pt-1 text-[12px] font-medium text-[#9A9AA0]">Admin</p>
                     {adminNav.map((item) => (
                       <NavLink key={item.href} item={item} pathname={pathname} collapsed={false} />
                     ))}
@@ -572,6 +567,9 @@ export function AppShell({ children }: AppShellProps) {
               </nav>
 
               {/* Bottom */}
+              {showSettings && (
+                <NavLink item={settingsItem} pathname={pathname} collapsed={false} />
+              )}
               <SidebarDivider collapsed={false} />
               <NavAction label="Salir" icon={LogOut} onClick={logout} collapsed={false} />
 
@@ -644,16 +642,11 @@ export function AppShell({ children }: AppShellProps) {
                 <NavLink key={item.href} item={item} pathname={pathname} collapsed={sidebarCollapsed} />
               ))}
 
-              <SidebarDivider collapsed={sidebarCollapsed} />
-
-              {showSettings && (
-                <NavLink item={settingsItem} pathname={pathname} collapsed={sidebarCollapsed} />
-              )}
-
               {showAdmin && (
                 <>
+                  <SidebarDivider collapsed={sidebarCollapsed} />
                   {!sidebarCollapsed && (
-                    <p className="px-3.5 pb-0.5 pt-3 text-[12px] font-medium text-[#9A9AA0]">Admin</p>
+                    <p className="px-3.5 pb-0.5 pt-1 text-[12px] font-medium text-[#9A9AA0]">Admin</p>
                   )}
                   {adminNav.map((item) => (
                     <NavLink key={item.href} item={item} pathname={pathname} collapsed={sidebarCollapsed} />
@@ -662,7 +655,10 @@ export function AppShell({ children }: AppShellProps) {
               )}
             </nav>
 
-            {/* ---- Bottom: salir + identity ---- */}
+            {/* ---- Bottom: settings + salir + identity ---- */}
+            {showSettings && (
+              <NavLink item={settingsItem} pathname={pathname} collapsed={sidebarCollapsed} />
+            )}
             <SidebarDivider collapsed={sidebarCollapsed} />
             <NavAction label="Salir" icon={LogOut} onClick={logout} collapsed={sidebarCollapsed} />
 
