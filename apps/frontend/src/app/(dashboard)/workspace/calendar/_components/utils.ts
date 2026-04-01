@@ -147,3 +147,123 @@ export function getTodayIndex(calendarDays: CalendarDay[]): number {
   const index = calendarDays.findIndex((day) => day.key === todayKey);
   return index >= 0 ? index : 0;
 }
+
+// ── Grid constants ──
+
+export const HOUR_HEIGHT = 64;
+export const MIN_BLOCK_HEIGHT = 24;
+export const TIME_RAIL_WIDTH = 56;
+
+// ── Grid math ──
+
+export function parseHourString(h: string): number {
+  const [hours, minutes] = h.split(":").map(Number);
+  return hours * 60 + (minutes ?? 0);
+}
+
+export function timeToMinutes(isoString: string): number {
+  const d = new Date(isoString);
+  return d.getHours() * 60 + d.getMinutes();
+}
+
+export function minutesToPx(
+  minutes: number,
+  openMinutes: number,
+  hourHeight: number = HOUR_HEIGHT,
+): number {
+  return ((minutes - openMinutes) / 60) * hourHeight;
+}
+
+export type GridHour = { hour: number; label: string };
+
+export function gridHours(openHour: string, closeHour: string): GridHour[] {
+  const openMin = parseHourString(openHour);
+  const closeMin = parseHourString(closeHour);
+  const hours: GridHour[] = [];
+  for (let m = openMin; m < closeMin; m += 60) {
+    const h = Math.floor(m / 60);
+    hours.push({
+      hour: h,
+      label: `${String(h).padStart(2, "0")}:00`,
+    });
+  }
+  return hours;
+}
+
+export type OverlapInfo = { column: number; totalColumns: number };
+
+export function getOverlapGroups<T extends { id: string; starts_at: string; ends_at: string }>(
+  appointments: T[],
+): Map<string, OverlapInfo> {
+  if (appointments.length === 0) return new Map();
+
+  const sorted = [...appointments].sort((a, b) => {
+    const diff = new Date(a.starts_at).getTime() - new Date(b.starts_at).getTime();
+    if (diff !== 0) return diff;
+    return (
+      new Date(b.ends_at).getTime() -
+      new Date(b.starts_at).getTime() -
+      (new Date(a.ends_at).getTime() - new Date(a.starts_at).getTime())
+    );
+  });
+
+  const result = new Map<string, OverlapInfo>();
+  const columnEnds: number[] = [];
+  const clusterMembers: string[][] = [];
+  let clusterEnd = 0;
+  let currentCluster: string[] = [];
+
+  for (const appt of sorted) {
+    const start = new Date(appt.starts_at).getTime();
+    const end = new Date(appt.ends_at).getTime();
+
+    if (start >= clusterEnd && currentCluster.length > 0) {
+      const totalCols = columnEnds.length;
+      for (const id of currentCluster) {
+        const info = result.get(id)!;
+        result.set(id, { ...info, totalColumns: totalCols });
+      }
+      clusterMembers.push(currentCluster);
+      currentCluster = [];
+      columnEnds.length = 0;
+    }
+
+    let placed = false;
+    for (let c = 0; c < columnEnds.length; c++) {
+      if (columnEnds[c] <= start) {
+        columnEnds[c] = end;
+        result.set(appt.id, { column: c, totalColumns: 0 });
+        currentCluster.push(appt.id);
+        placed = true;
+        break;
+      }
+    }
+
+    if (!placed) {
+      const col = columnEnds.length;
+      columnEnds.push(end);
+      result.set(appt.id, { column: col, totalColumns: 0 });
+      currentCluster.push(appt.id);
+    }
+
+    clusterEnd = Math.max(clusterEnd, end);
+  }
+
+  if (currentCluster.length > 0) {
+    const totalCols = columnEnds.length;
+    for (const id of currentCluster) {
+      const info = result.get(id)!;
+      result.set(id, { ...info, totalColumns: totalCols });
+    }
+  }
+
+  return result;
+}
+
+export function formatDayLong(date: Date): string {
+  return date.toLocaleDateString("es-AR", {
+    weekday: "long",
+    day: "numeric",
+    month: "long",
+  });
+}
