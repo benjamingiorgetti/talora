@@ -215,7 +215,7 @@ function KanbanColumnView({
   isLoading: boolean;
 }) {
   return (
-    <div className="flex min-w-[260px] flex-1 flex-col rounded-[24px] border border-[#e6e7ec] bg-[linear-gradient(180deg,#f9fafb_0%,#f3f4f8_100%)] p-4">
+    <div className="flex min-h-0 min-w-[260px] flex-1 flex-col rounded-[24px] border border-[#e6e7ec] bg-[linear-gradient(180deg,#f9fafb_0%,#f3f4f8_100%)] p-4">
       {/* Column header */}
       <div className="mb-3 flex items-center gap-2">
         <span
@@ -231,7 +231,7 @@ function KanbanColumnView({
       </div>
 
       {/* Cards */}
-      <div className="flex flex-col gap-2.5">
+      <div className="flex min-h-0 flex-1 flex-col gap-2.5 overflow-y-auto">
         {isLoading ? (
           <>
             <SkeletonCard />
@@ -505,7 +505,7 @@ export default function GrowthPage() {
 
   return (
     <>
-      <PageEntrance className="min-h-0 flex-1 overflow-y-auto space-y-5 lg:space-y-6">
+      <PageEntrance className="flex min-h-0 flex-1 flex-col space-y-5 lg:space-y-6 overflow-hidden">
         {/* Top bar */}
         <div className="flex flex-wrap items-center gap-3">
           {/* Tab: CRM (active) */}
@@ -652,7 +652,7 @@ export default function GrowthPage() {
         )}
 
         {/* Kanban board */}
-        <div className="flex gap-4 overflow-x-auto pb-4 -mx-3 px-3 sm:-mx-4 sm:px-4 md:-mx-6 md:px-6 lg:-mx-8 lg:px-8">
+        <div className="flex min-h-0 flex-1 gap-4 overflow-x-auto pb-4 -mx-3 px-3 sm:-mx-4 sm:px-4 md:-mx-6 md:px-6 lg:-mx-8 lg:px-8">
           {columns.map((column) => (
             <KanbanColumnView
               key={column.id}
