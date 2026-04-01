@@ -1,8 +1,10 @@
 "use client";
 
+import Image from "next/image";
 import { useState, useEffect, useRef } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { Menu, X } from "lucide-react";
+import brandLogo from "../../../../../img/logo.png";
 import { Button } from "@/components/ui/button";
 import { nav } from "@/lib/content";
 import { cn } from "@/lib/utils";
@@ -84,13 +86,14 @@ export function Navbar() {
           <div className="flex h-full items-center justify-between">
             {/* Logo */}
             <a href="/" className="flex items-center shrink-0">
-              <img
-                src="/images/logo-talora.png"
+              <Image
+                src={brandLogo}
                 alt="Talora"
-                height={48}
+                width={118}
+                height={36}
                 className={cn(
-                  "h-12 w-auto transition-all duration-300",
-                  scrolled ? "h-9" : ""
+                  "h-auto w-[108px] transition-all duration-300",
+                  scrolled ? "w-[92px]" : ""
                 )}
               />
             </a>

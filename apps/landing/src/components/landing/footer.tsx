@@ -1,3 +1,5 @@
+import Image from "next/image";
+import brandLogo from "../../../../../img/logo.png";
 import { footer, nav } from "@/lib/content";
 import { Button } from "@/components/ui/button";
 
@@ -8,11 +10,12 @@ export function Footer() {
         <div className="grid gap-6 sm:grid-cols-2 sm:gap-8 md:grid-cols-4 md:gap-10">
           {/* Brand */}
           <div>
-            <img
-              src="/images/logo-talora.png"
+            <Image
+              src={brandLogo}
               alt="Talora"
-              height={56}
-              className="h-14 w-auto"
+              width={132}
+              height={40}
+              className="h-auto w-[118px]"
             />
             <p className="mt-4 text-sm text-gray-medium leading-relaxed">
               {footer.tagline}

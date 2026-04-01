@@ -39,6 +39,8 @@ import { CompanySwitcherDialog } from "@/components/company-switcher-dialog";
 import { cn } from "@/lib/utils";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { useWebSocket } from "@/hooks/useWebSocket";
+import brandLogo from "../../../../img/logo.png";
+import brandBlack from "../../../../img/negro.png";
 
 interface AppShellProps {
   children: React.ReactNode;
@@ -192,7 +194,7 @@ function BrandLockup({
       {collapsed ? (
         <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-[14px] border border-[#dfe2ea] bg-white shadow-[0_8px_20px_rgba(15,23,42,0.05)]">
           <Image
-            src="/talora-icon.png"
+            src={brandBlack}
             alt="Talora"
             width={22}
             height={22}
@@ -202,11 +204,11 @@ function BrandLockup({
       ) : (
         <div className="flex min-h-14 items-center">
           <Image
-            src="/talora-wordmark.png"
+            src={brandLogo}
             alt="Talora"
             width={148}
-            height={54}
-            className="h-auto w-[136px] object-contain"
+            height={46}
+            className="h-auto w-[132px] object-contain"
           />
         </div>
       )}
@@ -235,7 +237,7 @@ function SidebarIdentityCard({
           )}
           <div className="absolute -bottom-1 -right-1 flex h-4.5 w-4.5 items-center justify-center rounded-full border border-[#dfe2ea] bg-white shadow-sm">
             <Image
-              src="/talora-icon.png"
+              src={brandBlack}
               alt=""
               width={10}
               height={10}

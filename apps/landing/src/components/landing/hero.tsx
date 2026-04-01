@@ -1,8 +1,10 @@
 "use client";
 
 import { useState, useEffect, useRef } from "react";
+import Image from "next/image";
 import { motion, AnimatePresence } from "framer-motion";
 import { Phone, Video, Paperclip, Mic, TrendingUp, CheckCircle2 } from "lucide-react";
+import brandWhite from "../../../../../img/blanco.png";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { hero } from "@/lib/content";
@@ -152,7 +154,7 @@ function WhatsAppMockup() {
           {/* WhatsApp header */}
           <div className="flex items-center gap-2 bg-[#075E54] px-3 pt-[44px] pb-3 flex-shrink-0">
             <div className="h-8 w-8 rounded-full bg-[#25D366] flex items-center justify-center flex-shrink-0 overflow-hidden">
-              <img src="/images/icono-blanco.png" alt="Talora" className="h-5 w-5 object-contain" />
+              <Image src={brandWhite} alt="Talora" width={20} height={20} className="h-5 w-5 object-contain" />
             </div>
             <div className="flex-1 min-w-0">
               <p className="text-[13px] font-semibold text-white leading-none">Talora</p>

@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import useSWR from "swr";
 import type { ClientAnalytics, SlotFillOpportunity, SlotFillSettings } from "@talora/shared";
 import {
@@ -89,6 +89,64 @@ function filterClients(clients: ClientAnalytics[], query: string): ClientAnalyti
       (c.client_name ?? "").toLowerCase().includes(q) ||
       (c.client_phone ?? "").toLowerCase().includes(q)
   );
+}
+
+function getSlotFillStatus(settings: SlotFillSettings | undefined): {
+  enabled: boolean;
+  autoContactActive: boolean;
+  badgeLabel: string;
+  triggerBadgeLabel: string;
+  primaryActionLabel: string;
+  secondaryActionLabel: string | null;
+  description: string;
+  note: string;
+  tone: "disabled" | "active" | "manual";
+} {
+  const enabled = settings?.slot_fill_enabled === true;
+  const autoContactActive = enabled && settings?.slot_fill_manual_review === false;
+
+  if (!enabled) {
+    return {
+      enabled: false,
+      autoContactActive: false,
+      badgeLabel: "Desactivado",
+      triggerBadgeLabel: "Off",
+      primaryActionLabel: "Activar auto-contacto",
+      secondaryActionLabel: null,
+      description:
+        "Cuando se libera un turno con más de 2 horas de anticipación, Talora busca clientes compatibles para intentar cubrir esa cancelación.",
+      note: "Hoy este flujo está apagado. No se enviarán mensajes ni se generarán oportunidades automáticas.",
+      tone: "disabled",
+    };
+  }
+
+  if (autoContactActive) {
+    return {
+      enabled: true,
+      autoContactActive: true,
+      badgeLabel: "Auto-contacto activo",
+      triggerBadgeLabel: "Auto",
+      primaryActionLabel: "Pasar a revisión manual",
+      secondaryActionLabel: "Desactivar cobertura",
+      description:
+        "Si se libera un turno, Talora le escribe automáticamente al mejor candidato para intentar cubrir esa cancelación.",
+      note: "Solo se envía 1 mensaje por cancelación. No es un envío masivo del CRM.",
+      tone: "active",
+    };
+  }
+
+  return {
+    enabled: true,
+    autoContactActive: false,
+    badgeLabel: "Revisión manual",
+    triggerBadgeLabel: "Manual",
+    primaryActionLabel: "Activar auto-contacto",
+    secondaryActionLabel: "Desactivar cobertura",
+    description:
+      "Si se libera un turno, Talora prepara la oportunidad y la deja lista para que vos revises y decidas a quién escribirle.",
+    note: "No se envían mensajes hasta que vos lo confirmes. No es un envío masivo del CRM.",
+    tone: "manual",
+  };
 }
 
 // ─── Sub-components ──────────────────────────────────────────────────────────
@@ -294,11 +352,13 @@ export default function GrowthPage() {
   const [modalOpen, setModalOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
   const [refreshing, setRefreshing] = useState(false);
+  const [slotFillPopoverOpen, setSlotFillPopoverOpen] = useState(false);
   const [slotFillTarget, setSlotFillTarget] = useState<{
     opportunityId: string;
     candidateId: string;
     clientName: string;
   } | null>(null);
+  const slotFillPopoverRef = useRef<HTMLDivElement | null>(null);
 
   // ── Data fetching ──────────────────────────────────────────────────────────
 
@@ -362,15 +422,43 @@ export default function GrowthPage() {
     setSlotFillTarget({ opportunityId, candidateId, clientName });
   };
 
-  const handleToggleAutoSend = async () => {
-    const newValue = !(growthSettings?.slot_fill_manual_review === false);
+  const updateSlotFillSettings = async (
+    updates: Partial<SlotFillSettings>,
+    successMessage: string
+  ) => {
     try {
-      await api.put("/growth/settings", { slot_fill_manual_review: !newValue });
+      await api.put("/growth/settings", updates);
       void mutateSettings();
-      toast.success(newValue ? "Envio automatico activado" : "Envio automatico desactivado");
+      setSlotFillPopoverOpen(false);
+      toast.success(successMessage);
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "No se pudo actualizar.");
     }
+  };
+
+  const handleSlotFillPrimaryAction = async () => {
+    if (!growthSettings?.slot_fill_enabled) {
+      await updateSlotFillSettings(
+        { slot_fill_enabled: true, slot_fill_manual_review: false },
+        "Cobertura automática activada."
+      );
+      return;
+    }
+
+    const enableAutoContact = growthSettings.slot_fill_manual_review !== false;
+    await updateSlotFillSettings(
+      { slot_fill_enabled: true, slot_fill_manual_review: !enableAutoContact },
+      enableAutoContact
+        ? "Auto-contacto activado para cubrir cancelaciones."
+        : "Las cancelaciones quedarán en revisión manual."
+    );
+  };
+
+  const handleSlotFillDisable = async () => {
+    await updateSlotFillSettings(
+      { slot_fill_enabled: false },
+      "Cobertura de cancelaciones desactivada."
+    );
   };
 
   const handleSlotFillDismiss = async (opportunityId: string) => {
@@ -387,6 +475,31 @@ export default function GrowthPage() {
 
   const filtered = filterClients(allClients ?? [], searchQuery);
   const columns = buildColumns(filtered);
+  const slotFillStatus = getSlotFillStatus(growthSettings);
+
+  useEffect(() => {
+    if (!slotFillPopoverOpen) return;
+
+    const handlePointerDown = (event: MouseEvent) => {
+      if (!slotFillPopoverRef.current?.contains(event.target as Node)) {
+        setSlotFillPopoverOpen(false);
+      }
+    };
+
+    const handleEscape = (event: KeyboardEvent) => {
+      if (event.key === "Escape") {
+        setSlotFillPopoverOpen(false);
+      }
+    };
+
+    document.addEventListener("mousedown", handlePointerDown);
+    document.addEventListener("keydown", handleEscape);
+
+    return () => {
+      document.removeEventListener("mousedown", handlePointerDown);
+      document.removeEventListener("keydown", handleEscape);
+    };
+  }, [slotFillPopoverOpen]);
 
   // ── Render ─────────────────────────────────────────────────────────────────
 
@@ -427,20 +540,93 @@ export default function GrowthPage() {
             Actualizar
           </Button>
 
-          {/* Auto-send toggle */}
-          <Button
-            variant="outline"
-            onClick={() => void handleToggleAutoSend()}
-            className={cn(
-              "h-10 rounded-2xl border-[#dde1ea] px-4 text-sm transition-colors",
-              growthSettings?.slot_fill_manual_review === false
-                ? "bg-emerald-50 border-emerald-200 text-emerald-700 hover:bg-emerald-100"
-                : "bg-white text-slate-500 hover:bg-[#f6f7fb]"
+          <div className="relative" ref={slotFillPopoverRef}>
+            <button
+              type="button"
+              onClick={() => setSlotFillPopoverOpen((current) => !current)}
+              aria-expanded={slotFillPopoverOpen}
+              aria-label="Abrir detalles de cobertura de cancelaciones"
+              className={cn(
+                "flex h-9 items-center gap-1.5 rounded-xl border bg-white px-2.5 text-[13px] shadow-[0_1px_2px_rgba(15,23,42,0.04)] transition-colors",
+                slotFillStatus.tone === "active" && "border-emerald-200 text-emerald-700 hover:bg-emerald-50",
+                slotFillStatus.tone === "manual" && "border-[#dde1ea] text-slate-600 hover:bg-[#f6f7fb]",
+                slotFillStatus.tone === "disabled" && "border-amber-200 text-amber-700 hover:bg-amber-50"
+              )}
+            >
+              <Zap className="h-4 w-4" />
+              <span
+                className={cn(
+                  "rounded-full border px-1.5 py-0.5 text-[10px] font-semibold leading-none",
+                  slotFillStatus.tone === "active" && "border-emerald-200 bg-emerald-50 text-emerald-700",
+                  slotFillStatus.tone === "manual" && "border-slate-200 bg-white text-slate-600",
+                  slotFillStatus.tone === "disabled" && "border-amber-200 bg-amber-50 text-amber-700"
+                )}
+              >
+                {slotFillStatus.triggerBadgeLabel}
+              </span>
+            </button>
+
+            {slotFillPopoverOpen && (
+              <div className="absolute right-0 top-[calc(100%+8px)] z-20 w-[320px] origin-top-right rounded-[22px] border border-[#e6e7ec] bg-white p-3.5 shadow-[0_18px_50px_rgba(15,23,42,0.12)] animate-in fade-in-0 zoom-in-95 slide-in-from-top-2 duration-150">
+                <div className="flex items-start gap-3">
+                  <div
+                    className={cn(
+                      "mt-0.5 flex h-9 w-9 shrink-0 items-center justify-center rounded-[13px] border",
+                      slotFillStatus.tone === "active" && "border-emerald-200 bg-emerald-50 text-emerald-700",
+                      slotFillStatus.tone === "manual" && "border-slate-200 bg-slate-50 text-slate-600",
+                      slotFillStatus.tone === "disabled" && "border-amber-200 bg-amber-50 text-amber-700"
+                    )}
+                  >
+                    <Zap className="h-4 w-4" />
+                  </div>
+
+                  <div className="min-w-0">
+                    <div className="flex flex-wrap items-center gap-2">
+                      <h3 className="text-sm font-semibold text-slate-950">
+                        Cubrir cancelaciones
+                      </h3>
+                      <span
+                        className={cn(
+                          "rounded-full border px-2 py-0.5 text-[11px] font-semibold",
+                          slotFillStatus.tone === "active" && "border-emerald-200 bg-emerald-50 text-emerald-700",
+                          slotFillStatus.tone === "manual" && "border-slate-200 bg-white text-slate-600",
+                          slotFillStatus.tone === "disabled" && "border-amber-200 bg-amber-50 text-amber-700"
+                        )}
+                      >
+                        {slotFillStatus.badgeLabel}
+                      </span>
+                    </div>
+
+                    <p className="mt-1.5 text-[13px] leading-5 text-slate-600">
+                      {slotFillStatus.description}
+                    </p>
+                    <p className="mt-2 text-[11px] leading-5 text-slate-500">
+                      {slotFillStatus.note}
+                    </p>
+                  </div>
+                </div>
+
+                <div className="mt-4 flex flex-col gap-2 border-t border-[#eef0f4] pt-3">
+                  <Button
+                    onClick={() => void handleSlotFillPrimaryAction()}
+                    className="h-9 rounded-xl bg-slate-900 text-white hover:bg-slate-800"
+                  >
+                    {slotFillStatus.primaryActionLabel}
+                  </Button>
+
+                  {slotFillStatus.secondaryActionLabel && (
+                    <Button
+                      variant="outline"
+                      onClick={() => void handleSlotFillDisable()}
+                      className="h-9 rounded-xl border-[#dde1ea] text-slate-600 hover:bg-[#f6f7fb]"
+                    >
+                      {slotFillStatus.secondaryActionLabel}
+                    </Button>
+                  )}
+                </div>
+              </div>
             )}
-          >
-            <Zap className="mr-2 h-4 w-4" />
-            {growthSettings?.slot_fill_manual_review === false ? "Envio auto ON" : "Envio auto OFF"}
-          </Button>
+          </div>
         </div>
 
         {/* Slot fill opportunities */}

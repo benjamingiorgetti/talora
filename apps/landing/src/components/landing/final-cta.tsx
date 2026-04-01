@@ -1,6 +1,8 @@
 "use client";
 
+import Image from "next/image";
 import { CheckCircle2 } from "lucide-react";
+import brandWhite from "../../../../../img/blanco.png";
 import { Button } from "@/components/ui/button";
 import { SectionWrapper } from "@/components/shared/section-wrapper";
 import { FadeIn } from "@/components/shared/fade-in";
@@ -13,8 +15,8 @@ export function FinalCTA() {
       <FadeIn>
         <div className="relative mx-auto max-w-2xl text-center">
           {/* Brand icon */}
-          <img
-            src="/images/icono-blanco-cta.png"
+          <Image
+            src={brandWhite}
             alt="Talora"
             width={44}
             height={44}
