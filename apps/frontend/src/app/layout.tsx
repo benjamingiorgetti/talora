@@ -36,7 +36,7 @@ export const metadata: Metadata = {
     "software turnos",
     "talora",
   ],
-  icons: { icon: "/talora-icon.png" },
+  icons: { icon: "/icon.png", apple: "/apple-icon.png" },
   authors: [{ name: "Talora" }],
   creator: "Talora",
   openGraph: {

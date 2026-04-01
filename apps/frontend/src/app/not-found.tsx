@@ -1,13 +1,14 @@
 import Link from "next/link";
 import Image from "next/image";
+import brandBlack from "../../../../img/negro.png";
 
 export default function NotFound() {
   return (
-    <div className="flex min-h-dvh flex-col items-center justify-center bg-slate-50 px-4">
+    <div className="flex min-h-dvh flex-col items-center justify-center bg-[#F8F9FC] px-4">
       <div className="flex flex-col items-center gap-6 text-center">
-        <div className="flex h-16 w-16 items-center justify-center rounded-[22px] bg-emerald-950 shadow-[0_18px_36px_rgba(6,78,59,0.2)]">
+        <div className="flex h-16 w-16 items-center justify-center rounded-[22px] border border-[#E2E4EC] bg-white shadow-[0_18px_36px_rgba(17,19,24,0.08)]">
           <Image
-            src="/talora-logo-transparent.png"
+            src={brandBlack}
             alt="Talora"
             width={36}
             height={36}
@@ -36,7 +37,7 @@ export default function NotFound() {
           </Link>
           <Link
             href="/dashboard"
-            className="inline-flex h-11 items-center rounded-2xl bg-emerald-950 px-5 text-sm font-semibold text-white hover:bg-emerald-900"
+            className="inline-flex h-11 items-center rounded-2xl bg-[#1C1D22] px-5 text-sm font-semibold text-white hover:bg-[#111318]"
           >
             Ir al dashboard
           </Link>

@@ -1,4 +1,5 @@
 import Image from "next/image";
+import brandLogo from "../../../../../img/logo.png";
 import { footer, nav } from "@/lib/content";
 import { Button } from "@/components/ui/button";
 
@@ -9,7 +10,7 @@ export function Footer() {
         <div className="grid gap-8 md:grid-cols-[1.2fr_0.8fr_0.8fr] md:items-start">
           <div className="max-w-sm">
             <Image
-              src="/images/logo-talora.png"
+              src={brandLogo}
               alt="Talora"
               width={164}
               height={48}
@@ -31,7 +32,7 @@ export function Footer() {
                   <li key={link.label}>
                     <a
                       href={link.href}
-                      className="text-sm text-gray-medium hover:text-ink transition-colors"
+                      className="text-sm text-gray-medium transition-colors hover:text-ink"
                     >
                       {link.label}
                     </a>

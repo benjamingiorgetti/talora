@@ -1,12 +1,13 @@
 /**
- * One-time script to generate favicon assets and OG image from talora-icon.png.
+ * One-time script to generate favicon assets and OG image from the official Talora assets in /img.
  * Run: cd apps/frontend && bun run scripts/generate-favicons.ts
  */
 import sharp from "sharp";
 import { join } from "path";
 
 const ROOT = join(import.meta.dir, "..");
-const SOURCE = join(ROOT, "public", "talora-icon.png");
+const SOURCE = join(ROOT, "..", "..", "img", "negro.png");
+const OG_LOGO = join(ROOT, "..", "..", "img", "logo.png");
 
 async function generateIcons() {
   // 32x32 icon for Next.js file convention (auto-generates <link rel="icon">)
@@ -27,20 +28,18 @@ async function generateIcons() {
 async function generateOgImage() {
   const width = 1200;
   const height = 630;
-  const bgColor = "#022c22"; // emerald-950
+  const bgColor = "#F8F9FC";
 
-  // Use transparent logo for OG image (no square background)
-  const transparentLogo = join(ROOT, "public", "talora-logo-transparent.png");
-  const logoHeight = 300;
-  const logoBuffer = await sharp(transparentLogo)
-    .resize({ height: logoHeight, fit: "inside" })
+  const logoWidth = 420;
+  const logoBuffer = await sharp(OG_LOGO)
+    .resize({ width: logoWidth, fit: "inside" })
     .png()
     .toBuffer();
 
   const logoMeta = await sharp(logoBuffer).metadata();
-  const logoWidth = logoMeta.width ?? logoHeight;
+  const logoHeight = logoMeta.height ?? 160;
+  const resolvedLogoWidth = logoMeta.width ?? logoWidth;
 
-  // Create OG image: branded background with centered transparent logo
   await sharp({
     create: {
       width,
@@ -52,7 +51,7 @@ async function generateOgImage() {
     .composite([
       {
         input: logoBuffer,
-        left: Math.round((width - logoWidth) / 2),
+        left: Math.round((width - resolvedLogoWidth) / 2),
         top: Math.round((height - logoHeight) / 2),
       },
     ])
