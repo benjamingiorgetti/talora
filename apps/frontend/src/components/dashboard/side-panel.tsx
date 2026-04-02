@@ -20,44 +20,58 @@ export function DashboardReviewPanel({
   reviewQueue: Conversation[];
 }) {
   return (
-    <div className="rounded-xl border border-[#e2e4ec] bg-white">
-      <div className="px-4 py-3 pb-2.5">
-        <div className="flex items-center justify-between mb-2">
-          <h3 className="text-sm font-semibold text-slate-900">
+    <div className="rounded-2xl border border-[#dde1ea] bg-white p-5">
+      <div className="flex items-center justify-between mb-3">
+        <div className="flex items-center gap-2">
+          <h3 className="font-display text-[1.1rem] font-semibold text-[#111318]">
             Casos en revision
           </h3>
-          <Link
-            href="/whatsapp"
-            className="inline-flex items-center gap-0.5 text-[11px] font-medium text-slate-500 hover:text-slate-700"
-          >
-            WhatsApp
-            <ArrowRight className="h-3 w-3" />
-          </Link>
+          {reviewQueue.length > 0 && (
+            <span className="rounded-full bg-[#ECEDF2] px-2 py-0.5 text-[11px] font-medium tabular-nums text-[#4B5563]">
+              {reviewQueue.length}
+            </span>
+          )}
         </div>
+        <Link
+          href="/whatsapp"
+          className="inline-flex items-center gap-0.5 text-[11px] font-medium text-[#6B7280] hover:text-[#111318]"
+        >
+          WhatsApp
+          <ArrowRight className="h-3 w-3" />
+        </Link>
+      </div>
 
-        {reviewQueue.length > 0 ? (
-          <div className="space-y-0">
-            {reviewQueue.map((c) => (
-              <div
-                key={c.id}
-                className="flex items-center justify-between gap-2 border-b border-[#f0f1f5] py-1.5 last:border-b-0"
-              >
-                <span className="min-w-0 flex-1 truncate text-[12px] font-medium text-slate-800">
+      {reviewQueue.length > 0 ? (
+        <div className="space-y-0">
+          {reviewQueue.map((c) => (
+            <div
+              key={c.id}
+              className="flex items-center justify-between gap-2 rounded-lg px-2 -mx-2 py-2 transition-colors hover:bg-[#F8F9FC]"
+            >
+              <div className="flex items-center gap-2.5 min-w-0 flex-1">
+                <span className="h-2 w-2 shrink-0 rounded-full bg-[#E0D4FF]" />
+                <span className="min-w-0 flex-1 truncate text-[13px] font-medium text-[#111318]">
                   {c.contact_name || c.phone_number}
                 </span>
-                <span className="shrink-0 text-[11px] tabular-nums text-slate-400">
-                  {formatActivity(c.last_message_at)}
-                </span>
-                <span className="shrink-0 rounded-full border border-sky-200 bg-sky-50 px-1.5 py-0.5 text-[10px] font-medium text-sky-700">
-                  En pausa
-                </span>
               </div>
-            ))}
+              <span className="shrink-0 text-[11px] tabular-nums text-[#6B7280]">
+                {formatActivity(c.last_message_at)}
+              </span>
+            </div>
+          ))}
+        </div>
+      ) : (
+        <div className="flex items-center justify-between rounded-xl bg-[#F8F9FC] px-5 py-4">
+          <div>
+            <p className="text-[14px] font-semibold text-[#111318]">
+              Todo al dia
+            </p>
+            <p className="mt-0.5 text-[11px] text-[#6B7280]">
+              El bot gestiona las conversaciones
+            </p>
           </div>
-        ) : (
-          <p className="text-[11px] text-slate-500">Todo al dia</p>
-        )}
-      </div>
+        </div>
+      )}
     </div>
   );
 }

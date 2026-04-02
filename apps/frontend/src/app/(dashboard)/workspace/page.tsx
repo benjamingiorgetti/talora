@@ -3,7 +3,7 @@
 import { useEffect, useMemo } from "react";
 import { usePathname, useRouter } from "next/navigation";
 import useSWR from "swr";
-import type { Appointment, Company, Conversation, DashboardMetrics, GrowthStats, Professional, WhatsAppInstance } from "@talora/shared";
+import type { Appointment, Conversation, DashboardMetrics, GrowthStats, Professional } from "@talora/shared";
 import { companyScopedFetcher, companyScopedKey } from "@/lib/api";
 import { LoadingSpinner } from "@/components/ui/loading-spinner";
 import { PageEntrance } from "@/components/ui/page-entrance";
@@ -14,23 +14,12 @@ import { DashboardToolbar } from "@/components/dashboard/toolbar";
 import { DashboardKpiStrip } from "@/components/dashboard/kpi-strip";
 import { DashboardAgendaPanel } from "@/components/dashboard/agenda-panel";
 import { DashboardReviewPanel } from "@/components/dashboard/side-panel";
-import { DashboardAtRiskTable } from "@/components/dashboard/at-risk-table";
+import { DashboardRetentionSummary, DashboardAtRiskTable } from "@/components/dashboard/at-risk-table";
 
 type WorkspaceAppointment = Appointment & {
   professional_name?: string | null;
   service_name?: string | null;
 };
-
-function formatBotActivity(isoDate: string | null | undefined): { label: string; tone: "green" | "yellow" | "red" } {
-  if (!isoDate) return { label: "Sin actividad", tone: "red" };
-  const diffMs = Date.now() - new Date(isoDate).getTime();
-  const diffMin = Math.floor(diffMs / 60_000);
-  if (diffMin < 1) return { label: "Bot activo", tone: "green" };
-  if (diffMin < 60) return { label: `Bot ${diffMin}m`, tone: diffMin < 30 ? "green" : "yellow" };
-  const diffH = Math.floor(diffMin / 60);
-  if (diffH < 24) return { label: `Bot ${diffH}h`, tone: diffH < 2 ? "yellow" : "red" };
-  return { label: `Bot ${Math.floor(diffH / 24)}d`, tone: "red" };
-}
 
 function getCurrentMonthRange() {
   const now = new Date();
@@ -70,10 +59,6 @@ export default function WorkspaceDashboardPage() {
     companyScopedKey("/dashboard/metrics", activeCompanyId),
     companyScopedFetcher<DashboardMetrics>
   );
-  const { data: company } = useSWR(
-    companyScopedKey("/companies/current", activeCompanyId),
-    companyScopedFetcher<Company>
-  );
   const { data: appointments, error: appointmentsError, mutate: mutateAppointments } = useSWR(
     companyScopedKey(appointmentsPath, activeCompanyId),
     companyScopedFetcher<WorkspaceAppointment[]>
@@ -81,10 +66,6 @@ export default function WorkspaceDashboardPage() {
   const { data: conversations } = useSWR(
     companyScopedKey(conversationsPath, activeCompanyId),
     companyScopedFetcher<Conversation[]>
-  );
-  const { data: instances } = useSWR(
-    isProfessional ? null : companyScopedKey("/instances", activeCompanyId),
-    companyScopedFetcher<WhatsAppInstance[]>
   );
   const { data: growthStats } = useSWR(
     companyScopedKey(`/growth/stats?from=${growthRange.from}&to=${growthRange.to}`, activeCompanyId),
@@ -124,13 +105,6 @@ export default function WorkspaceDashboardPage() {
     [pausedConversations]
   );
 
-  const connectedInstances = useMemo(
-    () => (instances ?? []).filter((i) => i.status === "connected"),
-    [instances]
-  );
-
-  const botActivity = formatBotActivity(metrics?.last_bot_activity_at);
-
   // ── Side effects ──
   useEffect(() => {
     if (pathname === "/workspace") {
@@ -153,43 +127,51 @@ export default function WorkspaceDashboardPage() {
   }
 
   return (
-    <PageEntrance className="mx-auto min-h-0 flex-1 overflow-y-auto max-w-[1120px] px-1">
-      {/* ── Toolbar ── */}
+    <PageEntrance className="mx-auto min-h-0 flex-1 overflow-y-auto max-w-[1120px]">
+      {/* ── Level 1: Toolbar ── */}
       <DashboardToolbar
         timeRange={timeRange}
         onTimeRangeChange={setTimeRange}
         professionals={professionals ?? []}
         professionalId={filterProfId}
         onProfessionalChange={setFilterProfId}
-        botActivity={botActivity}
-        whatsappConnected={connectedInstances.length > 0}
-        calendarConnected={company?.calendar_connected ?? false}
         isProfessional={isProfessional}
       />
 
-      {/* ── KPI Strip ── */}
-      <DashboardKpiStrip
-        todayCount={todayAppointments.length}
-        automationRate={metrics?.automation_rate ?? 0}
-        pausedCount={pausedConversations.length}
-        atRiskCount={growthStats?.clients_at_risk ?? 0}
-        isProfessional={isProfessional}
-      />
-
-      {/* ── Main content: agenda + side panel ── */}
-      <div className="grid gap-5 xl:grid-cols-[1.8fr_1fr] mt-3">
-        <DashboardAgendaPanel
-          appointments={filteredAppointments}
-          professionals={professionals ?? []}
-          timeRange={timeRange}
-        />
-        <DashboardReviewPanel
-          reviewQueue={reviewQueue}
+      {/* ── Level 2: KPI Overview ── */}
+      <div className="mt-1">
+        <DashboardKpiStrip
+          todayCount={todayAppointments.length}
+          automationRate={metrics?.automation_rate ?? 0}
+          pausedCount={pausedConversations.length}
+          atRiskCount={growthStats?.clients_at_risk ?? 0}
+          isProfessional={isProfessional}
         />
       </div>
 
-      {/* ── Dense table ── */}
-      <DashboardAtRiskTable />
+      {/* ── Level 3: Operational Zone ── */}
+      <section className="mt-8">
+        <div className="grid gap-5 lg:grid-cols-[1.6fr_1fr]">
+          <DashboardAgendaPanel
+            appointments={filteredAppointments}
+            professionals={professionals ?? []}
+            timeRange={timeRange}
+          />
+          <DashboardReviewPanel
+            reviewQueue={reviewQueue}
+          />
+        </div>
+      </section>
+
+      {/* ── Level 4: Retention Summary ── */}
+      <section className="mt-8">
+        <DashboardRetentionSummary />
+      </section>
+
+      {/* ── Level 5: Detail Table (below fold) ── */}
+      <section className="mt-6 mb-6">
+        <DashboardAtRiskTable />
+      </section>
     </PageEntrance>
   );
 }

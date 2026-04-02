@@ -95,16 +95,16 @@ const ICON_STROKE = 1.75;
 const navItemBase =
   "group flex items-center gap-3 rounded-[14px] px-3.5 py-2.5 text-[15px] font-medium transition-colors duration-150";
 const navItemActive =
-  "bg-white text-[#111111] shadow-[0_2px_8px_rgba(0,0,0,0.06)]";
+  "bg-white text-[#111111] shadow-[0_2px_10px_rgba(0,0,0,0.08)]";
 const navItemInactive =
-  "text-[#2B2B2B] hover:bg-[#EDEDF0]";
+  "text-[#1C1D22] hover:bg-[#EDEDF0]";
 
 const collapsedItemBase =
   "flex items-center justify-center rounded-[14px] p-2.5 transition-colors duration-150";
 const collapsedItemActive =
-  "bg-white text-[#111111] shadow-[0_2px_8px_rgba(0,0,0,0.06)]";
+  "bg-white text-[#111111] shadow-[0_2px_10px_rgba(0,0,0,0.08)]";
 const collapsedItemInactive =
-  "text-[#2B2B2B] hover:bg-[#EDEDF0]";
+  "text-[#1C1D22] hover:bg-[#EDEDF0]";
 
 /* ------------------------------------------------------------------ */
 /*  Helpers                                                            */
@@ -223,7 +223,7 @@ function SidebarDivider({ collapsed }: { collapsed: boolean }) {
     <div
       className={cn(
         "border-t border-[#E5E5EA]/60",
-        collapsed ? "mx-2 my-2" : "mx-3 my-3",
+        collapsed ? "mx-2 my-2.5" : "mx-3 my-3.5",
       )}
     />
   );
@@ -324,7 +324,7 @@ function BrandLockup({ collapsed }: { collapsed: boolean }) {
         className="h-7 w-7 rounded-lg object-contain"
         aria-hidden="true"
       />
-      <span className="text-[17px] font-semibold text-[#111111] tracking-[-0.01em]">Talora</span>
+      <span className="text-[17px] font-semibold text-[#111111] tracking-[0.01em]">Talora</span>
     </div>
   );
 }
@@ -681,7 +681,10 @@ export function AppShell({ children }: AppShellProps) {
         {/* ========================================================== */}
 
         <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden rounded-[28px] border border-[#e2e4ec] bg-[linear-gradient(180deg,#ffffff_0%,#fafbfe_100%)] shadow-[0_24px_80px_rgba(15,23,42,0.07)] sm:rounded-[32px]">
-          <header className="sticky top-0 z-20 rounded-t-[28px] border-b border-[#e6e7ee] bg-white/92 px-4 py-2.5 backdrop-blur sm:rounded-t-[32px] md:px-5 lg:px-8">
+          <header className={cn(
+            "sticky top-0 z-20 rounded-t-[28px] border-b border-[#e6e7ee] bg-white/92 backdrop-blur sm:rounded-t-[32px] md:px-5 lg:px-8",
+            pathname === "/dashboard" ? "px-4 py-2" : "px-4 py-2.5"
+          )}>
             <div className="flex flex-wrap items-center justify-between gap-4">
               <div className="flex min-w-0 items-center gap-3">
                 <Button
@@ -694,8 +697,20 @@ export function AppShell({ children }: AppShellProps) {
                   <PanelLeft className="h-4 w-4" />
                 </Button>
                 <div className="min-w-0">
-                  <p className="text-xs font-medium uppercase tracking-[0.18em] text-slate-400">{topbarEyebrow}</p>
-                  <h1 className="truncate text-[1.3rem] font-semibold leading-none text-slate-950 sm:text-[1.45rem] lg:text-[1.55rem]">{topbarTitle}</h1>
+                  {pathname !== "/dashboard" && (
+                    <p className="text-xs font-medium uppercase tracking-[0.18em] text-slate-400">{topbarEyebrow}</p>
+                  )}
+                  <h1 className={cn(
+                    "truncate font-semibold leading-none text-slate-950",
+                    pathname === "/dashboard"
+                      ? "text-[1.25rem] sm:text-[1.35rem]"
+                      : "text-[1.3rem] sm:text-[1.45rem] lg:text-[1.55rem]"
+                  )}>
+                    {topbarTitle}
+                  </h1>
+                  {pathname === "/dashboard" && (
+                    <p className="mt-0.5 text-[12px] text-[#4B5563]">Estado general de operacion, agenda y reactivacion</p>
+                  )}
                 </div>
               </div>
 
