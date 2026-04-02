@@ -312,7 +312,7 @@ export default function WorkspaceCalendarPage() {
   const weekTotal = visibleAppointments.length;
 
   return (
-    <div className="min-h-0 flex-1 overflow-y-auto space-y-4 lg:space-y-5">
+    <div className="min-h-0 flex-1 overflow-y-auto space-y-3 lg:space-y-3">
       {/* ── Desktop: Unified header ── */}
       <div className="hidden lg:block">
         <CalendarHeader

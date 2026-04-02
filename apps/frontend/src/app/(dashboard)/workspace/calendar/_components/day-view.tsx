@@ -13,7 +13,6 @@ import {
   sameDay,
 } from "./utils";
 import { TimeGrid, type GridColumn } from "./time-grid";
-import { CalendarDays } from "lucide-react";
 
 type AppointmentItem = Appointment & {
   professional_name?: string | null;
@@ -86,12 +85,12 @@ export function DayView({
   }, [isToday, openingMinutes, day.key]);
 
   return (
-    <div className="overflow-hidden rounded-2xl border border-[#e6e7ec] bg-white">
+    <div className="overflow-hidden">
       {/* Column headers */}
       {columns.length > 1 && (
-        <div className="flex border-b border-[#e6e7ec] bg-[#f7f8fc]">
+        <div className="flex border-b border-[#E2E4EC]">
           {/* Spacer for time rail */}
-          <div className="shrink-0" style={{ width: 58 }} />
+          <div className="shrink-0" style={{ width: 64 }} />
           {columns.map((col, i) => {
             const count = dayAppointments.filter(
               (a) =>
@@ -102,17 +101,17 @@ export function DayView({
             return (
               <div
                 key={col.id}
-                className={`flex flex-1 items-center gap-2 px-3 py-3 ${i > 0 ? "border-l border-[#e6e7ec]" : ""}`}
+                className={`flex flex-1 items-center gap-2.5 px-4 py-3 ${i > 0 ? "border-l border-[#E2E4EC]/60" : ""}`}
               >
                 <span
-                  className="h-2.5 w-2.5 shrink-0 rounded-full"
+                  className="h-2 w-2 shrink-0 rounded-full"
                   style={{ backgroundColor: col.color }}
                 />
-                <span className="truncate text-sm font-medium text-slate-900">
+                <span className="truncate text-[13px] font-semibold tracking-[-0.01em] text-[#1C1D22]">
                   {col.label}
                 </span>
                 {count > 0 && (
-                  <span className="rounded-full bg-white px-2 py-0.5 text-[11px] font-medium text-slate-500">
+                  <span className="rounded-md bg-[#F5F6FA] px-1.5 py-px text-[10px] font-medium tabular-nums text-[#6B7280]">
                     {count}
                   </span>
                 )}
@@ -126,7 +125,7 @@ export function DayView({
       <div
         ref={scrollRef}
         className="overflow-y-auto"
-        style={{ maxHeight: "calc(100vh - 220px)" }}
+        style={{ maxHeight: "calc(100vh - 200px)" }}
       >
         {dayAppointments.length === 0 ? (
           <div className="relative">
@@ -141,11 +140,8 @@ export function DayView({
               onAppointmentClick={onAppointmentClick}
             />
             {/* Empty state overlay */}
-            <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
-              <div className="flex flex-col items-center gap-2 pointer-events-auto">
-                <CalendarDays className="h-8 w-8 text-slate-300" />
-                <p className="text-sm text-slate-400">Sin turnos en este dia</p>
-              </div>
+            <div className="absolute left-0 right-0 flex justify-center pointer-events-none" style={{ top: '40%' }}>
+              <p className="text-[13px] font-medium text-[#6B7280]/60">Sin turnos</p>
             </div>
           </div>
         ) : (
