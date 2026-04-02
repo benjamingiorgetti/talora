@@ -80,18 +80,29 @@ const statusLabels: Record<string, { label: string; className: string }> = {
   pending: { label: "Pendiente", className: "bg-amber-50 text-amber-700 border-amber-200" },
 };
 
+type KpiTone = "lilac" | "sky" | "sand" | "mint" | "rose";
+
+const kpiToneBg: Record<KpiTone, string> = {
+  lilac: "bg-[hsl(var(--surface-lilac))]",
+  sky: "bg-[hsl(var(--surface-sky))]",
+  sand: "bg-[hsl(var(--surface-sand))]",
+  mint: "bg-[hsl(var(--surface-mint))]",
+  rose: "bg-[hsl(var(--surface-rose))]",
+};
+
 interface KpiCardProps {
   icon: React.ReactNode;
   label: string;
   value: string;
   subtitle?: string;
   color?: string;
+  tone?: KpiTone;
 }
 
-function KpiCard({ icon, label, value, subtitle, color = "text-slate-700" }: KpiCardProps) {
+function KpiCard({ icon, label, value, subtitle, color = "text-slate-700", tone = "lilac" }: KpiCardProps) {
   return (
     <div className="flex items-start gap-3 rounded-2xl border border-[#e6e7ec] bg-white px-4 py-3.5">
-      <div className="flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-xl bg-[hsl(var(--surface-lilac))]">
+      <div className={`flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-xl ${kpiToneBg[tone]}`}>
         {icon}
       </div>
       <div className="min-w-0 flex-1">
@@ -187,7 +198,7 @@ export default function ClientDetailPage() {
             {client.booked_services && client.booked_services.length > 0 && (
               <div className="mt-3 flex flex-wrap gap-1.5">
                 {client.booked_services.map((s) => (
-                  <Badge key={s.id} variant="secondary" className="border-0 bg-[hsl(var(--surface-lilac))] text-slate-700 text-xs font-medium">
+                  <Badge key={s.id} variant="secondary" className="border-0 bg-[hsl(var(--surface-sand))] text-slate-700 text-xs font-medium">
                     {s.name}
                   </Badge>
                 ))}
@@ -210,18 +221,21 @@ export default function ClientDetailPage() {
             label="Ultimo Turno"
             value={analytics.last_appointment_at ? formatRelativeTime(analytics.last_appointment_at) : "\u2014"}
             color={analytics.last_appointment_at ? "text-slate-900" : "text-slate-400"}
+            tone="sky"
           />
           <KpiCard
             icon={<DollarSign className="h-4 w-4 text-slate-500" />}
             label="Ticket Promedio"
             value={analytics.avg_ticket > 0 ? formatCurrency(analytics.avg_ticket) : "\u2014"}
             color={analytics.avg_ticket > 0 ? "text-emerald-600" : "text-slate-400"}
+            tone="mint"
           />
           <KpiCard
             icon={<Repeat className="h-4 w-4 text-slate-500" />}
             label="Frecuencia"
             value={analytics.avg_frequency_days !== null ? `${analytics.avg_frequency_days} días` : "\u2014"}
             subtitle="promedio entre turnos"
+            tone="sand"
           />
           <KpiCard
             icon={<Hash className="h-4 w-4 text-slate-500" />}
@@ -234,23 +248,27 @@ export default function ClientDetailPage() {
             label="Revenue Total"
             value={analytics.total_revenue > 0 ? formatCurrency(analytics.total_revenue) : "\u2014"}
             color={analytics.total_revenue > 0 ? "text-emerald-600" : "text-slate-400"}
+            tone="mint"
           />
           <KpiCard
             icon={<Mail className="h-4 w-4 text-slate-500" />}
             label="Mensajes Enviados"
             value={String(analytics.messages_sent)}
+            tone="sky"
           />
           <KpiCard
             icon={<TrendingUp className="h-4 w-4 text-slate-500" />}
             label="Tasa de Respuesta"
             value={`${analytics.response_rate}%`}
             subtitle={analytics.messages_sent > 0 ? `${analytics.messages_sent} enviados` : "0 enviados"}
+            tone="rose"
           />
           <KpiCard
             icon={<TrendingUp className="h-4 w-4 text-slate-500" />}
             label="Tasa de Conversion"
             value={`${analytics.conversion_rate}%`}
             color={analytics.conversion_rate > 0 ? "text-emerald-600" : "text-slate-400"}
+            tone="mint"
           />
         </div>
       )}
@@ -259,7 +277,7 @@ export default function ClientDetailPage() {
       {analytics?.preferred_day && (
         <div className="flex items-center gap-2">
           <span className="text-xs font-medium uppercase tracking-[0.12em] text-slate-400">Dia preferido:</span>
-          <Badge variant="secondary" className="border-0 bg-[hsl(var(--surface-lilac))] text-slate-700 text-xs font-medium">
+          <Badge variant="secondary" className="border-0 bg-[hsl(var(--surface-sand))] text-slate-700 text-xs font-medium">
             {analytics.preferred_day}
           </Badge>
         </div>

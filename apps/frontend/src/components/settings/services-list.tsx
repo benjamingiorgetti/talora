@@ -93,7 +93,7 @@ export function ServicesList({
               <td className="hidden md:table-cell px-5 py-3">
                 <Badge
                   variant="secondary"
-                  className="border-0 bg-[hsl(var(--surface-lilac))] text-slate-700 text-xs font-medium"
+                  className="border-0 bg-[hsl(var(--surface-sky))] text-slate-700 text-xs font-medium"
                 >
                   {service.professional_id
                     ? professionalMap.get(service.professional_id) ?? "Profesional"

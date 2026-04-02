@@ -314,7 +314,7 @@ export default function WorkspaceClientsPage() {
                   <td className="hidden md:table-cell px-5 py-3">
                     {client.booked_services && client.booked_services.length > 0 ? (
                       <div className="flex items-center gap-1.5">
-                        <Badge variant="secondary" className="border-0 bg-[hsl(var(--surface-lilac))] text-slate-700 text-xs font-medium">
+                        <Badge variant="secondary" className="border-0 bg-[hsl(var(--surface-sand))] text-slate-700 text-xs font-medium">
                           {client.booked_services[0].name}
                         </Badge>
                         {client.booked_services.length > 1 && (
