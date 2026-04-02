@@ -27,8 +27,11 @@ export function CurrentTimeLine({
       className="pointer-events-none absolute left-0 right-0 z-20 flex items-center"
       style={{ top }}
     >
-      <div className="h-2.5 w-2.5 -ml-[5px] shrink-0 rounded-full bg-red-500" />
-      <div className="h-[2px] flex-1 bg-red-500" />
+      <div className="h-1.5 w-1.5 -ml-[3px] shrink-0 rounded-full bg-[#1C1D22]" />
+      <div className="h-px flex-1 bg-[#1C1D22]/40" />
+      <span className="ml-1 shrink-0 rounded bg-[#1C1D22] px-1.5 py-px text-[10px] font-medium tabular-nums text-white">
+        {now.toLocaleTimeString("es-AR", { hour: "2-digit", minute: "2-digit" })}
+      </span>
     </div>
   );
 }

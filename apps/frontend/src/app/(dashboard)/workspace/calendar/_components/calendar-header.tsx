@@ -45,72 +45,68 @@ export function CalendarHeader({
   ];
 
   return (
-    <div className="flex flex-wrap items-center justify-between gap-3">
-      {/* Left: View toggles */}
-      <div className="flex items-center gap-3">
-        <div className="inline-flex rounded-full border border-[#e6e7ec] bg-white p-1">
-          {views.map((v) => (
-            <button
-              key={v.id}
-              type="button"
-              onClick={() => onViewModeChange(v.id)}
-              className={`rounded-full px-3.5 py-1.5 text-sm font-medium transition-colors ${
-                viewMode === v.id
-                  ? "bg-[#1c1d22] text-white shadow-sm"
-                  : "text-slate-600 hover:bg-[#f7f8fc]"
-              }`}
-            >
-              {v.label}
-            </button>
-          ))}
-        </div>
+    <div className="flex items-center gap-2">
+      {/* View toggles */}
+      <div className="inline-flex rounded-full border border-[#E2E4EC] bg-[#F5F6FA] p-0.5">
+        {views.map((v) => (
+          <button
+            key={v.id}
+            type="button"
+            onClick={() => onViewModeChange(v.id)}
+            className={`rounded-full px-3 py-1 text-[13px] font-medium transition-colors ${
+              viewMode === v.id
+                ? "bg-[#1c1d22] text-white shadow-[0_1px_3px_rgba(0,0,0,0.08)]"
+                : "text-[#6B7280] hover:text-[#1C1D22]"
+            }`}
+          >
+            {v.label}
+          </button>
+        ))}
       </div>
 
-      {/* Center: Date navigation */}
-      <div className="flex items-center gap-2">
+      {/* Date navigation */}
+      <div className="flex items-center gap-1.5">
         <button
           type="button"
           onClick={onPrev}
-          className="flex h-8 w-8 items-center justify-center rounded-full border border-[#e6e7ec] bg-white text-slate-600 transition-colors hover:bg-[#f6f7fb]"
+          className="flex h-7 w-7 items-center justify-center rounded-full border border-[#E2E4EC] text-[#6B7280] transition-colors hover:bg-[#F5F6FA] hover:text-[#1C1D22]"
         >
-          <ChevronLeft className="h-4 w-4" />
+          <ChevronLeft className="h-3.5 w-3.5" />
         </button>
-        <span className="min-w-[140px] text-center text-sm font-medium text-slate-900">
+        <span className="min-w-[140px] text-center text-[13px] font-semibold tracking-[-0.01em] text-[#1C1D22]">
           {dateLabel}
         </span>
         <button
           type="button"
           onClick={onNext}
-          className="flex h-8 w-8 items-center justify-center rounded-full border border-[#e6e7ec] bg-white text-slate-600 transition-colors hover:bg-[#f6f7fb]"
+          className="flex h-7 w-7 items-center justify-center rounded-full border border-[#E2E4EC] text-[#6B7280] transition-colors hover:bg-[#F5F6FA] hover:text-[#1C1D22]"
         >
-          <ChevronRight className="h-4 w-4" />
+          <ChevronRight className="h-3.5 w-3.5" />
         </button>
         {!isToday && (
           <button
             type="button"
             onClick={onToday}
-            className="rounded-full border border-[#e6e7ec] bg-white px-3 py-1.5 text-xs font-medium text-slate-600 transition-colors hover:bg-[#f6f7fb]"
+            className="rounded-full border border-[#E2E4EC] px-2.5 py-1 text-[11px] font-semibold uppercase tracking-[0.05em] text-[#6B7280] transition-colors hover:bg-[#F5F6FA] hover:text-[#1C1D22]"
           >
             Hoy
           </button>
         )}
-        {weekTotal > 0 && (
-          <span className="hidden text-sm text-slate-500 lg:inline-flex">
-            {weekTotal === 1 ? "1 turno" : `${weekTotal} turnos`}
-          </span>
-        )}
       </div>
 
-      {/* Right: Professional filters + CTA */}
-      <div className="flex flex-wrap items-center gap-2">
+      {/* Spacer */}
+      <div className="flex-1" />
+
+      {/* Professional filters + CTA */}
+      <div className="flex items-center gap-1.5">
         {!isProfessionalSession && (
           <button
             type="button"
             onClick={() => onProfessionalChange("all")}
-            className={`rounded-full border px-3.5 py-1.5 text-sm font-medium transition-colors ${
+            className={`rounded-full border px-2.5 py-1 text-[12px] font-medium transition-colors ${
               selectedProfessionalId === "all"
                 ? "border-[#1c1d22] bg-[#1c1d22] text-white"
-                : "border-[#dde1ea] bg-[#f7f8fc] text-slate-700 hover:border-[#cfd5e0] hover:bg-white"
+                : "border-[#dde1ea] text-[#6B7280] hover:border-[#cfd5e0] hover:text-[#1C1D22]"
             }`}
           >
             Todos
@@ -129,10 +125,10 @@ export function CalendarHeader({
                 }
               }}
               disabled={isProfessionalSession}
-              className="rounded-full border px-3.5 py-1.5 text-sm font-medium transition-colors disabled:pointer-events-none disabled:opacity-50"
+              className="rounded-full border px-2.5 py-1 text-[12px] font-medium transition-colors disabled:pointer-events-none disabled:opacity-50"
               style={{
                 borderColor: isSelected ? accent : hexToRgba(accent, 0.16),
-                background: isSelected ? accent : hexToRgba(accent, 0.09),
+                background: isSelected ? accent : hexToRgba(accent, 0.06),
                 color: isSelected ? "#ffffff" : "#24323f",
               }}
             >
@@ -142,9 +138,9 @@ export function CalendarHeader({
         })}
         <button
           type="button"
-          className="inline-flex items-center gap-1.5 rounded-full bg-[#1c1d22] px-4 py-1.5 text-sm font-medium text-white transition-colors hover:bg-[#2a2b33]"
+          className="inline-flex items-center gap-1.5 rounded-full bg-[#1c1d22] px-3.5 py-1 text-[13px] font-medium text-white transition-colors hover:bg-[#2a2b33]"
         >
-          <Plus className="h-4 w-4" />
+          <Plus className="h-3.5 w-3.5" />
           Nuevo turno
         </button>
       </div>

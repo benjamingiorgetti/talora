@@ -71,42 +71,34 @@ export function WeekView({
   }, [selectedProfessionalId, professionals]);
 
   return (
-    <div className="overflow-hidden rounded-2xl border border-[#e6e7ec] bg-white">
+    <div className="overflow-hidden">
       {/* Day headers */}
-      <div className="flex border-b border-[#e6e7ec] bg-[#f7f8fc]">
-        <div className="shrink-0" style={{ width: 58 }} />
+      <div className="flex border-b border-[#E2E4EC]">
+        <div className="shrink-0" style={{ width: 64 }} />
         {days.map((day, i) => {
           const isToday = sameDay(day.date, today);
-          const count = appointments.filter(
-            (a) => getDateKey(new Date(a.starts_at)) === day.key,
-          ).length;
 
           return (
             <div
               key={day.key}
-              className={`flex flex-1 flex-col items-center py-2.5 ${i > 0 ? "border-l border-[#e6e7ec]" : ""} ${isToday ? "bg-[#FAFBFD]" : ""}`}
+              className={`flex flex-1 flex-col items-center py-3 ${i > 0 ? "border-l border-[#E2E4EC]/60" : ""}`}
             >
               <span
-                className={`text-[11px] font-medium tracking-[0.1em] ${
-                  isToday ? "text-[#5E4AE3]" : "text-slate-400"
+                className={`text-[10px] font-medium uppercase tracking-[0.12em] ${
+                  isToday ? "text-[#1C1D22]" : "text-[#6B7280]"
                 }`}
               >
                 {day.weekday}
               </span>
               <span
-                className={`mt-0.5 text-lg font-semibold leading-tight ${
+                className={`mt-0.5 font-semibold leading-tight ${
                   isToday
-                    ? "flex h-8 w-8 items-center justify-center rounded-full bg-[#1c1d22] text-white"
-                    : "text-slate-900"
+                    ? "flex h-7 w-7 items-center justify-center rounded-full bg-[#1c1d22] text-[15px] text-white"
+                    : "text-[15px] text-[#1C1D22]"
                 }`}
               >
                 {day.dayNumber}
               </span>
-              {count > 0 && (
-                <span className="mt-1 text-[10px] text-slate-400">
-                  {count}
-                </span>
-              )}
             </div>
           );
         })}
@@ -116,7 +108,7 @@ export function WeekView({
       <div
         ref={scrollRef}
         className="overflow-y-auto"
-        style={{ maxHeight: "calc(100vh - 220px)" }}
+        style={{ maxHeight: "calc(100vh - 200px)" }}
       >
         <div className="flex" style={{ height: gridHeight }}>
           <TimeRail hours={hours} />
@@ -131,28 +123,28 @@ export function WeekView({
               return (
                 <div
                   key={day.key}
-                  className={`relative flex-1 ${dayIdx > 0 ? "border-l border-[#E2E4EC]" : ""}`}
+                  className={`relative flex-1 ${dayIdx > 0 ? "border-l border-[#E2E4EC]/60" : ""}`}
                 >
                   {/* Hour lines */}
                   {hours.map((h, i) => (
                     <div key={`h-${h.hour}`}>
                       <div
-                        className="absolute left-0 right-0 border-b border-[#E2E4EC]"
+                        className="absolute left-0 right-0 border-b border-[#E2E4EC]/70"
                         style={{ top: i * HOUR_HEIGHT }}
                       />
                       <div
-                        className="absolute left-0 right-0 border-b border-dashed border-[#F0F1F5]"
+                        className="absolute left-0 right-0 border-b border-dashed border-[#E2E4EC]/25"
                         style={{ top: i * HOUR_HEIGHT + HOUR_HEIGHT / 2 }}
                       />
                     </div>
                   ))}
                   <div
-                    className="absolute left-0 right-0 border-b border-[#E2E4EC]"
+                    className="absolute left-0 right-0 border-b border-[#E2E4EC]/70"
                     style={{ top: gridHeight }}
                   />
 
                   {isToday && (
-                    <div className="absolute inset-0 bg-[#FAFBFD] pointer-events-none" />
+                    <div className="absolute inset-0 bg-[#F5F6FA]/40 pointer-events-none" />
                   )}
 
                   {dayAppts.map((appt) => {

@@ -63,30 +63,30 @@ export function TimeGrid({
           return (
             <div
               key={col.id}
-              className={`relative flex-1 ${colIdx > 0 ? "border-l border-[#E2E4EC]" : ""}`}
+              className={`relative flex-1 ${colIdx > 0 ? "border-l border-[#E2E4EC]/50" : ""}`}
             >
               {/* Hour grid lines */}
               {hours.map((h, i) => (
                 <div key={`h-${h.hour}`}>
                   <div
-                    className="absolute left-0 right-0 border-b border-[#E2E4EC]"
+                    className="absolute left-0 right-0 border-b border-[#E2E4EC]/70"
                     style={{ top: i * HOUR_HEIGHT }}
                   />
                   <div
-                    className="absolute left-0 right-0 border-b border-dashed border-[#F0F1F5]"
+                    className="absolute left-0 right-0 border-b border-dashed border-[#E2E4EC]/25"
                     style={{ top: i * HOUR_HEIGHT + HOUR_HEIGHT / 2 }}
                   />
                 </div>
               ))}
               {/* Bottom line */}
               <div
-                className="absolute left-0 right-0 border-b border-[#E2E4EC]"
+                className="absolute left-0 right-0 border-b border-[#E2E4EC]/70"
                 style={{ top: gridHeight }}
               />
 
               {/* Today column tint */}
               {isToday && columns.length > 1 && (
-                <div className="absolute inset-0 bg-[#FAFBFD] pointer-events-none" />
+                <div className="absolute inset-0 bg-[#F5F6FA]/40 pointer-events-none" />
               )}
 
               {/* Appointment blocks */}
