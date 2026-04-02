@@ -228,7 +228,7 @@ export function ProfessionalsSettingsPage() {
           <WorkspaceMetricCard label="Profesionales visibles" value={stats.total} icon={Users2} tone="sky" />
           <WorkspaceMetricCard label="Turnos esta semana" value={stats.weekAppointments} icon={CalendarDays} tone="mint" />
           <WorkspaceMetricCard label="Pendientes" value={stats.pending} icon={CalendarClock} tone="rose" />
-          <WorkspaceMetricCard label="Calendarios accesibles" value={stats.calendarsVisible} icon={CalendarCheck2} tone="lilac" />
+          <WorkspaceMetricCard label="Calendarios accesibles" value={stats.calendarsVisible} icon={CalendarCheck2} tone="sky" />
         </div>
       </section>
 
