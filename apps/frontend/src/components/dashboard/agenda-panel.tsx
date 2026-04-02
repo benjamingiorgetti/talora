@@ -21,7 +21,7 @@ function formatTime(iso: string) {
 
 const statusBadge: Record<string, { bg: string; text: string; label: string }> = {
   confirmed: { bg: "bg-[#dbf0dd]", text: "text-[#2d5e3a]", label: "Confirmado" },
-  draft: { bg: "bg-[#f0f1f5]", text: "text-slate-600", label: "Borrador" },
+  draft: { bg: "bg-[#f0f1f5]", text: "text-[#4B5563]", label: "Borrador" },
   rescheduled: { bg: "bg-[#fef3c7]", text: "text-[#92400e]", label: "Reprogramado" },
   cancelled: { bg: "bg-[#fce4ec]", text: "text-[#881337]", label: "Cancelado" },
 };
@@ -61,7 +61,6 @@ export function DashboardAgendaPanel({
     });
   }, [appointments, profMap, timeRange]);
 
-  // Summary stats for 7d/30d
   const periodSummary = useMemo(() => {
     if (timeRange === "today") return null;
     const confirmed = appointments.filter((a) => a.status === "confirmed").length;
@@ -85,15 +84,15 @@ export function DashboardAgendaPanel({
   }, [appointments, timeRange]);
 
   return (
-    <div>
+    <div className="rounded-2xl border border-[#dde1ea] bg-white p-5">
       {/* Section header */}
-      <div className="flex items-center justify-between mb-2">
-        <h3 className="text-sm font-bold text-slate-950">
+      <div className="flex items-center justify-between mb-3">
+        <h3 className="font-display text-[1.1rem] font-semibold text-[#111318]">
           {timeRange === "today" ? "Agenda del dia" : timeRange === "7d" ? "Ultimos 7 dias" : "Ultimos 30 dias"}
         </h3>
         <Link
           href="/calendar"
-          className="inline-flex items-center gap-1 text-[11px] font-medium text-slate-500 hover:text-slate-700"
+          className="inline-flex items-center gap-1 text-[11px] font-medium text-[#6B7280] hover:text-[#111318]"
         >
           Ver calendario
           <ArrowRight className="h-3 w-3" />
@@ -102,9 +101,8 @@ export function DashboardAgendaPanel({
 
       {/* Content by time range */}
       {timeRange === "today" ? (
-        /* Today: operational view */
         appointments.length === 0 ? (
-          <EmptyState timeRange={timeRange} />
+          <EmptyState />
         ) : (
           <div className="space-y-3">
             {groupedByProfessional.map((group) => (
@@ -114,10 +112,10 @@ export function DashboardAgendaPanel({
                     className="h-2 w-2 rounded-full"
                     style={{ backgroundColor: group.professional?.color_hex ?? "#9AA1AE" }}
                   />
-                  <span className="text-[12px] font-medium text-slate-600">
+                  <span className="text-[12px] font-medium text-[#4B5563]">
                     {group.professional?.name ?? "Sin asignar"}
                   </span>
-                  <span className="text-[11px] text-slate-400">
+                  <span className="text-[11px] text-[#9AA1AE]">
                     {group.appointments.length}
                   </span>
                 </div>
@@ -129,66 +127,57 @@ export function DashboardAgendaPanel({
           </div>
         )
       ) : periodSummary && periodSummary.total > 0 ? (
-        /* 7d / 30d: calm summary */
         <div className="space-y-2.5">
           <div className="flex items-baseline gap-6">
             <div>
-              <span className="text-[11px] font-semibold text-slate-600">Total</span>
-              <span className="ml-1.5 text-[15px] font-bold tabular-nums text-slate-900">{periodSummary.total}</span>
+              <span className="text-[11px] font-semibold text-[#4B5563]">Total</span>
+              <span className="ml-1.5 text-[15px] font-bold tabular-nums text-[#111318]">{periodSummary.total}</span>
             </div>
             <div>
-              <span className="text-[11px] font-semibold text-slate-600">Confirmados</span>
+              <span className="text-[11px] font-semibold text-[#4B5563]">Confirmados</span>
               <span className="ml-1.5 text-[15px] font-bold tabular-nums text-[#2d5e3a]">{periodSummary.confirmed}</span>
             </div>
             {periodSummary.cancelled > 0 && (
               <div>
-                <span className="text-[11px] font-semibold text-slate-600">Cancelados</span>
+                <span className="text-[11px] font-semibold text-[#4B5563]">Cancelados</span>
                 <span className="ml-1.5 text-[15px] font-bold tabular-nums text-[#9e3553]">{periodSummary.cancelled}</span>
               </div>
             )}
           </div>
           {periodSummary.uniqueProfessionals > 0 && (
-            <p className="text-[12px] text-slate-500">
+            <p className="text-[12px] text-[#6B7280]">
               {periodSummary.uniqueProfessionals} profesional{periodSummary.uniqueProfessionals > 1 ? "es" : ""} con turnos
               {periodSummary.topProfessional && (
-                <span className="text-slate-700"> · {periodSummary.topProfessional.name} ({periodSummary.topProfessional.count})</span>
+                <span className="text-[#4B5563]"> · {periodSummary.topProfessional.name} ({periodSummary.topProfessional.count})</span>
               )}
             </p>
           )}
         </div>
       ) : (
-        <EmptyState timeRange={timeRange} />
+        <EmptyState />
       )}
     </div>
   );
 }
 
-function EmptyState({ timeRange }: { timeRange: TimeRange }) {
+function EmptyState() {
   return (
-    <div className="flex items-center justify-between rounded-xl border border-dashed border-[#ccd0db] bg-[#f7f8fb] px-4 py-4">
+    <div className="flex items-center justify-between rounded-xl bg-[#F8F9FC] px-5 py-4">
       <div>
-        <p className="text-[13px] font-semibold text-slate-800">
-          {timeRange === "today" ? "Sin turnos para hoy" : "Sin turnos en este periodo"}
+        <p className="text-[14px] font-semibold text-[#111318]">
+          Sin turnos hoy
         </p>
-        <p className="mt-0.5 text-[11px] text-slate-500">
-          Tu agenda esta libre en este momento
+        <p className="mt-0.5 text-[11px] text-[#6B7280]">
+          Tu agenda esta libre
         </p>
       </div>
-      <div className="flex items-center gap-2">
-        <Link
-          href="/calendar"
-          className="text-[12px] font-medium text-slate-600 hover:text-slate-900"
-        >
-          Ver calendario
-        </Link>
-        <Link
-          href="/calendar"
-          className="inline-flex items-center gap-1.5 rounded-lg border border-[#dde1ea] bg-white px-3 py-1.5 text-[12px] font-semibold text-slate-700 shadow-sm transition-all hover:bg-[#f5f6fa] hover:shadow"
-        >
-          <CalendarPlus className="h-3.5 w-3.5" />
-          Crear turno
-        </Link>
-      </div>
+      <Link
+        href="/calendar"
+        className="inline-flex items-center gap-1.5 rounded-lg bg-[#1C1D22] px-3.5 py-2 text-[12px] font-semibold text-white transition-all hover:bg-[#111318]"
+      >
+        <CalendarPlus className="h-3.5 w-3.5" />
+        Crear turno
+      </Link>
     </div>
   );
 }
@@ -203,16 +192,16 @@ function AppointmentRow({
   const badge = statusBadge[a.status] ?? statusBadge.confirmed;
 
   return (
-    <div className="grid grid-cols-[52px_1fr_72px] items-center gap-2 border-b border-[#f0f1f5] py-1.5 last:border-b-0">
-      <span className="text-[13px] font-semibold tabular-nums text-slate-900">
+    <div className="grid grid-cols-[52px_1fr_72px] items-center gap-2 rounded-lg px-2 -mx-2 py-1.5 transition-colors hover:bg-[#F8F9FC]">
+      <span className="text-[13px] font-semibold tabular-nums text-[#111318]">
         {formatTime(a.starts_at)}
       </span>
       <div className="min-w-0">
-        <span className="truncate text-[13px] font-medium text-slate-800">
+        <span className="truncate text-[13px] font-medium text-[#111318]">
           {a.client_name || "Cliente"}
         </span>
-        <span className="mx-1.5 text-slate-300">·</span>
-        <span className="truncate text-[12px] text-slate-500">
+        <span className="mx-1.5 text-[#dde1ea]">·</span>
+        <span className="truncate text-[12px] text-[#6B7280]">
           {a.service_name ?? a.title ?? "Turno"}
         </span>
       </div>

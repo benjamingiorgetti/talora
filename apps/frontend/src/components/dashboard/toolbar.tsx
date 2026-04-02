@@ -15,31 +15,21 @@ export function DashboardToolbar({
   professionals,
   professionalId,
   onProfessionalChange,
-  botActivity,
-  whatsappConnected,
-  calendarConnected,
   isProfessional,
+  className,
 }: {
   timeRange: TimeRange;
   onTimeRangeChange: (v: TimeRange) => void;
   professionals: Professional[];
   professionalId: string;
   onProfessionalChange: (v: string) => void;
-  botActivity: { label: string; tone: "green" | "yellow" | "red" };
-  whatsappConnected: boolean;
-  calendarConnected: boolean;
   isProfessional: boolean;
+  className?: string;
 }) {
-  const dotColor = {
-    green: "bg-emerald-500",
-    yellow: "bg-amber-400",
-    red: "bg-red-400",
-  };
-
   return (
-    <div className="flex items-center justify-between gap-4 border-b border-[#dde1ea] pb-3 mb-1">
-      {/* Left: Time range segmented control */}
-      <div className="flex items-center gap-1 rounded-lg bg-[#ecedf2] p-0.5">
+    <div className={`flex items-center gap-3 mb-4 ${className ?? ""}`}>
+      {/* Time range segmented control */}
+      <div className="flex items-center gap-1 rounded-lg bg-[#f0f1f5] p-[3px]">
         {timeRangeOptions.map((opt) => (
           <button
             key={opt.value}
@@ -47,8 +37,8 @@ export function DashboardToolbar({
             onClick={() => onTimeRangeChange(opt.value)}
             className={`rounded-md px-2.5 py-1 text-[12px] font-medium transition-all ${
               timeRange === opt.value
-                ? "bg-white text-slate-900 shadow-[0_1px_3px_rgba(0,0,0,0.08)]"
-                : "text-slate-600 hover:text-slate-800"
+                ? "bg-white text-[#111318] shadow-[0_1px_3px_rgba(0,0,0,0.08)]"
+                : "text-[#6B7280] hover:text-[#111318]"
             }`}
           >
             {opt.label}
@@ -56,12 +46,12 @@ export function DashboardToolbar({
         ))}
       </div>
 
-      {/* Center: Professional filter */}
+      {/* Professional filter */}
       {!isProfessional && professionals.length > 0 && (
         <select
           value={professionalId}
           onChange={(e) => onProfessionalChange(e.target.value)}
-          className="rounded-lg border border-[#e2e4ec] bg-white px-2.5 py-1 text-[12px] font-medium text-slate-700 outline-none focus:border-slate-400"
+          className="rounded-lg border border-[#dde1ea] bg-white px-2.5 py-1 text-[11px] font-medium text-[#4B5563] outline-none focus:border-[#9AA1AE]"
         >
           <option value="all">Todos los profesionales</option>
           {professionals.map((p) => (
@@ -70,24 +60,6 @@ export function DashboardToolbar({
             </option>
           ))}
         </select>
-      )}
-
-      {/* Right: System health indicators */}
-      {!isProfessional && (
-        <div className="flex items-center gap-3">
-          <div className="flex items-center gap-1.5">
-            <span className={`h-1.5 w-1.5 rounded-full ${dotColor[botActivity.tone]}`} />
-            <span className="text-[11px] text-slate-600">{botActivity.label}</span>
-          </div>
-          <div className="flex items-center gap-1.5">
-            <span className={`h-1.5 w-1.5 rounded-full ${whatsappConnected ? "bg-emerald-500" : "bg-red-400"}`} />
-            <span className="text-[11px] text-slate-600">WhatsApp</span>
-          </div>
-          <div className="flex items-center gap-1.5">
-            <span className={`h-1.5 w-1.5 rounded-full ${calendarConnected ? "bg-emerald-500" : "bg-red-400"}`} />
-            <span className="text-[11px] text-slate-600">Calendar</span>
-          </div>
-        </div>
       )}
     </div>
   );
